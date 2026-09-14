@@ -23,7 +23,9 @@ def login(client, email="owner@example.com"):
         db.session.flush()
         db.session.add(Business(user_id=user.id, name="Test Shop"))
         db.session.commit()
-    client.post("/login", data={"email": email, "password": "password123"})
+    response = client.post("/auth/login", data={"email": email, "password": "password123"})
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/dashboard")
 
 def test_create_and_list_low_stock_product(client, app):
     login(client)
