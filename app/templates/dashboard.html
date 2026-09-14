@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard · StockBridge{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<section class="dashboard-wrap">
+    <div class="welcome-row">
+        <div>
+            <p class="eyebrow">{{ business.name if business else 'Your business' }}</p>
+            <h2>Good to see you, {{ current_user.full_name.split(' ')[0] }}.</h2>
+            <p class="muted">Here’s your business snapshot for today. As you record sales and expenses, these numbers will update automatically.</p>
+        </div>
+        <button class="primary-btn disabled-action" type="button" disabled>+ Record sale</button>
+    </div>
+
+    <div class="metric-grid">
+        <article class="metric-card">
+            <div class="metric-top"><span>Sales today</span><span class="metric-icon">↗</span></div>
+            <strong>₦{{ "{:,.0f}".format(metrics.sales_today) }}</strong>
+            <small>No sales recorded yet</small>
+        </article>
+        <article class="metric-card">
+            <div class="metric-top"><span>Expenses today</span><span class="metric-icon">₦</span></div>
+            <strong>₦{{ "{:,.0f}".format(metrics.expenses_today) }}</strong>
+            <small>Keep costs visible</small>
+        </article>
+        <article class="metric-card">
+            <div class="metric-top"><span>Estimated gross profit</span><span class="metric-icon">◎</span></div>
+            <strong>₦{{ "{:,.0f}".format(metrics.gross_profit) }}</strong>
+            <small>Based on recorded product costs</small>
+        </article>
+        <article class="metric-card accent-card">
+            <div class="metric-top"><span>Low-stock products</span><span class="metric-icon">!</span></div>
+            <strong>{{ metrics.low_stock_count }}</strong>
+            <small>{{ metrics.product_count }} products in inventory</small>
+        </article>
+    </div>
+
+    <div class="dashboard-grid">
+        <article class="panel-card chart-card">
+            <div class="panel-heading">
+                <div>
+                    <p class="eyebrow">Performance</p>
+                    <h3>Sales overview</h3>
+                </div>
+                <span class="panel-chip">Last 7 days</span>
+            </div>
+            <div class="empty-chart">
+                <div class="chart-bars" aria-hidden="true">
+                    <span style="height: 24%"></span>
+                    <span style="height: 42%"></span>
+                    <span style="height: 31%"></span>
+                    <span style="height: 58%"></span>
+                    <span style="height: 48%"></span>
+                    <span style="height: 72%"></span>
+                    <span style="height: 64%"></span>
+                </div>
+                <div class="empty-copy">
+                    <strong>Your sales trend will appear here</strong>
+                    <p>Record your first sale to start building a useful daily view.</p>
+                </div>
+            </div>
+        </article>
+
+        <article class="panel-card recommendation-card">
+            <div class="recommendation-badge">SMART RESTOCK</div>
+            <h3>Know what to reorder before it runs out.</h3>
+            <p>StockBridge will use your recent sales rate, supplier lead time, and safety stock to recommend when and how much to reorder.</p>
+            <div class="formula-box">
+                <span>Reorder point</span>
+                <strong>(Avg. daily sales × Lead time) + Safety stock</strong>
+            </div>
+            <button class="secondary-btn disabled-action" type="button" disabled>Available after product setup</button>
+        </article>
+    </div>
+
+    <div class="dashboard-grid lower-grid">
+        <article class="panel-card">
+            <div class="panel-heading">
+                <div>
+                    <p class="eyebrow">Inventory watch</p>
+                    <h3>Low-stock products</h3>
+                </div>
+                <span class="count-badge">{{ metrics.low_stock_count }}</span>
+            </div>
+            {% if low_stock_products %}
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Product</th><th>Stock</th><th>Status</th></tr></thead>
+                        <tbody>
+                        {% for product in low_stock_products %}
+                            <tr><td>{{ product.name }}</td><td>{{ product.stock_quantity }}</td><td><span class="status danger">Restock</span></td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="empty-state compact">
+                    <div class="empty-icon">▦</div>
+                    <strong>No inventory yet</strong>
+                    <p>Once products are added, StockBridge will flag items that need attention.</p>
+                </div>
+            {% endif %}
+        </article>
+
+        <article class="panel-card">
+            <div class="panel-heading">
+                <div>
+                    <p class="eyebrow">Activity</p>
+                    <h3>Recent transactions</h3>
+                </div>
+            </div>
+            {% if recent_transactions %}
+                <div class="transaction-list">
+                {% for transaction in recent_transactions %}
+                    <div class="transaction-row">
+                        <div><strong>{{ transaction.title }}</strong><span>{{ transaction.date }}</span></div>
+                        <strong>{{ transaction.amount }}</strong>
+                    </div>
+                {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state compact">
+                    <div class="empty-icon">↗</div>
+                    <strong>No transactions yet</strong>
+                    <p>Your latest sales and expenses will show here.</p>
+                </div>
+            {% endif %}
+        </article>
+    </div>
+</section>
+{% endblock %}
