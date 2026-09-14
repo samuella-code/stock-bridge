@@ -1,0 +1,3 @@
+Database changes use Flask-Migrate. After installing dependencies run:
+`flask db init` once if this folder has no Alembic environment, then `flask db migrate -m "Initial schema"` and `flask db upgrade`.
+For every later model change: migrate, inspect the generated file, upgrade locally, test, and commit the migration. Production startup runs `flask db upgrade`; it never uses db.create_all().
