@@ -11,14 +11,14 @@
             <h2>Good to see you, {{ current_user.full_name.split(' ')[0] }}.</h2>
             <p class="muted">Here’s your business snapshot for today. As you record sales and expenses, these numbers will update automatically.</p>
         </div>
-        <button class="primary-btn disabled-action" type="button" disabled>+ Record sale</button>
+        <a class="primary-btn button-link" href="{{ url_for('sales.index') }}">+ Record sale</a>
     </div>
 
     <div class="metric-grid">
         <article class="metric-card">
             <div class="metric-top"><span>Sales today</span><span class="metric-icon">↗</span></div>
             <strong>₦{{ "{:,.0f}".format(metrics.sales_today) }}</strong>
-            <small>No sales recorded yet</small>
+            <small>{{ 'Updated from today’s sales' if metrics.sales_today else 'No sales recorded yet' }}</small>
         </article>
         <article class="metric-card">
             <div class="metric-top"><span>Expenses today</span><span class="metric-icon">₦</span></div>
@@ -47,19 +47,7 @@
                 <span class="panel-chip">Last 7 days</span>
             </div>
             <div class="empty-chart">
-                <div class="chart-bars" aria-hidden="true">
-                    <span style="height: 24%"></span>
-                    <span style="height: 42%"></span>
-                    <span style="height: 31%"></span>
-                    <span style="height: 58%"></span>
-                    <span style="height: 48%"></span>
-                    <span style="height: 72%"></span>
-                    <span style="height: 64%"></span>
-                </div>
-                <div class="empty-copy">
-                    <strong>Your sales trend will appear here</strong>
-                    <p>Record your first sale to start building a useful daily view.</p>
-                </div>
+                <div class="chart-bars real-chart">{% for day in chart %}<span style="height: {{ day.height }}%" title="{{ day.label }}: ₦{{ '{:,.2f}'.format(day.total) }}"><small>{{ day.label }}</small></span>{% endfor %}</div><div class="empty-copy"><strong>₦{{ '{:,.2f}'.format(chart|sum(attribute='total')) }} in the last 7 days</strong><p>Hover over a bar to see its daily total.</p></div>
             </div>
         </article>
 
@@ -71,7 +59,7 @@
                 <span>Reorder point</span>
                 <strong>(Avg. daily sales × Lead time) + Safety stock</strong>
             </div>
-            <button class="secondary-btn disabled-action" type="button" disabled>Available after product setup</button>
+            <a class="secondary-btn button-link" href="{{ url_for('restocking.index') }}">View recommendations</a>
         </article>
     </div>
 
@@ -115,7 +103,7 @@
                 <div class="transaction-list">
                 {% for transaction in recent_transactions %}
                     <div class="transaction-row">
-                        <div><strong>{{ transaction.title }}</strong><span>{{ transaction.date }}</span></div>
+                        <div><strong>{{ transaction.title }}</strong><span>{{ transaction.date.strftime('%d %b, %H:%M') }}</span></div>
                         <strong>{{ transaction.amount }}</strong>
                     </div>
                 {% endfor %}

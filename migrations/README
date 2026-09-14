@@ -1,0 +1,30 @@
+# Database migrations
+
+StockBridge uses Flask-Migrate/Alembic. Production startup runs `flask db upgrade` and never calls `db.create_all()`.
+
+## Existing local database
+
+Older StockBridge builds created tables directly. Back it up, then mark the matching initial schema as applied:
+
+```bash
+python scripts/backup.py
+flask db stamp 0001_initial
+flask db upgrade
+```
+
+Do not run the initial upgrade against an existing populated database before stamping it, because its tables already exist.
+
+## Brand-new database
+
+```bash
+flask db upgrade
+```
+
+## Future model changes
+
+```bash
+flask db migrate -m "Describe the schema change"
+flask db upgrade
+```
+
+Inspect every generated migration, test upgrade and downgrade on a disposable database, then commit it.

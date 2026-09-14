@@ -4,11 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0f172a">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}StockBridge{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/inventory.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules.css') }}">
 </head>
 <body>
     <div class="app-shell">
@@ -23,27 +26,17 @@
             </div>
 
             <nav class="sidebar-nav" aria-label="Main navigation">
-                <a class="nav-link active" href="{{ url_for('main.dashboard') }}">
+                <a class="nav-link {{ 'active' if request.blueprint == 'main' }}" href="{{ url_for('main.dashboard') }}">
                     <span class="nav-icon">⌂</span>
                     <span>Dashboard</span>
                 </a>
-                <a class="nav-link disabled" href="#" aria-disabled="true">
+                <a class="nav-link {{ 'active' if request.blueprint == 'products' }}" href="{{ url_for('products.index') }}">
                     <span class="nav-icon">▦</span>
                     <span>Products</span>
-                    <span class="nav-chip">Soon</span>
                 </a>
-                <a class="nav-link disabled" href="#" aria-disabled="true">
-                    <span class="nav-icon">↗</span>
-                    <span>Sales</span>
-                </a>
-                <a class="nav-link disabled" href="#" aria-disabled="true">
-                    <span class="nav-icon">₦</span>
-                    <span>Expenses</span>
-                </a>
-                <a class="nav-link disabled" href="#" aria-disabled="true">
-                    <span class="nav-icon">◎</span>
-                    <span>Restocking</span>
-                </a>
+                <a class="nav-link {{ 'active' if request.blueprint == 'sales' }}" href="{{ url_for('sales.index') }}"><span class="nav-icon">↗</span><span>Sales</span></a>
+                <a class="nav-link {{ 'active' if request.blueprint == 'expenses' }}" href="{{ url_for('expenses.index') }}"><span class="nav-icon">₦</span><span>Expenses</span></a>
+                <a class="nav-link {{ 'active' if request.blueprint == 'restocking' }}" href="{{ url_for('restocking.index') }}"><span class="nav-icon">◎</span><span>Restocking</span></a>
             </nav>
 
             <div class="sidebar-footer">
@@ -69,13 +62,12 @@
                     <p class="eyebrow">Retail control center</p>
                     <h1>{% block page_title %}Dashboard{% endblock %}</h1>
                 </div>
-                <div class="profile-pill">
+                <div class="profile-menu"><button class="profile-pill" id="profileButton" type="button" aria-expanded="false">
                     <div class="avatar">{{ current_user.full_name[:1] | upper }}</div>
                     <div class="profile-copy">
                         <strong>{{ current_user.full_name }}</strong>
                         <span>Owner</span>
-                    </div>
-                </div>
+                    </div></button><div class="profile-dropdown" id="profileDropdown"><a href="{{ url_for('profile.index') }}">Edit profile</a><a href="{{ url_for('profile.index') }}">Business settings</a></div></div>
             </header>
             {% endif %}
 
