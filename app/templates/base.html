@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f172a">
+    <title>{% block title %}StockBridge{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="app-shell">
+        {% if current_user.is_authenticated %}
+        <aside class="sidebar" id="sidebar">
+            <div class="brand-wrap">
+                <div class="brand-mark">SB</div>
+                <div>
+                    <div class="brand-name">StockBridge</div>
+                    <div class="brand-subtitle">Retail intelligence</div>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav" aria-label="Main navigation">
+                <a class="nav-link active" href="{{ url_for('main.dashboard') }}">
+                    <span class="nav-icon">⌂</span>
+                    <span>Dashboard</span>
+                </a>
+                <a class="nav-link disabled" href="#" aria-disabled="true">
+                    <span class="nav-icon">▦</span>
+                    <span>Products</span>
+                    <span class="nav-chip">Soon</span>
+                </a>
+                <a class="nav-link disabled" href="#" aria-disabled="true">
+                    <span class="nav-icon">↗</span>
+                    <span>Sales</span>
+                </a>
+                <a class="nav-link disabled" href="#" aria-disabled="true">
+                    <span class="nav-icon">₦</span>
+                    <span>Expenses</span>
+                </a>
+                <a class="nav-link disabled" href="#" aria-disabled="true">
+                    <span class="nav-icon">◎</span>
+                    <span>Restocking</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="workspace-card">
+                    <div class="workspace-dot"></div>
+                    <div>
+                        <span class="workspace-label">Workspace</span>
+                        <strong>{{ business.name if business else 'My business' }}</strong>
+                    </div>
+                </div>
+                <form method="POST" action="{{ url_for('auth.logout') }}">
+                    <button class="logout-btn" type="submit">Log out</button>
+                </form>
+            </div>
+        </aside>
+        {% endif %}
+
+        <main class="main-panel {% if not current_user.is_authenticated %}auth-panel{% endif %}">
+            {% if current_user.is_authenticated %}
+            <header class="topbar">
+                <button class="menu-btn" id="menuButton" type="button" aria-label="Open navigation">☰</button>
+                <div class="topbar-copy">
+                    <p class="eyebrow">Retail control center</p>
+                    <h1>{% block page_title %}Dashboard{% endblock %}</h1>
+                </div>
+                <div class="profile-pill">
+                    <div class="avatar">{{ current_user.full_name[:1] | upper }}</div>
+                    <div class="profile-copy">
+                        <strong>{{ current_user.full_name }}</strong>
+                        <span>Owner</span>
+                    </div>
+                </div>
+            </header>
+            {% endif %}
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-stack">
+                        {% for category, message in messages %}
+                            <div class="flash flash-{{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
