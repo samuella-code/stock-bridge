@@ -11,14 +11,14 @@
             <h2>Good to see you, {{ current_user.full_name.split(' ')[0] }}.</h2>
             <p class="muted">Here’s your business snapshot for today. As you record sales and expenses, these numbers will update automatically.</p>
         </div>
-        <button class="primary-btn disabled-action" type="button" disabled>+ Record sale</button>
+        <a class="primary-btn button-link" href="{{ url_for('sales.index') }}">+ Record sale</a>
     </div>
 
     <div class="metric-grid">
         <article class="metric-card">
             <div class="metric-top"><span>Sales today</span><span class="metric-icon">↗</span></div>
             <strong>₦{{ "{:,.0f}".format(metrics.sales_today) }}</strong>
-            <small>No sales recorded yet</small>
+            <small>{{ 'Updated from today’s sales' if metrics.sales_today else 'No sales recorded yet' }}</small>
         </article>
         <article class="metric-card">
             <div class="metric-top"><span>Expenses today</span><span class="metric-icon">₦</span></div>
@@ -71,7 +71,7 @@
                 <span>Reorder point</span>
                 <strong>(Avg. daily sales × Lead time) + Safety stock</strong>
             </div>
-            <button class="secondary-btn disabled-action" type="button" disabled>Available after product setup</button>
+            <a class="secondary-btn button-link" href="{{ url_for('restocking.index') }}">View recommendations</a>
         </article>
     </div>
 
