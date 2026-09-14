@@ -47,19 +47,7 @@
                 <span class="panel-chip">Last 7 days</span>
             </div>
             <div class="empty-chart">
-                <div class="chart-bars" aria-hidden="true">
-                    <span style="height: 24%"></span>
-                    <span style="height: 42%"></span>
-                    <span style="height: 31%"></span>
-                    <span style="height: 58%"></span>
-                    <span style="height: 48%"></span>
-                    <span style="height: 72%"></span>
-                    <span style="height: 64%"></span>
-                </div>
-                <div class="empty-copy">
-                    <strong>Your sales trend will appear here</strong>
-                    <p>Record your first sale to start building a useful daily view.</p>
-                </div>
+                <div class="chart-bars real-chart">{% for day in chart %}<span style="height: {{ day.height }}%" title="{{ day.label }}: ₦{{ '{:,.2f}'.format(day.total) }}"><small>{{ day.label }}</small></span>{% endfor %}</div><div class="empty-copy"><strong>₦{{ '{:,.2f}'.format(chart|sum(attribute='total')) }} in the last 7 days</strong><p>Hover over a bar to see its daily total.</p></div>
             </div>
         </article>
 
@@ -115,7 +103,7 @@
                 <div class="transaction-list">
                 {% for transaction in recent_transactions %}
                     <div class="transaction-row">
-                        <div><strong>{{ transaction.title }}</strong><span>{{ transaction.date }}</span></div>
+                        <div><strong>{{ transaction.title }}</strong><span>{{ transaction.date.strftime('%d %b, %H:%M') }}</span></div>
                         <strong>{{ transaction.amount }}</strong>
                     </div>
                 {% endfor %}

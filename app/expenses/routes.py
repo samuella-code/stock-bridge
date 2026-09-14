@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal,InvalidOperation
-from flask import Blueprint,flash,redirect,render_template,request,url_for
+from flask import Blueprint,abort,flash,redirect,render_template,request,url_for
 from flask_login import current_user,login_required
 from app import db
 from app.models import Expense
@@ -17,3 +17,9 @@ def index():
   else: db.session.add(Expense(business_id=b.id,description=description,amount=amount,spent_at=spent)); db.session.commit(); flash("Expense recorded.","success"); return redirect(url_for("expenses.index"))
  rows=Expense.query.filter_by(business_id=b.id).order_by(Expense.spent_at.desc()).all()
  return render_template("expenses/index.html",business=b,expenses=rows,total=sum(x.amount for x in rows))
+@expenses_bp.post("/<int:expense_id>/delete")
+@login_required
+def delete(expense_id):
+ b=current_user.businesses[0]; row=db.session.get(Expense,expense_id)
+ if not row or row.business_id!=b.id: abort(404)
+ db.session.delete(row); db.session.commit(); flash("Expense removed.","success"); return redirect(url_for("expenses.index"))
