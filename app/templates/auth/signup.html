@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Create account · StockBridge{% endblock %}
+
+{% block content %}
+<section class="auth-page">
+    <div class="auth-visual">
+        <div class="auth-brand">
+            <div class="brand-mark">SB</div>
+            <div>
+                <div class="brand-name">StockBridge</div>
+                <div class="brand-subtitle">Retail intelligence</div>
+            </div>
+        </div>
+        <div class="auth-hero-copy">
+            <p class="eyebrow light">Simple retail visibility</p>
+            <h1>Run your stock with less guesswork.</h1>
+            <p>Start with the basics: products, sales, expenses and smarter restocking decisions in one clean workspace.</p>
+            <div class="auth-proof-grid">
+                <div><strong>Fast</strong><span>Easy daily updates</span></div>
+                <div><strong>Clear</strong><span>Readable business numbers</span></div>
+                <div><strong>Smart</strong><span>Actionable stock alerts</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="auth-form-wrap">
+        <div class="auth-form-card">
+            <p class="eyebrow">Get started</p>
+            <h2>Create your StockBridge workspace</h2>
+            <p class="muted">Set up your business account in a few simple steps.</p>
+
+            <form method="POST" class="form-stack">
+                <label>
+                    <span>Your full name</span>
+                    <input type="text" name="full_name" placeholder="e.g. Amaka Okafor" autocomplete="name" required>
+                </label>
+                <label>
+                    <span>Business name</span>
+                    <input type="text" name="business_name" placeholder="e.g. Amaka Mini Mart" required>
+                </label>
+                <label>
+                    <span>Email address</span>
+                    <input type="email" name="email" placeholder="you@example.com" autocomplete="email" required>
+                </label>
+                <label>
+                    <span>Password</span>
+                    <input type="password" name="password" placeholder="At least 8 characters" minlength="8" autocomplete="new-password" required>
+                </label>
+                <button class="primary-btn full-width" type="submit">Create workspace</button>
+            </form>
+
+            <p class="auth-switch">Already have an account? <a href="{{ url_for('auth.login') }}">Log in</a></p>
+        </div>
+    </div>
+</section>
+{% endblock %}
