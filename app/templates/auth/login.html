@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Log in · StockBridge{% endblock %}
+
+{% block content %}
+<section class="auth-page">
+    <div class="auth-visual">
+        <div class="auth-brand">
+            <div class="brand-mark">SB</div>
+            <div>
+                <div class="brand-name">StockBridge</div>
+                <div class="brand-subtitle">Retail intelligence</div>
+            </div>
+        </div>
+        <div class="auth-hero-copy">
+            <p class="eyebrow light">Built for growing retailers</p>
+            <h1>Know what is selling.<br>Restock with confidence.</h1>
+            <p>Keep your products, sales, expenses and stock decisions in one simple workspace built for everyday retail operations.</p>
+            <div class="auth-proof-grid">
+                <div><strong>01</strong><span>Track stock clearly</span></div>
+                <div><strong>02</strong><span>See daily performance</span></div>
+                <div><strong>03</strong><span>Restock smarter</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="auth-form-wrap">
+        <div class="auth-form-card">
+            <p class="eyebrow">Welcome back</p>
+            <h2>Log in to your workspace</h2>
+            <p class="muted">Continue managing your business with StockBridge.</p>
+
+            <form method="POST" class="form-stack">
+                <label>
+                    <span>Email address</span>
+                    <input type="email" name="email" placeholder="you@example.com" autocomplete="email" required>
+                </label>
+                <label>
+                    <span>Password</span>
+                    <input type="password" name="password" placeholder="Enter your password" autocomplete="current-password" required>
+                </label>
+                <button class="primary-btn full-width" type="submit">Log in</button>
+            </form>
+
+            <p class="auth-switch">New to StockBridge? <a href="{{ url_for('auth.signup') }}">Create an account</a></p>
+        </div>
+    </div>
+</section>
+{% endblock %}
