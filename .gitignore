@@ -4,5 +4,6 @@ __pycache__/
 venv/
 .env
 instance/*.db
+instance/*.log
 .pytest_cache/
 .DS_Store

@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Plans · StockBridge{% endblock %}
+{% block page_title %}Plans & billing{% endblock %}
+{% block content %}
+<section class="dashboard-wrap billing-page">
+  <div class="billing-intro"><div><p class="eyebrow">Simple pricing</p><h2>Choose a plan that grows with your shop</h2><p class="muted">Your records always remain yours. Payment activation is the next implementation step.</p></div><div class="subscription-summary"><span>Current access</span><strong>{{ business.subscription_plan | title }}</strong>{% if business.subscription_status == 'trialing' and business.has_write_access %}<small>{{ business.trial_days_remaining }} trial days remaining</small>{% elif business.subscription_status == 'active' %}<small>Active subscription</small>{% else %}<small>Trial ended · read-only mode</small>{% endif %}</div></div>
+  <div class="pricing-grid">{% for plan in plans %}<article class="pricing-card {{ 'featured' if plan.slug == 'business' }}">{% if plan.slug == 'business' %}<span class="popular-badge">Most popular</span>{% endif %}<h3>{{ plan.name }}</h3><p>{{ plan.description }}</p><div class="plan-price"><strong>₦{{ "{:,.0f}".format(plan.price) }}</strong><span>/month</span></div><ul>{% for feature in plan.features %}<li>✓ {{ feature }}</li>{% endfor %}</ul>{% if business.subscription_plan == plan.slug %}<button class="secondary-btn" disabled>Current plan</button>{% else %}<button class="primary-btn" disabled>Payments coming next</button>{% endif %}</article>{% endfor %}</div>
+</section>
+{% endblock %}

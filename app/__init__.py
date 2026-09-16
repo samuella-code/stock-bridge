@@ -2,8 +2,8 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 
-from flask import Flask, jsonify
-from flask_login import LoginManager
+from flask import Flask, flash, jsonify, redirect, request, url_for
+from flask_login import LoginManager, current_user
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import CSRFProtect
@@ -41,12 +41,29 @@ def create_app(test_config=None):
     from app.expenses.routes import expenses_bp
     from app.restocking.routes import restocking_bp
     from app.profile.routes import profile_bp
+    from app.subscriptions.routes import subscriptions_bp
 
     for blueprint in (
         auth_bp, main_bp, products_bp, sales_bp,
-        expenses_bp, restocking_bp, profile_bp,
+        expenses_bp, restocking_bp, profile_bp, subscriptions_bp,
     ):
         app.register_blueprint(blueprint)
+
+    @app.before_request
+    def require_current_subscription_for_writes():
+        protected = {"products", "sales", "expenses", "restocking"}
+        if current_user.is_authenticated and request.method in {"POST", "PUT", "PATCH", "DELETE"} and request.blueprint in protected:
+            business = current_user.businesses[0]
+            db.session.refresh(business)
+            if not business.has_write_access:
+                flash("Your trial has ended. Choose a plan to continue adding business records.", "warning")
+                return redirect(url_for("subscriptions.index"))
+
+    @app.context_processor
+    def subscription_context():
+        if not current_user.is_authenticated or not current_user.businesses:
+            return {}
+        return {"subscription_business": current_user.businesses[0]}
 
     @app.get("/health")
     def health():

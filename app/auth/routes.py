@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_user, logout_user
 
@@ -36,12 +37,13 @@ def signup():
         db.session.add(user)
         db.session.flush()
 
-        business = Business(user_id=user.id, name=business_name)
+        trial_started = datetime.utcnow()
+        business = Business(user_id=user.id, name=business_name, subscription_plan="starter", subscription_status="trialing", trial_started_at=trial_started, trial_ends_at=trial_started + timedelta(days=14))
         db.session.add(business)
         db.session.commit()
 
         login_user(user)
-        flash("Welcome to StockBridge. Your workspace is ready.", "success")
+        flash("Welcome to StockBridge. Your 14-day free trial has started.", "success")
         return redirect(url_for("main.dashboard"))
 
     return render_template("auth/signup.html")
