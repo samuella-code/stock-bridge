@@ -27,12 +27,26 @@ def _confirm(payment, data):
     return True
 
 
+def _activate_account(payment):
+    existing_user = User.query.filter_by(email=payment.customer_email).first()
+    if not existing_user or payment.status != "success":
+        return False
+    business = existing_user.businesses[0]
+    business.subscription_plan = "lifetime"
+    business.subscription_status = "active"
+    business.subscription_ends_at = None
+    payment.business_id = business.id
+    db.session.commit()
+    return True
+
+
 @payments_bp.get("/checkout")
 @login_required
 def checkout():
     if current_user.is_authenticated and current_user.businesses[0].has_write_access:
         return redirect(url_for("main.dashboard"))
-    return render_template("payments/checkout.html", price=current_app.config["LIFETIME_PRICE_NAIRA"], configured=bool(current_app.config["PAYSTACK_SECRET_KEY"]), account_email=current_user.email if current_user.is_authenticated else "")
+    configured = bool(current_app.config["PAYSTACK_PUBLIC_KEY"] and current_app.config["PAYSTACK_SECRET_KEY"])
+    return render_template("payments/checkout.html", price=current_app.config["LIFETIME_PRICE_NAIRA"], configured=configured, account_email=current_user.email)
 
 
 @payments_bp.post("/initialize")
@@ -46,8 +60,8 @@ def initialize():
     if existing_user and existing_user.businesses[0].has_write_access:
         flash("That account already has lifetime access. Log in instead.", "success")
         return redirect(url_for("auth.login"))
-    secret = current_app.config["PAYSTACK_SECRET_KEY"]
-    if not secret:
+    public_key = current_app.config["PAYSTACK_PUBLIC_KEY"]
+    if not public_key or not current_app.config["PAYSTACK_SECRET_KEY"]:
         flash("Payments are being configured. Please try again later.", "warning")
         return redirect(url_for("payments.checkout"))
     amount_kobo = current_app.config["LIFETIME_PRICE_NAIRA"] * 100
@@ -55,21 +69,7 @@ def initialize():
     payment = Payment(customer_email=email, reference=reference, amount_kobo=amount_kobo)
     db.session.add(payment)
     db.session.commit()
-    try:
-        data = initialize_transaction(secret, email, amount_kobo, reference, url_for("payments.callback", _external=True, _scheme="https"))
-    except PaystackError as error:
-        payment.status = "failed"
-        db.session.commit()
-        current_app.logger.warning("Payment initialization failed for %s: %s", reference, error)
-        flash(str(error), "error")
-        return redirect(url_for("payments.checkout"))
-    authorization_url = data.get("authorization_url")
-    if not authorization_url:
-        payment.status = "failed"
-        db.session.commit()
-        flash("The payment provider did not return a checkout link.", "error")
-        return redirect(url_for("payments.checkout"))
-    return redirect(authorization_url)
+    return render_template("payments/launch.html", payment=payment, public_key=public_key)
 
 
 @payments_bp.get("/callback")
@@ -82,28 +82,19 @@ def callback():
     if payment.business_id:
         flash("This payment has already been used.", "warning")
         return redirect(url_for("auth.login"))
-    if payment.status != "success":
-        try:
-            data = verify_transaction(current_app.config["PAYSTACK_SECRET_KEY"], reference)
-        except PaystackError as error:
-            current_app.logger.warning("Payment verification failed for %s: %s", reference, error)
-            flash("Payment verification is pending. Please try again.", "warning")
-            return redirect(url_for("payments.checkout"))
-        if not _confirm(payment, data):
-            flash("The payment details could not be verified.", "error")
-            return redirect(url_for("payments.checkout"))
-    existing_user = User.query.filter_by(email=payment.customer_email).first()
-    if existing_user:
-        business = existing_user.businesses[0]
-        business.subscription_plan = "lifetime"
-        business.subscription_status = "active"
-        business.subscription_ends_at = None
-        payment.business_id = business.id
-        db.session.commit()
+    if _activate_account(payment):
         flash("Payment confirmed. Your lifetime access is active.", "success")
-        return redirect(url_for("main.dashboard") if current_user.is_authenticated and current_user.id == existing_user.id else url_for("auth.login"))
-    session["paid_claim_token"] = payment.claim_token
-    return redirect(url_for("auth.signup"))
+        return redirect(url_for("main.dashboard"))
+    return render_template("payments/pending.html", reference=reference)
+
+
+@payments_bp.get("/status/<reference>")
+@login_required
+def status(reference):
+    payment = Payment.query.filter_by(reference=reference, customer_email=current_user.email).first_or_404()
+    if payment.status == "success":
+        _activate_account(payment)
+    return jsonify(status=payment.status, redirect=url_for("main.dashboard") if payment.business_id else None)
 
 
 @payments_bp.post("/webhook")

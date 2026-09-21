@@ -10,7 +10,7 @@ from app.models import Business, Payment, User
 
 @pytest.fixture
 def app():
-    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:", "SECRET_KEY": "test", "PAYSTACK_SECRET_KEY": "sk_test_secret", "LIFETIME_PRICE_NAIRA": 3000})
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:", "SECRET_KEY": "test", "PAYSTACK_SECRET_KEY": "sk_test_secret", "PAYSTACK_PUBLIC_KEY": "pk_test_public", "LIFETIME_PRICE_NAIRA": 3000})
     with app.app_context():
         db.create_all(); yield app; db.session.remove(); db.drop_all()
 
@@ -30,20 +30,19 @@ def transaction(payment, amount=300_000):
     return {"status":"success", "reference":payment.reference, "amount":amount, "currency":"NGN", "metadata":{"customer_email":payment.customer_email, "product":"stockbridge_lifetime"}}
 
 
-def test_logged_in_user_initializes_payment(client, app, monkeypatch):
+def test_logged_in_user_initializes_payment(client, app):
     create_account(client, app)
-    monkeypatch.setattr("app.payments.routes.initialize_transaction", lambda *args: {"authorization_url":"https://checkout.paystack.test/example"})
     response = client.post("/payments/initialize")
-    assert response.headers["Location"] == "https://checkout.paystack.test/example"
+    assert response.status_code == 200
+    assert b"Paystack secure checkout" in response.data
     with app.app_context():
         payment = Payment.query.one(); assert payment.customer_email == "ada@example.com"; assert payment.amount_kobo == 300_000
 
 
-def test_verified_payment_unlocks_stock_tools(client, app, monkeypatch):
+def test_verified_payment_unlocks_stock_tools(client, app):
     create_account(client, app)
     with app.app_context():
-        payment = Payment(customer_email="ada@example.com", reference="SB-test", amount_kobo=300_000); db.session.add(payment); db.session.commit(); verified=transaction(payment)
-    monkeypatch.setattr("app.payments.routes.verify_transaction", lambda *args: verified)
+        payment = Payment(customer_email="ada@example.com", reference="SB-test", amount_kobo=300_000, status="success"); db.session.add(payment); db.session.commit()
     response = client.get("/payments/callback?reference=SB-test")
     assert response.headers["Location"].endswith("/dashboard")
     with app.app_context():
@@ -51,13 +50,12 @@ def test_verified_payment_unlocks_stock_tools(client, app, monkeypatch):
         assert Payment.query.one().business_id == Business.query.one().id
 
 
-def test_wrong_amount_does_not_unlock(client, app, monkeypatch):
+def test_wrong_amount_does_not_unlock(client, app):
     create_account(client, app)
     with app.app_context():
-        payment=Payment(customer_email="ada@example.com",reference="SB-wrong",amount_kobo=300_000); db.session.add(payment); db.session.commit(); verified=transaction(payment,100)
-    monkeypatch.setattr("app.payments.routes.verify_transaction", lambda *args: verified)
-    response=client.get("/payments/callback?reference=SB-wrong",follow_redirects=True)
-    assert b"could not be verified" in response.data
+        payment=Payment(customer_email="ada@example.com",reference="SB-wrong",amount_kobo=300_000); db.session.add(payment); db.session.commit(); event={"event":"charge.success","data":transaction(payment,100)}
+    payload=json.dumps(event,separators=(",",":")).encode(); signature=hmac.new(b"sk_test_secret",payload,hashlib.sha512).hexdigest()
+    client.post("/payments/webhook",data=payload,content_type="application/json",headers={"x-paystack-signature":signature})
     with app.app_context(): assert not Business.query.one().has_write_access
 
 
