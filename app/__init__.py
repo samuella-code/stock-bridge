@@ -43,17 +43,21 @@ def create_app(test_config=None):
     from app.profile.routes import profile_bp
     from app.subscriptions.routes import subscriptions_bp
     from app.payments.routes import payments_bp
+    from app.admin.routes import admin_bp
 
     for blueprint in (
         auth_bp, main_bp, products_bp, sales_bp,
-        expenses_bp, restocking_bp, profile_bp, subscriptions_bp, payments_bp,
+        expenses_bp, restocking_bp, profile_bp, subscriptions_bp, payments_bp, admin_bp,
     ):
         app.register_blueprint(blueprint)
 
     @app.before_request
     def require_lifetime_access():
-        protected = {"main", "products", "sales", "expenses", "restocking", "profile"}
+        protected = {"main", "products", "sales", "expenses", "restocking", "profile", "admin"}
         if current_user.is_authenticated and request.blueprint in protected:
+            if not current_user.email_verified_at:
+                flash("Verify your email to access StockBridge.", "warning")
+                return redirect(url_for("auth.verification_pending"))
             business = current_user.businesses[0]
             db.session.refresh(business)
             if not business.has_write_access:
@@ -64,7 +68,8 @@ def create_app(test_config=None):
     def subscription_context():
         if not current_user.is_authenticated or not current_user.businesses:
             return {}
-        return {"subscription_business": current_user.businesses[0]}
+        owners = {email.strip().lower() for email in app.config["ADMIN_EMAILS"].split(",") if email.strip()}
+        return {"subscription_business": current_user.businesses[0], "is_owner": current_user.email.lower() in owners}
 
     @app.get("/health")
     def health():

@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}Owner dashboard · StockBridge{% endblock %}
+{% block page_title %}Owner dashboard{% endblock %}
+{% block content %}
+<section class="dashboard-wrap"><div class="metrics-grid"><article class="metric-card"><span>Total users</span><strong>{{ metrics.users }}</strong></article><article class="metric-card"><span>Verified emails</span><strong>{{ metrics.verified }}</strong></article><article class="metric-card"><span>Lifetime access</span><strong>{{ metrics.lifetime }}</strong></article></div><div class="panel-card"><div class="section-heading"><div><p class="eyebrow">Access register</p><h2>StockBridge users</h2></div></div><div class="table-wrap"><table><thead><tr><th>User</th><th>Business</th><th>Email status</th><th>Access</th><th>Joined</th></tr></thead><tbody>{% for user in users %}<tr><td><strong>{{ user.full_name }}</strong><br><span class="muted">{{ user.email }}</span></td><td>{{ user.businesses[0].name if user.businesses else '—' }}</td><td>{{ 'Verified' if user.email_verified_at else 'Pending' }}</td><td>{{ 'Lifetime' if user.businesses and user.businesses[0].has_write_access else 'No access' }}</td><td>{{ user.created_at.strftime('%d %b %Y') }}</td></tr>{% else %}<tr><td colspan="5">No users yet.</td></tr>{% endfor %}</tbody></table></div></div></section>
+{% endblock %}

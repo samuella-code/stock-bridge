@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime
 from app import create_app, db
 from app.models import Business, Product, User
 
@@ -17,7 +18,7 @@ def client(app):
 
 def login(client, email="owner@example.com"):
     with client.application.app_context():
-        user = User(full_name="Test Owner", email=email)
+        user = User(full_name="Test Owner", email=email, email_verified_at=datetime.utcnow())
         user.set_password("password123")
         db.session.add(user)
         db.session.flush()
@@ -39,7 +40,7 @@ def test_create_and_list_low_stock_product(client, app):
 def test_business_ownership_blocks_cross_account_edit(client, app):
     login(client)
     with app.app_context():
-        other = User(full_name="Other", email="other@example.com")
+        other = User(full_name="Other", email="other@example.com", email_verified_at=datetime.utcnow())
         other.set_password("password123")
         db.session.add(other)
         db.session.flush()

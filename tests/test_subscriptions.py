@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime
 
 from app import create_app, db
 from app.models import Business, User
@@ -36,7 +37,7 @@ def test_signup_requires_verified_payment(client):
 
 def test_inactive_legacy_account_cannot_open_dashboard(client, app):
     with app.app_context():
-        user = User(full_name="Old User", email="old@example.com")
+        user = User(full_name="Old User", email="old@example.com", email_verified_at=datetime.utcnow())
         user.set_password("password123")
         db.session.add(user)
         db.session.flush()

@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime
 from decimal import Decimal
 from app import create_app, db
 from app.models import Business, Expense, Product, Sale, User
@@ -18,7 +19,7 @@ def client(app):
 
 def seed(client):
     with client.application.app_context():
-        user = User(full_name="Owner", email="money@example.com")
+        user = User(full_name="Owner", email="money@example.com", email_verified_at=datetime.utcnow())
         user.set_password("password123")
         db.session.add(user)
         db.session.flush()

@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 import pytest
+from datetime import datetime
 
 from app import create_app, db
 from app.models import Business, Payment, User
@@ -38,6 +39,7 @@ def test_initialize_before_signup(client, app, monkeypatch):
 
 
 def test_verified_payment_allows_one_account_and_dashboard(client, app, monkeypatch):
+    monkeypatch.setattr("app.auth.routes.send_verification_email", lambda user: True)
     with app.app_context():
         payment = Payment(customer_email="ada@example.com", reference="SB-test", amount_kobo=300_000)
         db.session.add(payment)
@@ -47,7 +49,7 @@ def test_verified_payment_allows_one_account_and_dashboard(client, app, monkeypa
     response = client.get("/payments/callback?reference=SB-test", follow_redirects=True)
     assert b"Payment confirmed" in response.data
     response = client.post("/auth/signup", data={"full_name": "Ada Owner", "business_name": "Ada Mart", "password": "password123"}, follow_redirects=True)
-    assert b"lifetime access is active" in response.data
+    assert b"Verify your email" in response.data
     with app.app_context():
         assert User.query.one().email == "ada@example.com"
         assert Business.query.one().subscription_plan == "lifetime"
@@ -86,7 +88,7 @@ def test_webhook_rejects_bad_signature(client):
 
 def test_existing_inactive_account_can_pay_for_access(client, app, monkeypatch):
     with app.app_context():
-        user = User(full_name="Old Owner", email="old@example.com")
+        user = User(full_name="Old Owner", email="old@example.com", email_verified_at=datetime.utcnow())
         user.set_password("password123")
         db.session.add(user)
         db.session.flush()
