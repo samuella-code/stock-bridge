@@ -1,22 +1,15 @@
 import hashlib
 import hmac
 import json
-
 import pytest
 
 from app import create_app, db
-from app.models import Business, Payment
+from app.models import Business, Payment, User
 
 
 @pytest.fixture
 def app():
-    app = create_app({
-        "TESTING": True,
-        "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
-        "SECRET_KEY": "test",
-        "PAYSTACK_SECRET_KEY": "sk_test_secret",
-        "LIFETIME_PRICE_NAIRA": 3000,
-    })
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:", "SECRET_KEY": "test", "PAYSTACK_SECRET_KEY": "sk_test_secret", "LIFETIME_PRICE_NAIRA": 3000})
     with app.app_context():
         db.create_all()
         yield app
@@ -29,78 +22,63 @@ def client(app):
     return app.test_client()
 
 
-def create_account(client):
-    client.post("/auth/signup", data={"full_name": "Ada Owner", "business_name": "Ada Mini Mart", "email": "ada@example.com", "password": "password123"})
+def transaction(payment, amount=300_000):
+    return {"status": "success", "reference": payment.reference, "amount": amount, "currency": "NGN", "metadata": {"customer_email": payment.customer_email, "product": "stockbridge_lifetime"}}
 
 
-def successful_transaction(payment):
-    return {"status": "success", "reference": payment.reference, "amount": payment.amount_kobo, "currency": "NGN", "metadata": {"business_id": payment.business_id, "product": "stockbridge_lifetime"}}
-
-
-def test_initialize_creates_payment_and_redirects(client, app, monkeypatch):
-    create_account(client)
+def test_initialize_before_signup(client, app, monkeypatch):
     monkeypatch.setattr("app.payments.routes.initialize_transaction", lambda *args: {"authorization_url": "https://checkout.paystack.test/example"})
-    response = client.post("/payments/initialize")
-    assert response.status_code == 302
+    response = client.post("/payments/initialize", data={"email": "ada@example.com"})
     assert response.headers["Location"] == "https://checkout.paystack.test/example"
     with app.app_context():
         payment = Payment.query.one()
+        assert payment.business_id is None
+        assert payment.customer_email == "ada@example.com"
         assert payment.amount_kobo == 300_000
-        assert payment.status == "initialized"
 
 
-def test_callback_activates_lifetime_access(client, app, monkeypatch):
-    create_account(client)
+def test_verified_payment_allows_one_account_and_dashboard(client, app, monkeypatch):
     with app.app_context():
-        business = Business.query.one()
-        payment = Payment(business_id=business.id, reference="SB-test", amount_kobo=300_000)
+        payment = Payment(customer_email="ada@example.com", reference="SB-test", amount_kobo=300_000)
         db.session.add(payment)
         db.session.commit()
-        verified = successful_transaction(payment)
+        verified = transaction(payment)
     monkeypatch.setattr("app.payments.routes.verify_transaction", lambda *args: verified)
-    response = client.get("/payments/callback?reference=SB-test")
-    assert response.status_code == 200
-    assert b"permanent StockBridge access" in response.data
+    response = client.get("/payments/callback?reference=SB-test", follow_redirects=True)
+    assert b"Payment confirmed" in response.data
+    response = client.post("/auth/signup", data={"full_name": "Ada Owner", "business_name": "Ada Mart", "password": "password123"}, follow_redirects=True)
+    assert b"lifetime access is active" in response.data
     with app.app_context():
-        business = Business.query.one()
-        assert business.subscription_plan == "lifetime"
-        assert business.subscription_status == "active"
-        assert business.subscription_ends_at is None
+        assert User.query.one().email == "ada@example.com"
+        assert Business.query.one().subscription_plan == "lifetime"
+        assert Payment.query.one().business_id == Business.query.one().id
 
 
-def test_wrong_amount_does_not_activate(client, app, monkeypatch):
-    create_account(client)
+def test_wrong_amount_does_not_allow_signup(client, app, monkeypatch):
     with app.app_context():
-        business = Business.query.one()
-        payment = Payment(business_id=business.id, reference="SB-wrong", amount_kobo=300_000)
+        payment = Payment(customer_email="ada@example.com", reference="SB-wrong", amount_kobo=300_000)
         db.session.add(payment)
         db.session.commit()
-        verified = successful_transaction(payment)
-        verified["amount"] = 100
+        verified = transaction(payment, amount=100)
     monkeypatch.setattr("app.payments.routes.verify_transaction", lambda *args: verified)
     response = client.get("/payments/callback?reference=SB-wrong", follow_redirects=True)
     assert b"could not be verified" in response.data
-    with app.app_context():
-        assert Business.query.one().subscription_plan == "starter"
+    assert client.get("/auth/signup").status_code == 302
 
 
-def test_signed_webhook_activates_access(client, app):
-    create_account(client)
+def test_signed_webhook_confirms_payment(client, app):
     with app.app_context():
-        business = Business.query.one()
-        payment = Payment(business_id=business.id, reference="SB-hook", amount_kobo=300_000)
+        payment = Payment(customer_email="ada@example.com", reference="SB-hook", amount_kobo=300_000)
         db.session.add(payment)
         db.session.commit()
-        event = {"event": "charge.success", "data": successful_transaction(payment)}
+        event = {"event": "charge.success", "data": transaction(payment)}
     payload = json.dumps(event, separators=(",", ":")).encode()
     signature = hmac.new(b"sk_test_secret", payload, hashlib.sha512).hexdigest()
-    response = client.post("/payments/webhook", data=payload, content_type="application/json", headers={"x-paystack-signature": signature})
-    assert response.status_code == 200
+    assert client.post("/payments/webhook", data=payload, content_type="application/json", headers={"x-paystack-signature": signature}).status_code == 200
     with app.app_context():
         assert Payment.query.one().status == "success"
-        assert Business.query.one().subscription_plan == "lifetime"
+        assert Payment.query.one().claim_token
 
 
 def test_webhook_rejects_bad_signature(client):
-    response = client.post("/payments/webhook", data=b"{}", content_type="application/json", headers={"x-paystack-signature": "wrong"})
-    assert response.status_code == 401
+    assert client.post("/payments/webhook", data=b"{}", content_type="application/json", headers={"x-paystack-signature": "wrong"}).status_code == 401

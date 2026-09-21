@@ -4,7 +4,7 @@ from flask_login import current_user,login_required
 from app.models import Expense,Product,Sale
 main_bp=Blueprint("main",__name__)
 @main_bp.route("/")
-def index(): return redirect(url_for("main.dashboard")) if current_user.is_authenticated else redirect(url_for("auth.login"))
+def index(): return redirect(url_for("main.dashboard")) if current_user.is_authenticated else redirect(url_for("subscriptions.index"))
 @main_bp.route("/dashboard")
 @login_required
 def dashboard():

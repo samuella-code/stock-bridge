@@ -51,13 +51,13 @@ def create_app(test_config=None):
         app.register_blueprint(blueprint)
 
     @app.before_request
-    def require_current_subscription_for_writes():
-        protected = {"products", "sales", "expenses", "restocking"}
-        if current_user.is_authenticated and request.method in {"POST", "PUT", "PATCH", "DELETE"} and request.blueprint in protected:
+    def require_lifetime_access():
+        protected = {"main", "products", "sales", "expenses", "restocking", "profile"}
+        if current_user.is_authenticated and request.blueprint in protected:
             business = current_user.businesses[0]
             db.session.refresh(business)
             if not business.has_write_access:
-                flash("Your trial has ended. Choose a plan to continue adding business records.", "warning")
+                flash("A verified lifetime payment is required to access StockBridge.", "warning")
                 return redirect(url_for("subscriptions.index"))
 
     @app.context_processor

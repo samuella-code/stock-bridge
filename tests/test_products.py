@@ -21,7 +21,7 @@ def login(client, email="owner@example.com"):
         user.set_password("password123")
         db.session.add(user)
         db.session.flush()
-        db.session.add(Business(user_id=user.id, name="Test Shop"))
+        db.session.add(Business(user_id=user.id, name="Test Shop", subscription_plan="lifetime", subscription_status="active"))
         db.session.commit()
     response = client.post("/auth/login", data={"email": email, "password": "password123"})
     assert response.status_code == 302
@@ -43,7 +43,7 @@ def test_business_ownership_blocks_cross_account_edit(client, app):
         other.set_password("password123")
         db.session.add(other)
         db.session.flush()
-        business = Business(user_id=other.id, name="Other Shop")
+        business = Business(user_id=other.id, name="Other Shop", subscription_plan="lifetime", subscription_status="active")
         db.session.add(business)
         db.session.flush()
         product = Product(business_id=business.id, name="Private Product")

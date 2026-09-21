@@ -22,7 +22,7 @@ def seed(client):
         user.set_password("password123")
         db.session.add(user)
         db.session.flush()
-        business = Business(user_id=user.id, name="Shop")
+        business = Business(user_id=user.id, name="Shop", subscription_plan="lifetime", subscription_status="active")
         db.session.add(business)
         db.session.flush()
         product = Product(business_id=business.id, name="Water", buying_price=100, selling_price=150, stock_quantity=10, minimum_stock_level=3)

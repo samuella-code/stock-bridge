@@ -73,14 +73,6 @@
             </header>
             {% endif %}
 
-            {% if current_user.is_authenticated and subscription_business.subscription_status == 'trialing' %}
-            <div class="trial-banner {{ 'trial-ended' if not subscription_business.has_write_access }}">
-                {% if subscription_business.has_write_access %}<span><strong>{{ subscription_business.trial_days_remaining }} days left</strong> in your free trial.</span>
-                {% else %}<span><strong>Your free trial has ended.</strong> Your records remain available to view.</span>{% endif %}
-                <a href="{{ url_for('subscriptions.index') }}">View plans</a>
-            </div>
-            {% endif %}
-
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                     <div class="flash-stack">

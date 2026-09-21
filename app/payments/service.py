@@ -25,14 +25,14 @@ def _request(path, secret_key, method="GET", payload=None):
     return result["data"]
 
 
-def initialize_transaction(secret_key, email, amount_kobo, reference, callback_url, business_id):
+def initialize_transaction(secret_key, email, amount_kobo, reference, callback_url):
     return _request("/transaction/initialize", secret_key, "POST", {
         "email": email,
         "amount": amount_kobo,
         "currency": "NGN",
         "reference": reference,
         "callback_url": callback_url,
-        "metadata": {"business_id": business_id, "product": "stockbridge_lifetime"},
+        "metadata": {"customer_email": email, "product": "stockbridge_lifetime"},
     })
 
 

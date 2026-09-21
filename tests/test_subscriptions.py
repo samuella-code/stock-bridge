@@ -1,8 +1,7 @@
-from datetime import datetime, timedelta
 import pytest
 
 from app import create_app, db
-from app.models import Business
+from app.models import Business, User
 
 
 @pytest.fixture
@@ -20,34 +19,30 @@ def client(app):
     return app.test_client()
 
 
-def create_account(client):
-    return client.post("/auth/signup", data={"full_name":"Ada Owner","business_name":"Ada Mini Mart","email":"ada@example.com","password":"password123"}, follow_redirects=True)
-
-
-def test_signup_starts_fourteen_day_trial(client, app):
-    response = create_account(client)
-    assert b"14-day free trial" in response.data
-    with app.app_context():
-        business = Business.query.one()
-        assert business.subscription_status == "trialing"
-        assert business.subscription_plan == "starter"
-        assert 13 <= (business.trial_ends_at-business.trial_started_at).days <= 14
-
-
-def test_plans_page_shows_lifetime_price(client, app):
-    create_account(client)
-    response = client.get("/plans/")
-    assert response.status_code == 200
+def test_public_offer_precedes_signup(client):
+    response = client.get("/")
+    assert response.status_code == 302
+    response = client.get(response.headers["Location"])
     assert b"3,000" in response.data
-    assert b"No recurring billing" in response.data
+    assert b"No free trial" in response.data
+    assert b"Pay and get access" in response.data
 
 
-def test_expired_trial_blocks_new_business_records(client, app):
-    create_account(client)
+def test_signup_requires_verified_payment(client):
+    response = client.get("/auth/signup")
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/plans/")
+
+
+def test_inactive_legacy_account_cannot_open_dashboard(client, app):
     with app.app_context():
-        business = Business.query.one()
-        business.trial_ends_at = datetime.utcnow()-timedelta(days=1)
+        user = User(full_name="Old User", email="old@example.com")
+        user.set_password("password123")
+        db.session.add(user)
+        db.session.flush()
+        db.session.add(Business(user_id=user.id, name="Old Shop", subscription_status="inactive"))
         db.session.commit()
-    response = client.post("/expenses/", data={"description":"Transport","amount":"2500"})
+    client.post("/auth/login", data={"email": "old@example.com", "password": "password123"})
+    response = client.get("/dashboard")
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/plans/")
