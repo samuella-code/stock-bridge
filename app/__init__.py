@@ -42,10 +42,11 @@ def create_app(test_config=None):
     from app.restocking.routes import restocking_bp
     from app.profile.routes import profile_bp
     from app.subscriptions.routes import subscriptions_bp
+    from app.payments.routes import payments_bp
 
     for blueprint in (
         auth_bp, main_bp, products_bp, sales_bp,
-        expenses_bp, restocking_bp, profile_bp, subscriptions_bp,
+        expenses_bp, restocking_bp, profile_bp, subscriptions_bp, payments_bp,
     ):
         app.register_blueprint(blueprint)
 

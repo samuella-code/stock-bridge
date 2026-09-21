@@ -14,7 +14,7 @@ class Business(db.Model):
  trial_started_at=db.Column(db.DateTime,nullable=False,default=datetime.utcnow)
  trial_ends_at=db.Column(db.DateTime,nullable=False,default=lambda: datetime.utcnow()+timedelta(days=14))
  subscription_ends_at=db.Column(db.DateTime)
- products=db.relationship("Product",backref="business",cascade="all, delete-orphan"); sales=db.relationship("Sale",backref="business",cascade="all, delete-orphan"); expenses=db.relationship("Expense",backref="business",cascade="all, delete-orphan")
+ products=db.relationship("Product",backref="business",cascade="all, delete-orphan"); sales=db.relationship("Sale",backref="business",cascade="all, delete-orphan"); expenses=db.relationship("Expense",backref="business",cascade="all, delete-orphan"); payments=db.relationship("Payment",backref="business",cascade="all, delete-orphan")
  @property
  def trial_days_remaining(self):
   if self.subscription_status != "trialing" or not self.trial_ends_at: return 0
@@ -38,5 +38,16 @@ class Sale(db.Model):
  def profit(self): return (self.unit_price-self.unit_cost)*self.quantity
 class Expense(db.Model):
  id=db.Column(db.Integer,primary_key=True); business_id=db.Column(db.Integer,db.ForeignKey("business.id"),nullable=False,index=True); description=db.Column(db.String(180),nullable=False); amount=db.Column(db.Numeric(12,2),nullable=False); spent_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False,index=True)
+class Payment(db.Model):
+ id=db.Column(db.Integer,primary_key=True)
+ business_id=db.Column(db.Integer,db.ForeignKey("business.id"),nullable=False,index=True)
+ reference=db.Column(db.String(100),unique=True,nullable=False,index=True)
+ provider=db.Column(db.String(30),nullable=False,default="paystack")
+ product=db.Column(db.String(40),nullable=False,default="lifetime")
+ amount_kobo=db.Column(db.Integer,nullable=False)
+ currency=db.Column(db.String(3),nullable=False,default="NGN")
+ status=db.Column(db.String(20),nullable=False,default="initialized",index=True)
+ paid_at=db.Column(db.DateTime)
+ created_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False)
 @login_manager.user_loader
 def load_user(i): return db.session.get(User,int(i))

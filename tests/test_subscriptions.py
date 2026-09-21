@@ -34,13 +34,12 @@ def test_signup_starts_fourteen_day_trial(client, app):
         assert 13 <= (business.trial_ends_at-business.trial_started_at).days <= 14
 
 
-def test_plans_page_shows_prices(client, app):
+def test_plans_page_shows_lifetime_price(client, app):
     create_account(client)
     response = client.get("/plans/")
     assert response.status_code == 200
-    assert b"3,000" in response.data
-    assert b"7,500" in response.data
-    assert b"15,000" in response.data
+    assert b"50,000" in response.data
+    assert b"No recurring billing" in response.data
 
 
 def test_expired_trial_blocks_new_business_records(client, app):
