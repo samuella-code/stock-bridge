@@ -16,16 +16,10 @@ def signup():
     if current_user.is_authenticated:
         return redirect(url_for("main.dashboard"))
 
-    claim_token = session.get("paid_claim_token")
-    payment = Payment.query.filter_by(claim_token=claim_token, status="success", business_id=None).first() if claim_token else None
-    if not payment:
-        flash("Pay the one-time ₦3,000 access fee before creating an account.", "warning")
-        return redirect(url_for("subscriptions.index"))
-
     if request.method == "POST":
         full_name = request.form.get("full_name", "").strip()
         business_name = request.form.get("business_name", "").strip()
-        email = payment.customer_email
+        email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
 
         if not all([full_name, business_name, email, password]):
@@ -46,13 +40,10 @@ def signup():
         db.session.flush()
 
         now = datetime.utcnow()
-        business = Business(user_id=user.id, name=business_name, subscription_plan="lifetime", subscription_status="active", trial_started_at=now, trial_ends_at=now)
+        business = Business(user_id=user.id, name=business_name, subscription_plan="starter", subscription_status="inactive", trial_started_at=now, trial_ends_at=now)
         db.session.add(business)
-        db.session.flush()
-        payment.business_id = business.id
         db.session.commit()
 
-        session.pop("paid_claim_token", None)
         login_user(user)
         user.verification_sent_at = datetime.utcnow()
         db.session.commit()
@@ -64,7 +55,7 @@ def signup():
         flash("Account created. Check your email to verify your account." if sent else "Account created, but the verification email could not be sent. Please use resend after email is configured.", "success" if sent else "warning")
         return redirect(url_for("auth.verification_pending"))
 
-    return render_template("auth/signup.html", paid_email=payment.customer_email)
+    return render_template("auth/signup.html")
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])

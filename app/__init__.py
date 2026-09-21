@@ -53,15 +53,17 @@ def create_app(test_config=None):
 
     @app.before_request
     def require_lifetime_access():
-        protected = {"main", "products", "sales", "expenses", "restocking", "profile", "admin"}
-        if current_user.is_authenticated and request.blueprint in protected:
+        verified_areas = {"main", "products", "sales", "expenses", "restocking", "profile", "admin"}
+        paid_areas = {"products", "sales", "expenses", "restocking"}
+        if current_user.is_authenticated and request.blueprint in verified_areas:
             if not current_user.email_verified_at:
                 flash("Verify your email to access StockBridge.", "warning")
                 return redirect(url_for("auth.verification_pending"))
+        if current_user.is_authenticated and request.blueprint in paid_areas:
             business = current_user.businesses[0]
             db.session.refresh(business)
             if not business.has_write_access:
-                flash("A verified lifetime payment is required to access StockBridge.", "warning")
+                flash("Unlock Products, Sales, Expenses and Restocking with the one-time ₦3,000 payment.", "warning")
                 return redirect(url_for("subscriptions.index"))
 
     @app.context_processor

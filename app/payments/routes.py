@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for
-from flask_login import current_user
+from flask_login import current_user, login_required
 
 from app import csrf, db
 from app.models import Payment, User
@@ -28,6 +28,7 @@ def _confirm(payment, data):
 
 
 @payments_bp.get("/checkout")
+@login_required
 def checkout():
     if current_user.is_authenticated and current_user.businesses[0].has_write_access:
         return redirect(url_for("main.dashboard"))
@@ -35,12 +36,13 @@ def checkout():
 
 
 @payments_bp.post("/initialize")
+@login_required
 def initialize():
-    email = current_user.email if current_user.is_authenticated else request.form.get("email", "").strip().lower()
+    email = current_user.email
     if not email or "@" not in email:
         flash("Enter a valid email address.", "error")
         return redirect(url_for("payments.checkout"))
-    existing_user = User.query.filter_by(email=email).first()
+    existing_user = current_user
     if existing_user and existing_user.businesses[0].has_write_access:
         flash("That account already has lifetime access. Log in instead.", "success")
         return redirect(url_for("auth.login"))
