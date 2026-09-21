@@ -29,19 +29,20 @@ def _confirm(payment, data):
 
 @payments_bp.get("/checkout")
 def checkout():
-    if current_user.is_authenticated:
+    if current_user.is_authenticated and current_user.businesses[0].has_write_access:
         return redirect(url_for("main.dashboard"))
-    return render_template("payments/checkout.html", price=current_app.config["LIFETIME_PRICE_NAIRA"], configured=bool(current_app.config["PAYSTACK_SECRET_KEY"]))
+    return render_template("payments/checkout.html", price=current_app.config["LIFETIME_PRICE_NAIRA"], configured=bool(current_app.config["PAYSTACK_SECRET_KEY"]), account_email=current_user.email if current_user.is_authenticated else "")
 
 
 @payments_bp.post("/initialize")
 def initialize():
-    email = request.form.get("email", "").strip().lower()
+    email = current_user.email if current_user.is_authenticated else request.form.get("email", "").strip().lower()
     if not email or "@" not in email:
         flash("Enter a valid email address.", "error")
         return redirect(url_for("payments.checkout"))
-    if User.query.filter_by(email=email).first():
-        flash("An account already uses that email. Log in instead.", "warning")
+    existing_user = User.query.filter_by(email=email).first()
+    if existing_user and existing_user.businesses[0].has_write_access:
+        flash("That account already has lifetime access. Log in instead.", "success")
         return redirect(url_for("auth.login"))
     secret = current_app.config["PAYSTACK_SECRET_KEY"]
     if not secret:
@@ -89,6 +90,16 @@ def callback():
         if not _confirm(payment, data):
             flash("The payment details could not be verified.", "error")
             return redirect(url_for("payments.checkout"))
+    existing_user = User.query.filter_by(email=payment.customer_email).first()
+    if existing_user:
+        business = existing_user.businesses[0]
+        business.subscription_plan = "lifetime"
+        business.subscription_status = "active"
+        business.subscription_ends_at = None
+        payment.business_id = business.id
+        db.session.commit()
+        flash("Payment confirmed. Your lifetime access is active.", "success")
+        return redirect(url_for("main.dashboard") if current_user.is_authenticated and current_user.id == existing_user.id else url_for("auth.login"))
     session["paid_claim_token"] = payment.claim_token
     return redirect(url_for("auth.signup"))
 

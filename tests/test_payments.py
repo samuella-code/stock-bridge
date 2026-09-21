@@ -82,3 +82,22 @@ def test_signed_webhook_confirms_payment(client, app):
 
 def test_webhook_rejects_bad_signature(client):
     assert client.post("/payments/webhook", data=b"{}", content_type="application/json", headers={"x-paystack-signature": "wrong"}).status_code == 401
+
+
+def test_existing_inactive_account_can_pay_for_access(client, app, monkeypatch):
+    with app.app_context():
+        user = User(full_name="Old Owner", email="old@example.com")
+        user.set_password("password123")
+        db.session.add(user)
+        db.session.flush()
+        db.session.add(Business(user_id=user.id, name="Old Shop", subscription_status="inactive"))
+        payment = Payment(customer_email=user.email, reference="SB-existing", amount_kobo=300_000)
+        db.session.add(payment)
+        db.session.commit()
+        verified = transaction(payment)
+    client.post("/auth/login", data={"email": "old@example.com", "password": "password123"})
+    monkeypatch.setattr("app.payments.routes.verify_transaction", lambda *args: verified)
+    response = client.get("/payments/callback?reference=SB-existing")
+    assert response.headers["Location"].endswith("/dashboard")
+    with app.app_context():
+        assert Business.query.one().has_write_access
