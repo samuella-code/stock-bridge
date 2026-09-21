@@ -15,7 +15,7 @@ def app():
         "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
         "SECRET_KEY": "test",
         "PAYSTACK_SECRET_KEY": "sk_test_secret",
-        "LIFETIME_PRICE_NAIRA": 50000,
+        "LIFETIME_PRICE_NAIRA": 3000,
     })
     with app.app_context():
         db.create_all()
@@ -45,7 +45,7 @@ def test_initialize_creates_payment_and_redirects(client, app, monkeypatch):
     assert response.headers["Location"] == "https://checkout.paystack.test/example"
     with app.app_context():
         payment = Payment.query.one()
-        assert payment.amount_kobo == 5_000_000
+        assert payment.amount_kobo == 300_000
         assert payment.status == "initialized"
 
 
@@ -53,7 +53,7 @@ def test_callback_activates_lifetime_access(client, app, monkeypatch):
     create_account(client)
     with app.app_context():
         business = Business.query.one()
-        payment = Payment(business_id=business.id, reference="SB-test", amount_kobo=5_000_000)
+        payment = Payment(business_id=business.id, reference="SB-test", amount_kobo=300_000)
         db.session.add(payment)
         db.session.commit()
         verified = successful_transaction(payment)
@@ -72,7 +72,7 @@ def test_wrong_amount_does_not_activate(client, app, monkeypatch):
     create_account(client)
     with app.app_context():
         business = Business.query.one()
-        payment = Payment(business_id=business.id, reference="SB-wrong", amount_kobo=5_000_000)
+        payment = Payment(business_id=business.id, reference="SB-wrong", amount_kobo=300_000)
         db.session.add(payment)
         db.session.commit()
         verified = successful_transaction(payment)
@@ -88,7 +88,7 @@ def test_signed_webhook_activates_access(client, app):
     create_account(client)
     with app.app_context():
         business = Business.query.one()
-        payment = Payment(business_id=business.id, reference="SB-hook", amount_kobo=5_000_000)
+        payment = Payment(business_id=business.id, reference="SB-hook", amount_kobo=300_000)
         db.session.add(payment)
         db.session.commit()
         event = {"event": "charge.success", "data": successful_transaction(payment)}

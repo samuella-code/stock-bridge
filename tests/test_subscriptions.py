@@ -38,7 +38,7 @@ def test_plans_page_shows_lifetime_price(client, app):
     create_account(client)
     response = client.get("/plans/")
     assert response.status_code == 200
-    assert b"50,000" in response.data
+    assert b"3,000" in response.data
     assert b"No recurring billing" in response.data
 
 

@@ -152,7 +152,7 @@ StockBridge should not try to become a full enterprise ERP in the MVP. Its early
 
 ### Revenue model
 
-The first paid offer is permanent access for one business workspace after a single payment. The current ₦50,000 price is configurable and should be treated as a pilot assumption until real retailers confirm willingness to pay. Future paid add-ons can cover extra branches, advanced reporting, onboarding or supplier services without taking away the lifetime features already purchased.
+The first paid offer is permanent access for one business workspace after a single payment. The current ₦3,000 launch price is configurable and should be treated as an early-adopter offer while real retailers confirm willingness to pay. Future paid add-ons can cover extra branches, advanced reporting, onboarding or supplier services without taking away the lifetime features already purchased.
 
 Future revenue opportunities may include higher subscription tiers, multi-branch support, supplier tools, procurement commissions, and integrations with licensed financial-service partners.
 
@@ -161,7 +161,7 @@ Future revenue opportunities may include higher subscription tiers, multi-branch
 StockBridge creates Paystack transactions on the server and only grants lifetime access after verifying the reference, amount, currency and signed payment event.
 
 1. Copy `.env.example` to `.env` and add your Paystack **test** secret/public keys. Never commit real keys.
-2. Set `LIFETIME_PRICE_NAIRA` to the validated one-time price (the starter value is `50000`).
+2. Set `LIFETIME_PRICE_NAIRA` to the launch price (the starter value is `3000`).
 3. In the Paystack test dashboard, set the webhook URL to `https://your-domain.example/payments/webhook`.
 4. Run `flask --app app:create_app db upgrade` before starting the updated app.
 5. Complete a Paystack test payment and confirm the business changes to `lifetime` / `active`.
