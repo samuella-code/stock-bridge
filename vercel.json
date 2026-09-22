@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "flask --app app:create_app db upgrade",
   "functions": {
     "wsgi.py": {
       "maxDuration": 30
