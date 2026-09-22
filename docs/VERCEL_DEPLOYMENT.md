@@ -38,6 +38,7 @@ use a database):
 | `SMTP_USERNAME` | SMTP account username |
 | `SMTP_PASSWORD` | SMTP app password, not the normal mailbox password |
 | `SMTP_FROM_EMAIL` | Verified sender address |
+| `SMTP_FROM_NAME` | Sender display name, for example `StockBridge` |
 | `SMTP_USE_TLS` | `true` |
 
 Never commit or paste real secret values into GitHub, documentation, or chat.
