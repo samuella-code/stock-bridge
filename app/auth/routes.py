@@ -4,7 +4,12 @@ from flask_login import current_user, login_required, login_user, logout_user
 from itsdangerous import BadSignature, SignatureExpired
 
 from app import db
-from app.email_service import read_verification_token, send_verification_email
+from app.email_service import (
+    read_password_reset_token,
+    read_verification_token,
+    send_password_reset_email,
+    send_verification_email,
+)
 from app.models import Business, Payment, User
 
 
@@ -81,6 +86,59 @@ def login():
     return render_template("auth/login.html")
 
 
+@auth_bp.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if current_user.is_authenticated:
+        return redirect(url_for("main.dashboard"))
+
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        user = User.query.filter_by(email=email).first() if email else None
+        if user:
+            try:
+                send_password_reset_email(user)
+            except Exception:
+                current_app.logger.exception("Could not send password reset email to %s", user.email)
+        flash("If that email belongs to a StockBridge account, a password-reset link has been sent.", "success")
+        return redirect(url_for("auth.login"))
+
+    return render_template("auth/forgot_password.html")
+
+
+@auth_bp.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    if current_user.is_authenticated:
+        logout_user()
+    try:
+        email = read_password_reset_token(token)
+    except SignatureExpired:
+        flash("That password-reset link has expired. Request a new one.", "warning")
+        return redirect(url_for("auth.forgot_password"))
+    except BadSignature:
+        flash("That password-reset link is invalid.", "error")
+        return redirect(url_for("auth.forgot_password"))
+
+    user = User.query.filter_by(email=email.lower()).first()
+    if not user:
+        flash("That password-reset link is invalid.", "error")
+        return redirect(url_for("auth.forgot_password"))
+
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+        if len(password) < 8:
+            flash("Password must be at least 8 characters.", "error")
+        elif password != confirm_password:
+            flash("The passwords do not match.", "error")
+        else:
+            user.set_password(password)
+            db.session.commit()
+            flash("Your password has been updated. You can now log in.", "success")
+            return redirect(url_for("auth.login"))
+
+    return render_template("auth/reset_password.html", token=token)
+
+
 @auth_bp.get("/verify-pending")
 @login_required
 def verification_pending():
@@ -118,8 +176,9 @@ def resend_verification():
     except Exception:
         sent = False
         current_app.logger.exception("Could not resend verification email to %s", current_user.email)
-    current_user.verification_sent_at = datetime.utcnow()
-    db.session.commit()
+    if sent:
+        current_user.verification_sent_at = datetime.utcnow()
+        db.session.commit()
     flash("A new verification email was sent." if sent else "Email is not configured yet. Please contact the StockBridge owner.", "success" if sent else "warning")
     return redirect(url_for("auth.verification_pending"))
 
