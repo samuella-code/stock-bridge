@@ -2,8 +2,8 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 
-from flask import Flask, jsonify
-from flask_login import LoginManager
+from flask import Flask, flash, jsonify, redirect, request, url_for
+from flask_login import LoginManager, current_user
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import CSRFProtect
@@ -41,12 +41,37 @@ def create_app(test_config=None):
     from app.expenses.routes import expenses_bp
     from app.restocking.routes import restocking_bp
     from app.profile.routes import profile_bp
+    from app.subscriptions.routes import subscriptions_bp
+    from app.payments.routes import payments_bp
+    from app.admin.routes import admin_bp
 
     for blueprint in (
         auth_bp, main_bp, products_bp, sales_bp,
-        expenses_bp, restocking_bp, profile_bp,
+        expenses_bp, restocking_bp, profile_bp, subscriptions_bp, payments_bp, admin_bp,
     ):
         app.register_blueprint(blueprint)
+
+    @app.before_request
+    def require_lifetime_access():
+        verified_areas = {"main", "products", "sales", "expenses", "restocking", "profile", "admin"}
+        paid_areas = {"products", "sales", "expenses", "restocking"}
+        if current_user.is_authenticated and request.blueprint in verified_areas:
+            if not current_user.email_verified_at:
+                flash("Verify your email to access StockBridge.", "warning")
+                return redirect(url_for("auth.verification_pending"))
+        if current_user.is_authenticated and request.blueprint in paid_areas:
+            business = current_user.businesses[0]
+            db.session.refresh(business)
+            if not business.has_write_access:
+                flash("Unlock Products, Sales, Expenses and Restocking with the one-time ₦3,000 payment.", "warning")
+                return redirect(url_for("subscriptions.index"))
+
+    @app.context_processor
+    def subscription_context():
+        if not current_user.is_authenticated or not current_user.businesses:
+            return {}
+        owners = {email.strip().lower() for email in app.config["ADMIN_EMAILS"].split(",") if email.strip()}
+        return {"subscription_business": current_user.businesses[0], "is_owner": current_user.email.lower() in owners}
 
     @app.get("/health")
     def health():
@@ -57,7 +82,7 @@ def create_app(test_config=None):
             app.logger.exception("Health check failed")
             return jsonify(status="unhealthy"), 503
 
-    if not app.testing:
+    if not app.testing and not os.getenv("VERCEL"):
         os.makedirs(app.instance_path, exist_ok=True)
         handler = RotatingFileHandler(
             os.path.join(app.instance_path, "stockbridge.log"),
@@ -68,6 +93,10 @@ def create_app(test_config=None):
             "%(asctime)s %(levelname)s %(message)s"
         ))
         app.logger.addHandler(handler)
+        app.logger.setLevel(logging.INFO)
+    elif not app.testing:
+        # Vercel captures stdout/stderr in its runtime logs. Its function
+        # filesystem must not be used for persistent application logs.
         app.logger.setLevel(logging.INFO)
 
     return app

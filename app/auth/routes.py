@@ -1,8 +1,11 @@
-from flask import Blueprint, flash, redirect, render_template, request, url_for
-from flask_login import current_user, login_user, logout_user
+from datetime import datetime
+from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
+from flask_login import current_user, login_required, login_user, logout_user
+from itsdangerous import BadSignature, SignatureExpired
 
 from app import db
-from app.models import Business, User
+from app.email_service import read_verification_token, send_verification_email
+from app.models import Business, Payment, User
 
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
@@ -36,13 +39,21 @@ def signup():
         db.session.add(user)
         db.session.flush()
 
-        business = Business(user_id=user.id, name=business_name)
+        now = datetime.utcnow()
+        business = Business(user_id=user.id, name=business_name, subscription_plan="starter", subscription_status="inactive", trial_started_at=now, trial_ends_at=now)
         db.session.add(business)
         db.session.commit()
 
         login_user(user)
-        flash("Welcome to StockBridge. Your workspace is ready.", "success")
-        return redirect(url_for("main.dashboard"))
+        user.verification_sent_at = datetime.utcnow()
+        db.session.commit()
+        try:
+            sent = send_verification_email(user)
+        except Exception:
+            sent = False
+            current_app.logger.exception("Could not send verification email to %s", user.email)
+        flash("Account created. Check your email to verify your account." if sent else "Account created, but the verification email could not be sent. Please use resend after email is configured.", "success" if sent else "warning")
+        return redirect(url_for("auth.verification_pending"))
 
     return render_template("auth/signup.html")
 
@@ -62,10 +73,55 @@ def login():
             return render_template("auth/login.html")
 
         login_user(user)
+        if not user.email_verified_at:
+            return redirect(url_for("auth.verification_pending"))
         flash("Welcome back.", "success")
         return redirect(url_for("main.dashboard"))
 
     return render_template("auth/login.html")
+
+
+@auth_bp.get("/verify-pending")
+@login_required
+def verification_pending():
+    if current_user.email_verified_at:
+        return redirect(url_for("main.dashboard"))
+    return render_template("auth/verify_pending.html")
+
+
+@auth_bp.get("/verify/<token>")
+def verify_email(token):
+    try:
+        email = read_verification_token(token)
+    except SignatureExpired:
+        flash("That verification link has expired. Log in to request another.", "warning")
+        return redirect(url_for("auth.login"))
+    except BadSignature:
+        flash("That verification link is invalid.", "error")
+        return redirect(url_for("auth.login"))
+    user = User.query.filter_by(email=email.lower()).first_or_404()
+    user.email_verified_at = user.email_verified_at or datetime.utcnow()
+    db.session.commit()
+    if not current_user.is_authenticated:
+        login_user(user)
+    flash("Email verified. Welcome to StockBridge.", "success")
+    return redirect(url_for("main.dashboard"))
+
+
+@auth_bp.post("/resend-verification")
+@login_required
+def resend_verification():
+    if current_user.email_verified_at:
+        return redirect(url_for("main.dashboard"))
+    try:
+        sent = send_verification_email(current_user)
+    except Exception:
+        sent = False
+        current_app.logger.exception("Could not resend verification email to %s", current_user.email)
+    current_user.verification_sent_at = datetime.utcnow()
+    db.session.commit()
+    flash("A new verification email was sent." if sent else "Email is not configured yet. Please contact the StockBridge owner.", "success" if sent else "warning")
+    return redirect(url_for("auth.verification_pending"))
 
 
 @auth_bp.route("/logout", methods=["POST"])

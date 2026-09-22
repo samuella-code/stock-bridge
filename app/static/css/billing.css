@@ -1,0 +1,45 @@
+.trial-banner { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.75rem 2rem; background:#ecfdf3; color:#166534; border-bottom:1px solid #bbf7d0; font-size:.9rem; }
+.trial-banner a { color:inherit; font-weight:700; }
+.trial-banner.trial-ended { background:#fff7ed; color:#9a3412; border-color:#fed7aa; }
+.billing-page { display:grid; gap:1.5rem; }
+.billing-intro { display:flex; justify-content:space-between; gap:1.5rem; align-items:flex-end; }
+.billing-intro h2 { max-width:620px; }
+.subscription-summary { min-width:220px; background:#0f172a; color:#fff; border-radius:18px; padding:1.15rem 1.3rem; display:grid; gap:.25rem; }
+.subscription-summary span,.subscription-summary small { color:#cbd5e1; }
+.subscription-summary strong { font-size:1.5rem; }
+.pricing-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1rem; }
+.pricing-card { position:relative; background:#fff; border:1px solid #e2e8f0; border-radius:22px; padding:1.5rem; display:flex; flex-direction:column; gap:1rem; }
+.pricing-card.featured { border:2px solid #22c55e; box-shadow:0 16px 45px rgba(15,23,42,.09); }
+.popular-badge { position:absolute; right:1rem; top:1rem; background:#dcfce7; color:#166534; border-radius:999px; padding:.3rem .65rem; font-size:.75rem; font-weight:700; }
+.plan-price strong { font:800 2rem Manrope,sans-serif; }
+.plan-price span { color:#64748b; }
+.pricing-card ul { list-style:none; padding:0; margin:0 0 auto; display:grid; gap:.65rem; color:#475569; }
+.pricing-card button { width:100%; }
+@media(max-width:850px) { .pricing-grid{grid-template-columns:1fr}.billing-intro{align-items:stretch;flex-direction:column}.subscription-summary{min-width:0}.trial-banner{padding:.75rem 1rem} }
+.checkout-steps { display:grid; grid-template-columns:repeat(3,1fr); gap:.75rem; }
+.checkout-steps div { display:flex; align-items:center; gap:.65rem; color:#94a3b8; font-size:.85rem; }
+.checkout-steps span { display:grid; place-items:center; width:30px; height:30px; border-radius:50%; background:#e2e8f0; font-weight:800; }
+.checkout-steps .done,.checkout-steps .active { color:#166534; }
+.checkout-steps .done span,.checkout-steps .active span { background:#dcfce7; }
+.checkout-steps .active span { outline:3px solid #bbf7d0; }
+.lifetime-card { display:grid; grid-template-columns:1.5fr .75fr; gap:2rem; background:#fff; border:2px solid #22c55e; border-radius:24px; padding:2rem; box-shadow:0 18px 50px rgba(15,23,42,.08); }
+.lifetime-card .popular-badge { position:static; display:inline-block; margin-bottom:1rem; }
+.lifetime-card ul { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; list-style:none; padding:0; margin:1.5rem 0 0; color:#475569; }
+.lifetime-price { display:flex; flex-direction:column; justify-content:center; border-left:1px solid #e2e8f0; padding-left:2rem; }
+.lifetime-price>span,.lifetime-price small { color:#64748b; }
+.lifetime-price>strong { font:800 2.5rem Manrope,sans-serif; margin:.35rem 0; }
+.lifetime-price .primary-btn,.lifetime-price .secondary-btn { text-align:center; margin-top:1.25rem; }
+.payment-note { text-align:center; color:#64748b; font-size:.85rem; }
+.checkout-layout { display:grid; grid-template-columns:1.2fr .8fr; gap:2rem; align-items:start; }
+.secure-points { display:grid; gap:.7rem; margin-top:1.5rem; }
+.secure-points p { margin:0; }
+.order-summary { display:grid; gap:1rem; }
+.order-summary>div { display:flex; justify-content:space-between; gap:1rem; }
+.order-summary hr { width:100%; border:0; border-top:1px solid #e2e8f0; }
+.order-total strong { font-size:1.3rem; }
+.order-summary .text-link { text-align:center; font-weight:700; color:#166534; }
+.config-warning { color:#9a3412; text-align:center; }
+.payment-success { max-width:640px; margin:2rem auto; text-align:center; padding:3rem; }
+.success-mark { display:grid; place-items:center; width:64px; height:64px; margin:0 auto 1rem; border-radius:50%; background:#dcfce7; color:#166534; font-size:2rem; font-weight:800; }
+.payment-success .primary-btn { display:inline-block; margin-top:1.25rem; }
+@media(max-width:850px) { .lifetime-card,.checkout-layout{grid-template-columns:1fr}.lifetime-price{border-left:0;border-top:1px solid #e2e8f0;padding:1.5rem 0 0}.lifetime-card ul{grid-template-columns:1fr}.checkout-steps strong{display:none} }

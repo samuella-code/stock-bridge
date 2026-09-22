@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Opening Paystack · StockBridge{% endblock %}
+{% block page_title %}Secure payment{% endblock %}
+{% block content %}<section class="dashboard-wrap"><div class="panel-card payment-success"><p class="eyebrow">Paystack secure checkout</p><h2>Your ₦{{ "{:,.0f}".format(payment.amount_kobo / 100) }} lifetime payment is ready.</h2><p class="muted" id="paymentMessage">The secure payment window will open automatically.</p><button class="primary-btn" id="payButton">Open secure payment</button><a class="text-link" href="{{ url_for('payments.checkout') }}">Cancel</a></div></section>
+<script src="https://js.paystack.co/v2/inline.js"></script>
+<script>
+const options = {
+  key: {{ public_key|tojson }},
+  email: {{ payment.customer_email|tojson }},
+  amount: {{ payment.amount_kobo }},
+  currency: "NGN",
+  reference: {{ payment.reference|tojson }},
+  metadata: {customer_email: {{ payment.customer_email|tojson }}, product: "stockbridge_lifetime"},
+  onSuccess: transaction => { window.location.href = {{ url_for('payments.callback')|tojson }} + "?reference=" + encodeURIComponent(transaction.reference); },
+  onCancel: () => { document.getElementById("paymentMessage").textContent = "Payment was cancelled. You can try again when ready."; },
+  onError: error => { document.getElementById("paymentMessage").textContent = error.message || "Paystack could not open. Please try again."; }
+};
+function openPayment(){ new PaystackPop().newTransaction(options); }
+document.getElementById("payButton").addEventListener("click", openPayment);
+window.addEventListener("load", openPayment);
+</script>{% endblock %}

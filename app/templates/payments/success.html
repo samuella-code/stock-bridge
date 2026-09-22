@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block title %}Payment successful · StockBridge{% endblock %}
+{% block page_title %}Payment successful{% endblock %}
+{% block content %}<section class="dashboard-wrap"><div class="panel-card payment-success"><div class="success-mark">✓</div><p class="eyebrow">Lifetime unlocked</p><h2>{{ business.name }} now has permanent StockBridge access.</h2><p class="muted">There will be no monthly renewal or automatic StockBridge charge.</p><a class="primary-btn" href="{{ url_for('main.dashboard') }}">Go to dashboard</a></div></section>{% endblock %}

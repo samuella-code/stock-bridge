@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/inventory.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modules.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/billing.css') }}">
 </head>
 <body>
     <div class="app-shell">
@@ -37,13 +38,15 @@
                 <a class="nav-link {{ 'active' if request.blueprint == 'sales' }}" href="{{ url_for('sales.index') }}"><span class="nav-icon">↗</span><span>Sales</span></a>
                 <a class="nav-link {{ 'active' if request.blueprint == 'expenses' }}" href="{{ url_for('expenses.index') }}"><span class="nav-icon">₦</span><span>Expenses</span></a>
                 <a class="nav-link {{ 'active' if request.blueprint == 'restocking' }}" href="{{ url_for('restocking.index') }}"><span class="nav-icon">◎</span><span>Restocking</span></a>
+                <a class="nav-link {{ 'active' if request.blueprint == 'subscriptions' }}" href="{{ url_for('subscriptions.index') }}"><span class="nav-icon">◇</span><span>Plans</span></a>
+                {% if is_owner %}<a class="nav-link {{ 'active' if request.blueprint == 'admin' }}" href="{{ url_for('admin.index') }}"><span class="nav-icon">♙</span><span>Owner</span></a>{% endif %}
             </nav>
 
             <div class="sidebar-footer">
                 <div class="workspace-card">
                     <div class="workspace-dot"></div>
                     <div>
-                        <span class="workspace-label">Workspace</span>
+                        <span class="workspace-label">{{ subscription_business.subscription_plan | title }} · {{ 'Trial' if subscription_business.subscription_status == 'trialing' else subscription_business.subscription_status | title }}</span>
                         <strong>{{ business.name if business else 'My business' }}</strong>
                     </div>
                 </div>
@@ -67,7 +70,7 @@
                     <div class="profile-copy">
                         <strong>{{ current_user.full_name }}</strong>
                         <span>Owner</span>
-                    </div></button><div class="profile-dropdown" id="profileDropdown"><a href="{{ url_for('profile.index') }}">Edit profile</a><a href="{{ url_for('profile.index') }}">Business settings</a></div></div>
+                    </div></button><div class="profile-dropdown" id="profileDropdown"><a href="{{ url_for('profile.index') }}">Edit profile</a><a href="{{ url_for('profile.index') }}">Business settings</a><a href="{{ url_for('subscriptions.index') }}">Plan & billing</a></div></div>
             </header>
             {% endif %}
 

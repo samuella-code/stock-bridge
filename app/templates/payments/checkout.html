@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Checkout · StockBridge{% endblock %}
+{% block page_title %}Secure checkout{% endblock %}
+{% block content %}
+<section class="dashboard-wrap billing-page">
+  <div class="checkout-steps" aria-label="Access progress"><div class="done"><span>1</span><strong>Create account</strong></div><div class="active"><span>2</span><strong>Secure payment</strong></div><div><span>3</span><strong>Unlock tools</strong></div></div>
+  <div class="checkout-layout"><div><p class="eyebrow">Unlock your workspace</p><h2>Get permanent access to StockBridge tools</h2><p class="muted">After Paystack confirms your payment, Products, Sales, Expenses and Restocking unlock immediately.</p><div class="secure-points"><p><strong>Secure:</strong> Your payment details are handled by Paystack.</p><p><strong>One time:</strong> There are no renewals or automatic charges.</p><p><strong>Permanent:</strong> One verified payment unlocks this business workspace.</p></div></div><form class="panel-card order-summary" method="POST" action="{{ url_for('payments.initialize') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><h3>Order summary</h3><label><span>Account email</span><input type="email" value="{{ account_email }}" readonly></label><div><span>StockBridge Lifetime</span><strong>₦{{ "{:,.0f}".format(price) }}</strong></div><div><span>Recurring fees</span><strong>₦0</strong></div><hr><div class="order-total"><span>Total</span><strong>₦{{ "{:,.0f}".format(price) }}</strong></div><button class="primary-btn" {% if not configured %}disabled{% endif %}>Pay ₦{{ "{:,.0f}".format(price) }} securely</button>{% if not configured %}<small class="config-warning">Paystack keys were not found. Restart the app after saving them in .env.</small>{% endif %}<a class="text-link" href="{{ url_for('subscriptions.index') }}">Back</a></form></div>
+</section>
+{% endblock %}
