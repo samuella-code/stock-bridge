@@ -2,7 +2,7 @@ from datetime import datetime
 import pytest
 
 from app import create_app, db
-from app.email_service import verification_token
+from app.email_service import password_reset_token, verification_token
 from app.models import Business, User
 
 
@@ -39,6 +39,34 @@ def test_verification_link_unlocks_dashboard(client, app):
     assert b"Email verified" in response.data
     with app.app_context():
         assert User.query.one().email_verified_at is not None
+
+
+def test_password_reset_updates_login_password(client, app):
+    add_user(app, "reset@example.com", verified=True)
+    with app.app_context():
+        token = password_reset_token("reset@example.com")
+
+    response = client.post(
+        f"/auth/reset-password/{token}",
+        data={"password": "newpassword123", "confirm_password": "newpassword123"},
+        follow_redirects=True,
+    )
+    assert b"password has been updated" in response.data
+    response = client.post(
+        "/auth/login",
+        data={"email": "reset@example.com", "password": "newpassword123"},
+        follow_redirects=True,
+    )
+    assert b"Welcome back" in response.data
+
+
+def test_forgot_password_does_not_reveal_unknown_email(client):
+    response = client.post(
+        "/auth/forgot-password",
+        data={"email": "missing@example.com"},
+        follow_redirects=True,
+    )
+    assert b"If that email belongs to a StockBridge account" in response.data
 
 
 def test_only_configured_owner_can_view_user_counts(client, app):
