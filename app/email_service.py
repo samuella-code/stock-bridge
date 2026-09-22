@@ -1,5 +1,6 @@
 import smtplib
 from email.message import EmailMessage
+from email.utils import formataddr
 
 from flask import current_app, url_for
 from itsdangerous import URLSafeTimedSerializer
@@ -28,7 +29,9 @@ def _send_email(subject, recipient, body):
         return False
     message = EmailMessage()
     message["Subject"] = subject
-    message["From"] = current_app.config["SMTP_FROM_EMAIL"]
+    message["From"] = formataddr(
+        (current_app.config["SMTP_FROM_NAME"], current_app.config["SMTP_FROM_EMAIL"])
+    )
     message["To"] = recipient
     message.set_content(body)
     with smtplib.SMTP(host, current_app.config["SMTP_PORT"], timeout=15) as smtp:
