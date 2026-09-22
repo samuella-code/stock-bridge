@@ -39,6 +39,7 @@
                     <span>Password</span>
                     <input type="password" name="password" placeholder="Enter your password" autocomplete="current-password" required>
                 </label>
+                <p class="auth-switch"><a href="{{ url_for('auth.forgot_password') }}">Forgot your password?</a></p>
                 <button class="primary-btn full-width" type="submit">Log in</button>
             </form>
 
