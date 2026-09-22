@@ -40,4 +40,5 @@ class Config:
  SMTP_USERNAME=os.getenv("SMTP_USERNAME","")
  SMTP_PASSWORD=os.getenv("SMTP_PASSWORD","")
  SMTP_FROM_EMAIL=os.getenv("SMTP_FROM_EMAIL","noreply@stockbridge.ng")
+ SMTP_FROM_NAME=os.getenv("SMTP_FROM_NAME","StockBridge")
  SMTP_USE_TLS=os.getenv("SMTP_USE_TLS","true").lower()=="true"
