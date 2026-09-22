@@ -69,6 +69,12 @@ def test_forgot_password_does_not_reveal_unknown_email(client):
     assert b"If that email belongs to a StockBridge account" in response.data
 
 
+def test_login_links_directly_to_create_account(client):
+    response = client.get("/auth/login")
+    assert b'href="/auth/signup">Create account</a>' in response.data
+    assert b"View lifetime access" not in response.data
+
+
 def test_only_configured_owner_can_view_user_counts(client, app):
     add_user(app, "owner@example.com", verified=True)
     client.post("/auth/login", data={"email": "owner@example.com", "password": "password123"})
