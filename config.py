@@ -6,9 +6,14 @@ load_dotenv()
 
 def database_url():
     """Return a SQLAlchemy URL that uses the installed psycopg v3 driver."""
-    # Vercel's Neon integration is connected as NEON_URL so it can coexist
-    # safely with older hosting settings that may already define DATABASE_URL.
-    url = os.getenv("NEON_URL") or os.getenv("DATABASE_URL") or "sqlite:///stockbridge.db"
+    # Vercel's Neon integration uses prefixed connection variables, allowing
+    # it to coexist with older hosting settings that define DATABASE_URL.
+    url = (
+        os.getenv("NEON_DATABASE_URL")
+        or os.getenv("NEON_POSTGRES_URL")
+        or os.getenv("DATABASE_URL")
+        or "sqlite:///stockbridge.db"
+    )
     if url.startswith("postgres://"):
         return url.replace("postgres://", "postgresql+psycopg://", 1)
     if url.startswith("postgresql://"):
