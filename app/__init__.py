@@ -82,7 +82,7 @@ def create_app(test_config=None):
             app.logger.exception("Health check failed")
             return jsonify(status="unhealthy"), 503
 
-    if not app.testing:
+    if not app.testing and not os.getenv("VERCEL"):
         os.makedirs(app.instance_path, exist_ok=True)
         handler = RotatingFileHandler(
             os.path.join(app.instance_path, "stockbridge.log"),
@@ -93,6 +93,10 @@ def create_app(test_config=None):
             "%(asctime)s %(levelname)s %(message)s"
         ))
         app.logger.addHandler(handler)
+        app.logger.setLevel(logging.INFO)
+    elif not app.testing:
+        # Vercel captures stdout/stderr in its runtime logs. Its function
+        # filesystem must not be used for persistent application logs.
         app.logger.setLevel(logging.INFO)
 
     return app

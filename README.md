@@ -26,6 +26,7 @@ StockBridge is a beginner-friendly B2B SaaS MVP for Nigerian small retailers. It
 - Jinja templates
 - HTML, CSS and minimal JavaScript
 - Pytest for tests
+- Managed PostgreSQL for production deployments
 
 ## Project structure
 
@@ -167,6 +168,13 @@ StockBridge creates Paystack transactions on the server and only grants lifetime
 5. Complete a Paystack test payment and confirm the business changes to `lifetime` / `active`.
 
 Only switch to live Paystack keys after testing the full callback and webhook flow on HTTPS.
+
+## Vercel deployment
+
+The repository includes a Vercel-compatible Flask entry point. Production must
+use managed PostgreSQL rather than SQLite. Follow
+[`docs/VERCEL_DEPLOYMENT.md`](docs/VERCEL_DEPLOYMENT.md) for the database,
+environment variables, migrations, Paystack webhook and verification steps.
 
 ### Investor-relevant metrics later
 
