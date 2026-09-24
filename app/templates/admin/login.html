@@ -13,7 +13,7 @@
       <div class="password-field"><input id="admin-password" type="password" name="password" autocomplete="current-password" required><button type="button" class="password-toggle" data-password-toggle="admin-password" aria-controls="admin-password" aria-label="Show password" aria-pressed="false">Show</button></div>
       <button class="primary-action" type="submit">Sign In</button>
     </form>
-    <a class="back-link" href="{{url_for('main.index')}}">← Back to StockBridge</a>
+    <a class="back-link" href="{{'https://' ~ config['CUSTOMER_HOST'] ~ '/' if request.host.split(':')[0].lower()==config['ADMIN_HOST'] else url_for('main.index')}}">← Back to StockBridge</a>
   </div>
 </section>
 {% endblock %}
