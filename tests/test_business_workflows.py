@@ -161,7 +161,7 @@ def test_legacy_migration_preserves_sales_and_stock(tmp_path):
         assert Sale.query.one().total==1050
         assert Product.query.one().opening_quantity==20
         assert sum(m.quantity_change for m in StockMovement.query.all())==17
-        assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()=="0007_business_activity"
+        assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()=="0009_dual_role_admins"
 
 def test_void_expense_keeps_audit_and_updates_report(client):
     bid=owner(client)

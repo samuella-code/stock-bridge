@@ -32,7 +32,7 @@ use a database):
 | `PAYSTACK_SECRET_KEY` | Paystack secret key |
 | `PAYSTACK_PUBLIC_KEY` | Matching Paystack public key |
 | `LIFETIME_PRICE_NAIRA` | `3000` |
-| `ADMIN_EMAILS` | Comma-separated owner email addresses |
+| `ADMIN_EMAILS` | Legacy setting; no longer grants Admin Portal access |
 | `SMTP_HOST` | SMTP server, for example `smtp.gmail.com` |
 | `SMTP_PORT` | `587` |
 | `SMTP_USERNAME` | SMTP account username |
@@ -100,3 +100,12 @@ expense, restocking recommendation, and owner dashboard access.
 - Vercel runtime logs are temporary operational logs; configure an external log
   drain or monitoring service before relying on them for long-term auditing.
 - Keep automated PostgreSQL backups enabled in the database provider.
+
+## Admin Portal setup
+
+After the production schema reaches migration 0008, run
+`python scripts/create_admin.py` from a trusted local clone connected to the
+production database. Enter a dedicated administrator email and a strong
+password interactively. Visit `/admin/login`. Do not promote a customer account
+or commit admin credentials. The production database is separate from your
+local SQLite database.

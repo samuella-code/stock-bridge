@@ -69,13 +69,11 @@ def test_forgot_password_does_not_reveal_unknown_email(client):
     assert b"If that email belongs to a StockBridge account" in response.data
 
 
-def test_only_configured_owner_can_view_user_counts(client, app):
+def test_email_allowlist_does_not_grant_admin_access(client, app):
     add_user(app, "owner@example.com", verified=True)
     client.post("/auth/login", data={"email": "owner@example.com", "password": "password123"})
-    response = client.get("/admin/")
-    assert response.status_code == 200
-    assert b"Total users" in response.data
-    assert b"Lifetime access" in response.data
+    assert client.get("/admin/").status_code == 403
+    assert client.get("/api/admin/users").status_code == 403
 
 
 def test_retailer_cannot_open_owner_dashboard(client, app):

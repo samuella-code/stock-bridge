@@ -5,6 +5,7 @@ from flask_login import current_user, login_required
 from sqlalchemy import or_, func, update
 from app import db
 from app.models import Product, Restock, Sale, SaleItem, StockMovement
+from app.admin.routes import log
 
 products_bp = Blueprint("products", __name__, url_prefix="/products")
 ADJUSTMENT_REASONS = ("Damaged", "Expired", "Lost", "Stock count correction", "Returned", "Other")
@@ -101,6 +102,7 @@ def create():
             db.session.flush()
             db.session.add(StockMovement(business_id=b.id, product_id=product.id,
                 kind="opening", quantity_change=quantity, occurred_at=product.created_at))
+            log("PRODUCT_CREATED", f"Product {product.id} created.", actor=current_user, business_id=b.id)
             db.session.commit()
             flash(f"{product.name} was added to inventory.", "success")
             return redirect(url_for("products.detail", product_id=product.id))

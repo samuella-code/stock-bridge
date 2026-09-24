@@ -10,6 +10,7 @@ from flask_login import current_user, login_required
 
 from app import csrf, db
 from app.models import Payment, User
+from app.admin.routes import log
 from app.payments.service import PaystackError, initialize_transaction, verify_transaction
 
 payments_bp = Blueprint("payments", __name__, url_prefix="/payments")
@@ -23,6 +24,7 @@ def _confirm(payment, data):
     payment.status = "success"
     payment.paid_at = payment.paid_at or datetime.utcnow()
     payment.claim_token = payment.claim_token or secrets.token_urlsafe(32)
+    log("ACCESS_PAYMENT_SUCCESSFUL", f"Verified access payment {payment.reference}.", business_id=payment.business_id)
     db.session.commit()
     return True
 

@@ -228,3 +228,38 @@ that database, deploy the matching code and run `flask db upgrade`. The
 migration preserves existing users, businesses, products, sales and expenses.
 It has no automatic downgrade because a multi-item checkout and reasoned stock
 adjustments cannot be expressed safely in the older schema.
+
+## StockBridge Admin Portal
+
+Administrators use `/admin/login` and a separate interface. Public signup
+always creates a business user; the old `ADMIN_EMAILS` allowlist does not grant
+administrator access. Existing business customers are never automatically
+promoted, and administrator accounts have no customer business or access
+payment. The ₦3,000 lifetime-access workflow for business users is unchanged.
+
+After backing up the target database and applying migration 0008, create the
+initial administrator from a trusted terminal:
+
+```bash
+flask db upgrade
+python scripts/create_admin.py
+```
+
+The script prompts for a **new, separate email** and a password of at least
+12 characters without echoing it. It refuses to promote an existing customer
+account. For production, run both commands from a trusted clone configured
+with the **production** database connection; a local SQLite admin will not
+exist in the Vercel production database. Do not put admin credentials or a
+production connection string in source control.
+
+Admins can review users, businesses, verified payment records, activity and
+platform totals; suspend/reactivate customers or businesses with an audit
+reason. Suspension retains all data and stops protected business access.
+Payment status is read from the existing trusted access-payment records;
+administrators cannot mark a payment successful in the portal. The admin API
+under `/api/admin` requires the same role and dedicated admin session. Login
+attempts are limited per email and server-observed address.
+
+The audit log starts collecting events after migration 0008. Older products,
+sales and payments remain in their respective records and are not fabricated
+as historic audit events.
