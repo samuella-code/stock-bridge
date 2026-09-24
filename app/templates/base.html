@@ -38,6 +38,7 @@
                 <a class="nav-link {{ 'active' if request.blueprint == 'sales' }}" href="{{ url_for('sales.index') }}"><span class="nav-icon">↗</span><span>Sales</span></a>
                 <a class="nav-link {{ 'active' if request.blueprint == 'expenses' }}" href="{{ url_for('expenses.index') }}"><span class="nav-icon">₦</span><span>Expenses</span></a>
                 <a class="nav-link {{ 'active' if request.blueprint == 'restocking' }}" href="{{ url_for('restocking.index') }}"><span class="nav-icon">◎</span><span>Restocking</span></a>
+                <a class="nav-link {{ 'active' if request.endpoint == 'main.reports' }}" href="{{ url_for('main.reports') }}"><span class="nav-icon">▤</span><span>Reports</span></a>
                 <a class="nav-link {{ 'active' if request.blueprint == 'subscriptions' }}" href="{{ url_for('subscriptions.index') }}"><span class="nav-icon">◇</span><span>Plans</span></a>
                 {% if is_owner %}<a class="nav-link {{ 'active' if request.blueprint == 'admin' }}" href="{{ url_for('admin.index') }}"><span class="nav-icon">♙</span><span>Owner</span></a>{% endif %}
             </nav>

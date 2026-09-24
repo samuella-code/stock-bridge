@@ -2,7 +2,7 @@ import pytest
 from datetime import datetime
 from decimal import Decimal
 from app import create_app, db
-from app.models import Business, Expense, Product, Sale, User
+from app.models import Business, Expense, Product, Sale, SaleItem, User
 
 @pytest.fixture
 def app():
@@ -41,9 +41,10 @@ def test_sale_reduces_and_delete_restores_stock(client):
     with client.application.app_context():
         sale_id = Sale.query.one().id
         assert db.session.get(Product, product_id).stock_quantity == 8
-    client.post(f"/sales/{sale_id}/delete")
+    client.post(f"/sales/{sale_id}/delete", data={"reason":"Mistake"})
     with client.application.app_context():
         assert db.session.get(Product, product_id).stock_quantity == 10
+        assert Sale.query.one().voided_at is not None
 
 def test_expense_and_dashboard(client):
     seed(client)
@@ -56,14 +57,14 @@ def test_restock_creates_record_and_updates_stock(client):
     from app.models import Restock
     product_id = seed(client)
     response = client.post("/restocking/receive", data={"product_id": product_id, "quantity": "4", "unit_cost": "120.50", "supplier": "Distributor"}, follow_redirects=True)
-    assert b"Received 4 units" in response.data
+    assert b"Received stock" in response.data
     with client.application.app_context():
         assert db.session.get(Product, product_id).stock_quantity == 14
         assert Restock.query.one().total == Decimal("482.00")
     client.post("/sales/", data={"product_id": product_id, "quantity": "3"})
     with client.application.app_context():
         assert db.session.get(Product, product_id).stock_quantity == 11
-        assert Sale.query.one().unit_cost == Decimal("120.50")
+        assert SaleItem.query.one().unit_cost == Decimal("120.50")
 
 def test_invalid_restock_does_not_change_inventory(client):
     product_id = seed(client)
