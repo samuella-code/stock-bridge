@@ -84,7 +84,8 @@ def create_app(test_config=None):
         if request.path.startswith("/admin/") or request.path.startswith("/api/admin/"):
             response.headers["Cache-Control"]="no-store, private"
             response.headers["X-Content-Type-Options"]="nosniff"
-            response.headers["Referrer-Policy"]="no-referrer"
+            # Flask-WTF checks the same-origin Referer on HTTPS form submissions.
+            response.headers["Referrer-Policy"]="same-origin"
             response.headers["X-Frame-Options"]="DENY"
             response.headers["Content-Security-Policy"]=(
                 "default-src 'self'; script-src 'self'; style-src 'self'; "
