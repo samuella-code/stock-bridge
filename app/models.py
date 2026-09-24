@@ -3,7 +3,7 @@ from flask_login import UserMixin
 from werkzeug.security import check_password_hash,generate_password_hash
 from app import db,login_manager
 class User(UserMixin,db.Model):
- id=db.Column(db.Integer,primary_key=True); full_name=db.Column(db.String(120),nullable=False); email=db.Column(db.String(180),unique=True,nullable=False,index=True); password_hash=db.Column(db.String(255),nullable=False); created_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False); email_verified_at=db.Column(db.DateTime); verification_sent_at=db.Column(db.DateTime)
+ id=db.Column(db.Integer,primary_key=True); full_name=db.Column(db.String(120),nullable=False); email=db.Column(db.String(180),unique=True,nullable=False,index=True); password_hash=db.Column(db.String(255),nullable=False); created_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False); email_verified_at=db.Column(db.DateTime); verification_sent_at=db.Column(db.DateTime); role=db.Column(db.String(20),nullable=False,default="user"); suspended_at=db.Column(db.DateTime); last_activity_at=db.Column(db.DateTime)
  businesses=db.relationship("Business",backref="owner",lazy=True,cascade="all, delete-orphan")
  def set_password(self,p): self.password_hash=generate_password_hash(p)
  def check_password(self,p): return check_password_hash(self.password_hash,p)
@@ -13,7 +13,7 @@ class Business(db.Model):
  subscription_status=db.Column(db.String(20),nullable=False,default="inactive")
  trial_started_at=db.Column(db.DateTime,nullable=False,default=datetime.utcnow)
  trial_ends_at=db.Column(db.DateTime,nullable=False,default=lambda: datetime.utcnow()+timedelta(days=14))
- subscription_ends_at=db.Column(db.DateTime)
+ subscription_ends_at=db.Column(db.DateTime); suspended_at=db.Column(db.DateTime)
  products=db.relationship("Product",backref="business",cascade="all, delete-orphan"); sales=db.relationship("Sale",backref="business",cascade="all, delete-orphan"); expenses=db.relationship("Expense",backref="business",cascade="all, delete-orphan"); payments=db.relationship("Payment",backref="business",cascade="all, delete-orphan")
  @property
  def trial_days_remaining(self):
@@ -102,6 +102,21 @@ class Restock(db.Model):
 
 class Expense(db.Model):
  id=db.Column(db.Integer,primary_key=True); business_id=db.Column(db.Integer,db.ForeignKey("business.id"),nullable=False,index=True); description=db.Column(db.String(180),nullable=False); amount=db.Column(db.Numeric(12,2),nullable=False); spent_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False,index=True); category=db.Column(db.String(80),nullable=False,default="Miscellaneous"); note=db.Column(db.String(500)); voided_at=db.Column(db.DateTime); void_reason=db.Column(db.String(300))
+class AuditLog(db.Model):
+ id=db.Column(db.Integer,primary_key=True)
+ actor_id=db.Column(db.Integer,db.ForeignKey("user.id"),index=True)
+ business_id=db.Column(db.Integer,db.ForeignKey("business.id"),index=True)
+ action=db.Column(db.String(50),nullable=False,index=True)
+ description=db.Column(db.String(300),nullable=False)
+ created_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False,index=True)
+ actor=db.relationship("User")
+ business=db.relationship("Business")
+
+class AdminLoginAttempt(db.Model):
+ id=db.Column(db.Integer,primary_key=True)
+ identifier=db.Column(db.String(64),nullable=False,index=True)
+ attempted_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False,index=True)
+
 class Payment(db.Model):
  id=db.Column(db.Integer,primary_key=True)
  business_id=db.Column(db.Integer,db.ForeignKey("business.id"),nullable=True,index=True)

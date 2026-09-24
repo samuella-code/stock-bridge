@@ -6,6 +6,7 @@ from flask_login import current_user, login_required
 from sqlalchemy import func, update
 from app import db
 from app.models import Product, Sale, SaleItem, StockMovement, Restock
+from app.admin.routes import log
 
 restocking_bp = Blueprint("restocking", __name__, url_prefix="/restocking")
 
@@ -98,6 +99,7 @@ def receive():
                         supplier_name=supplier or Product.supplier_name))
             db.session.add(StockMovement(business_id=b.id, product_id=pid, kind="restock",
                 quantity_change=qty, restock_id=receipt.id, occurred_at=receipt.received_at))
+        log("RESTOCK_CREATED", f"Stock receipt {batch} recorded for {len(parsed)} products.", actor=current_user, business_id=b.id)
         db.session.commit()
     except Exception:
         db.session.rollback()

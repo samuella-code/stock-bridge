@@ -11,6 +11,7 @@ from app.email_service import (
     send_verification_email,
 )
 from app.models import Business, Payment, User
+from app.admin.routes import log
 
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
@@ -47,6 +48,9 @@ def signup():
         now = datetime.utcnow()
         business = Business(user_id=user.id, name=business_name, subscription_plan="starter", subscription_status="inactive", trial_started_at=now, trial_ends_at=now)
         db.session.add(business)
+        db.session.flush()
+        log("USER_REGISTERED", f"User {user.id} registered.", actor=user, business_id=business.id)
+        log("BUSINESS_CREATED", f"Business {business.id} created.", actor=user, business_id=business.id)
         db.session.commit()
 
         login_user(user)
@@ -77,7 +81,13 @@ def login():
             flash("Email or password is incorrect.", "error")
             return render_template("auth/login.html")
 
+        if user.role != "user" or user.suspended_at or any(b.suspended_at for b in user.businesses):
+            flash("This account cannot sign in here. Contact support if access is suspended.", "error")
+            return render_template("auth/login.html"), 403
+        session.pop("admin_session", None)
         login_user(user)
+        user.last_activity_at = datetime.utcnow()
+        db.session.commit()
         if not user.email_verified_at:
             return redirect(url_for("auth.verification_pending"))
         flash("Welcome back.", "success")
@@ -94,7 +104,7 @@ def forgot_password():
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
         user = User.query.filter_by(email=email).first() if email else None
-        if user:
+        if user and user.role == "user":
             try:
                 send_password_reset_email(user)
             except Exception:
@@ -119,7 +129,7 @@ def reset_password(token):
         return redirect(url_for("auth.forgot_password"))
 
     user = User.query.filter_by(email=email.lower()).first()
-    if not user:
+    if not user or user.role != "user":
         flash("That password-reset link is invalid.", "error")
         return redirect(url_for("auth.forgot_password"))
 
@@ -158,6 +168,8 @@ def verify_email(token):
         flash("That verification link is invalid.", "error")
         return redirect(url_for("auth.login"))
     user = User.query.filter_by(email=email.lower()).first_or_404()
+    if user.role != "user":
+        return redirect(url_for("auth.login"))
     user.email_verified_at = user.email_verified_at or datetime.utcnow()
     db.session.commit()
     if not current_user.is_authenticated:

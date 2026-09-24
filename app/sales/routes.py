@@ -6,6 +6,7 @@ from sqlalchemy import update, func
 from sqlalchemy.orm import selectinload
 from app import db
 from app.models import Product, Sale, SaleItem, StockMovement
+from app.admin.routes import log
 
 sales_bp = Blueprint("sales", __name__, url_prefix="/sales")
 PAYMENT_METHODS = ("Cash", "Bank Transfer", "POS", "Other")
@@ -71,6 +72,7 @@ def index():
                                         unit_cost=product.buying_price))
                 db.session.add(StockMovement(business_id=b.id, product_id=pid, kind="sale",
                     quantity_change=-qty, sale_id=sale.id, occurred_at=sold_at))
+            log("SALE_CREATED", f"Sale {sale.id} created with {len(parsed)} items.", actor=current_user, business_id=b.id)
             db.session.commit()
         except Exception:
             db.session.rollback()

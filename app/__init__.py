@@ -2,7 +2,7 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 
-from flask import Flask, flash, jsonify, redirect, request, url_for
+from flask import Flask, abort, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import LoginManager, current_user
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
@@ -43,17 +43,24 @@ def create_app(test_config=None):
     from app.profile.routes import profile_bp
     from app.subscriptions.routes import subscriptions_bp
     from app.payments.routes import payments_bp
-    from app.admin.routes import admin_bp
+    from app.admin.routes import admin_bp, admin_api_bp
 
     for blueprint in (
         auth_bp, main_bp, products_bp, sales_bp,
-        expenses_bp, restocking_bp, profile_bp, subscriptions_bp, payments_bp, admin_bp,
+        expenses_bp, restocking_bp, profile_bp, subscriptions_bp, payments_bp, admin_bp, admin_api_bp,
     ):
         app.register_blueprint(blueprint)
 
     @app.before_request
     def require_lifetime_access():
-        verified_areas = {"main", "products", "sales", "expenses", "restocking", "profile", "admin"}
+        if current_user.is_authenticated:
+            if current_user.role == "admin":
+                if request.blueprint not in {"admin", "admin_api"} and request.endpoint != "health" and request.endpoint != "static":
+                    abort(403)
+            elif current_user.suspended_at or any(b.suspended_at for b in current_user.businesses):
+                if request.endpoint != "auth.logout" and request.endpoint != "static":
+                    return render_template("admin/suspended.html"), 403
+        verified_areas = {"main", "products", "sales", "expenses", "restocking", "profile"}
         paid_areas = {"products", "sales", "expenses", "restocking"}
         if current_user.is_authenticated and request.blueprint in verified_areas:
             if not current_user.email_verified_at:
@@ -70,8 +77,7 @@ def create_app(test_config=None):
     def subscription_context():
         if not current_user.is_authenticated or not current_user.businesses:
             return {}
-        owners = {email.strip().lower() for email in app.config["ADMIN_EMAILS"].split(",") if email.strip()}
-        return {"subscription_business": current_user.businesses[0], "is_owner": current_user.email.lower() in owners}
+        return {"subscription_business": current_user.businesses[0]}
 
     @app.get("/health")
     def health():
