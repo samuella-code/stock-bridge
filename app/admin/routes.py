@@ -101,6 +101,18 @@ def logout():
     session.clear()
     return redirect(url_for("admin.login"))
 
+@admin_bp.post("/switch-to-business")
+@admin_required
+def switch_to_business():
+    if current_user.role!="user" or not current_user.businesses:
+        abort(403)
+    log("ADMIN_SWITCH_TO_BUSINESS","Administrator opened their business workspace.",actor=current_user)
+    db.session.commit()
+    session.pop("admin_session",None)
+    session.pop("admin_last_activity",None)
+    session.pop("admin_auth_version",None)
+    return redirect(url_for("main.dashboard"))
+
 def _admin_user(user):
     return user and (user.role=="admin" or user.admin_enabled) and not user.suspended_at
 
