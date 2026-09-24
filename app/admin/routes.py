@@ -108,6 +108,10 @@ def switch_to_business():
         abort(403)
     log("ADMIN_SWITCH_TO_BUSINESS","Administrator opened their business workspace.",actor=current_user)
     db.session.commit()
+    if request.host.split(":",1)[0].lower()==current_app.config["ADMIN_HOST"]:
+        logout_user()
+        session.clear()
+        return redirect(f"https://{current_app.config['CUSTOMER_HOST']}/auth/login")
     session.pop("admin_session",None)
     session.pop("admin_last_activity",None)
     session.pop("admin_auth_version",None)
