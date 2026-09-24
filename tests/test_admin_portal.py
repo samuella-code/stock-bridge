@@ -39,6 +39,8 @@ def test_admin_is_separate_and_never_needs_business_or_payment(client):
     assert response.status_code==302 and response.headers["Location"].endswith("/admin/")
     page=client.get("/admin/")
     assert page.status_code==200
+    assert client.get("/").headers["Location"].endswith("/admin/")
+    assert client.get("/auth/login").headers["Location"].endswith("/admin/")
     assert b"StockBridge Admin Portal" in page.data
     assert b"Shop" in client.get("/admin/businesses").data
     assert client.get("/api/admin/dashboard").json["businesses"]==1
@@ -247,12 +249,14 @@ def test_existing_business_owner_can_use_both_logins_without_losing_data(client)
     response = client.post("/admin/login", data={"email":"owner@example.com","password":"customer-password123"})
     assert response.status_code == 302
     assert client.get("/admin/").status_code == 200
+    assert client.get("/").headers["Location"].endswith("/admin/")
+    assert b"Business workspace" in client.get("/admin/").data
     assert client.get("/dashboard").status_code == 403
     assert client.post(f"/admin/users/{user_id}/suspension", data={"reason":"self"}).status_code == 403
     assert client.post(f"/admin/businesses/{business_id}/suspension", data={"reason":"self"}).status_code == 403
-    client.post("/admin/logout")
-    client.post("/auth/login", data={"email":"owner@example.com","password":"customer-password123"})
+    assert client.post("/admin/switch-to-business").headers["Location"].endswith("/dashboard")
     assert client.get("/dashboard").status_code == 200
+    assert client.get("/api/admin/dashboard").status_code == 403
     with client.application.app_context():
         user = db.session.get(User, user_id)
         assert user.role == "user" and user.admin_enabled
