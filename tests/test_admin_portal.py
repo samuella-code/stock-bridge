@@ -218,6 +218,23 @@ def test_csrf_blocks_admin_management_without_token():
         db.drop_all()
 
 
+def test_secure_admin_login_keeps_referrer_for_csrf_validation():
+    app=create_app({"TESTING":False,"SQLALCHEMY_DATABASE_URI":"sqlite:///:memory:",
+        "SECRET_KEY":"csrf-test"})
+    with app.app_context():
+        db.create_all()
+        client=app.test_client()
+        page=client.get("/admin/login",base_url="https://stockbridge.test")
+        assert page.headers["Referrer-Policy"]=="same-origin"
+        token=re.search(rb'name="csrf_token" value="([^"]+)"',page.data).group(1).decode()
+        response=client.post("/admin/login",base_url="https://stockbridge.test",
+            headers={"Referer":"https://stockbridge.test/admin/login"},
+            data={"csrf_token":token,"email":"nobody@example.invalid","password":"wrong"})
+        assert response.status_code==401
+        db.session.remove()
+        db.drop_all()
+
+
 def test_existing_business_owner_can_use_both_logins_without_losing_data(client):
     _, user_id, business_id = seed(client)
     with client.application.app_context():
