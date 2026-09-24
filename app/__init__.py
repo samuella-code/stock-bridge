@@ -54,11 +54,11 @@ def create_app(test_config=None):
     @app.before_request
     def require_lifetime_access():
         if current_user.is_authenticated:
-            if current_user.role == "admin":
-                if request.blueprint not in {"admin", "admin_api"} and request.endpoint != "health" and request.endpoint != "static":
+            if current_user.role == "admin" or (current_user.admin_enabled and session.get("admin_session")):
+                if request.blueprint not in {"admin", "admin_api"} and request.endpoint not in {"health", "static", "auth.logout"}:
                     abort(403)
             elif current_user.suspended_at or any(b.suspended_at for b in current_user.businesses):
-                if request.endpoint != "auth.logout" and request.endpoint != "static":
+                if request.endpoint not in {"auth.logout", "static"} and not (request.endpoint == "admin.login" and current_user.admin_enabled and not current_user.suspended_at):
                     return render_template("admin/suspended.html"), 403
         verified_areas = {"main", "products", "sales", "expenses", "restocking", "profile"}
         paid_areas = {"products", "sales", "expenses", "restocking"}
