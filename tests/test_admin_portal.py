@@ -100,6 +100,30 @@ def test_admin_login_throttle_and_no_secret_leaks(client):
     # Response never includes a password hash or token.
     assert b"safe-admin-password123" not in client.get("/admin/login").data
 
+
+def test_existing_business_owner_can_use_both_logins_without_losing_data(client):
+    _, user_id, business_id = seed(client)
+    with client.application.app_context():
+        db.session.get(User, user_id).admin_enabled = True
+        db.session.commit()
+    client.post("/auth/login", data={"email":"owner@example.com","password":"customer-password123"})
+    assert client.get("/dashboard").status_code == 200
+    assert client.get("/api/admin/dashboard").status_code == 403
+    assert client.get("/admin/login").status_code == 200
+    response = client.post("/admin/login", data={"email":"owner@example.com","password":"customer-password123"})
+    assert response.status_code == 302
+    assert client.get("/admin/").status_code == 200
+    assert client.get("/dashboard").status_code == 403
+    assert client.post(f"/admin/users/{user_id}/suspension", data={"reason":"self"}).status_code == 403
+    assert client.post(f"/admin/businesses/{business_id}/suspension", data={"reason":"self"}).status_code == 403
+    client.post("/admin/logout")
+    client.post("/auth/login", data={"email":"owner@example.com","password":"customer-password123"})
+    assert client.get("/dashboard").status_code == 200
+    with client.application.app_context():
+        user = db.session.get(User, user_id)
+        assert user.role == "user" and user.admin_enabled
+        assert user.businesses[0].id == business_id
+
 def test_migration_keeps_customer_and_payment_without_promoting_email(tmp_path):
     from flask_migrate import upgrade
     from sqlalchemy import text
@@ -118,4 +142,5 @@ def test_migration_keeps_customer_and_payment_without_promoting_email(tmp_path):
         assert User.query.one().role=="user"
         assert User.query.one().businesses[0].name=="Shop"
         assert Payment.query.one().amount_kobo==300000
-        assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()=="0008_admin_portal"
+        assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()=="0009_dual_role_admins"
+        assert User.query.one().admin_enabled is False
