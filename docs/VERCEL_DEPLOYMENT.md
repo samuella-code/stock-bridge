@@ -108,5 +108,10 @@ After the production schema reaches migration 0010, run
 production database. Enter a dedicated administrator email and a strong
 password interactively. To grant an existing account access, use
 `python scripts/grant_admin.py` from the same trusted environment. Visit
-`/admin/login`. Admin recovery emails use the existing SMTP settings. Do not
+`https://stock-bridge-admin.vercel.app/admin/login`. Business users enter at
+`https://stock-bridge-one.vercel.app/`. Both hosts point to the same production
+deployment and database, but browser cookies are host-scoped. An admin who also
+owns a business uses **Business sign in** to open the customer host and signs
+in there separately. `CUSTOMER_HOST` and `ADMIN_HOST` can override these hostnames
+if the production domains change. Admin recovery emails use the existing SMTP settings. Do not
 commit credentials. The production database is separate from your local SQLite database.
