@@ -58,7 +58,7 @@ def create_app(test_config=None):
                 if request.blueprint not in {"admin", "admin_api"} and request.endpoint not in {"health", "static", "auth.logout"}:
                     abort(403)
             elif current_user.suspended_at or any(b.suspended_at for b in current_user.businesses):
-                if request.endpoint not in {"auth.logout", "static"} and not (request.endpoint == "admin.login" and current_user.admin_enabled and not current_user.suspended_at):
+                if request.endpoint not in {"auth.logout", "static"} and not (request.endpoint in {"admin.login", "admin.forgot_password", "admin.reset_password"} and current_user.admin_enabled and not current_user.suspended_at):
                     return render_template("admin/suspended.html"), 403
         verified_areas = {"main", "products", "sales", "expenses", "restocking", "profile"}
         paid_areas = {"products", "sales", "expenses", "restocking"}
@@ -78,6 +78,19 @@ def create_app(test_config=None):
         if not current_user.is_authenticated or not current_user.businesses:
             return {}
         return {"subscription_business": current_user.businesses[0]}
+
+    @app.after_request
+    def protect_admin_responses(response):
+        if request.path.startswith("/admin/") or request.path.startswith("/api/admin/"):
+            response.headers["Cache-Control"]="no-store, private"
+            response.headers["X-Content-Type-Options"]="nosniff"
+            response.headers["Referrer-Policy"]="no-referrer"
+            response.headers["X-Frame-Options"]="DENY"
+            response.headers["Content-Security-Policy"]=(
+                "default-src 'self'; script-src 'self'; style-src 'self'; "
+                "img-src 'self' data:; object-src 'none'; base-uri 'self'; "
+                "frame-ancestors 'none'; form-action 'self'")
+        return response
 
     @app.get("/health")
     def health():
