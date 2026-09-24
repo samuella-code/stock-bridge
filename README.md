@@ -234,11 +234,12 @@ adjustments cannot be expressed safely in the older schema.
 Administrators use `/admin/login` and a separate interface. Public signup
 always creates a business user; the old `ADMIN_EMAILS` allowlist does not grant
 administrator access. Existing business customers are never automatically
-promoted, and administrator accounts have no customer business or access
-payment. The ₦3,000 lifetime-access workflow for business users is unchanged.
+promoted. A trusted operator may explicitly grant an existing business owner
+admin access while retaining their business account. The ₦3,000 lifetime-access
+workflow for business users is unchanged.
 
-After backing up the target database and applying migration 0008, create the
-initial administrator from a trusted terminal:
+After backing up the target database and applying migrations through 0010,
+create a dedicated administrator from a trusted terminal:
 
 ```bash
 flask db upgrade
@@ -246,8 +247,10 @@ python scripts/create_admin.py
 ```
 
 The script prompts for a **new, separate email** and a password of at least
-12 characters without echoing it. It refuses to promote an existing customer
-account. For production, run both commands from a trusted clone configured
+12 characters without echoing it. To grant an already registered business
+account admin access, run `python scripts/grant_admin.py` in the same trusted
+environment and confirm the selected account. This preserves its business
+data and existing password. For production, run the commands from a trusted clone configured
 with the **production** database connection; a local SQLite admin will not
 exist in the Vercel production database. Do not put admin credentials or a
 production connection string in source control.
@@ -258,7 +261,11 @@ reason. Suspension retains all data and stops protected business access.
 Payment status is read from the existing trusted access-payment records;
 administrators cannot mark a payment successful in the portal. The admin API
 under `/api/admin` requires the same role and dedicated admin session. Login
-attempts are limited per email and server-observed address.
+attempts are limited per email and server-observed address. Admin sessions
+expire after 30 minutes of inactivity. The admin-only password reset sends a
+one-hour, single-use link to the administrator's email using the existing SMTP
+configuration. Resetting a dual-role account changes its business login password
+too; older admin sessions are invalidated. No new environment variables are required.
 
 The audit log starts collecting events after migration 0008. Older products,
 sales and payments remain in their respective records and are not fabricated
