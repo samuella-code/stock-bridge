@@ -3,7 +3,7 @@ import os
 from logging.handlers import RotatingFileHandler
 
 from flask import Flask, abort, flash, jsonify, redirect, render_template, request, session, url_for
-from flask_login import LoginManager, current_user
+from flask_login import LoginManager, current_user, logout_user
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import CSRFProtect
@@ -53,6 +53,24 @@ def create_app(test_config=None):
 
     @app.before_request
     def require_lifetime_access():
+        host = request.host.split(":", 1)[0].lower()
+        customer_host = app.config["CUSTOMER_HOST"]
+        admin_host = app.config["ADMIN_HOST"]
+        if host == customer_host and request.blueprint in {"admin", "admin_api"}:
+            if request.method == "GET" and request.blueprint == "admin":
+                return redirect(f"https://{admin_host}{request.full_path.rstrip('?')}")
+            abort(404)
+        if host == admin_host and request.endpoint not in {"static", "health"} and request.blueprint not in {"admin", "admin_api"}:
+            if request.method == "GET":
+                if request.endpoint == "main.index":
+                    return redirect(url_for("admin.index"))
+                return redirect(f"https://{customer_host}{request.full_path.rstrip('?')}")
+            abort(404)
+        # Old admin cookies on the customer host should not hide customer login.
+        if host == customer_host and current_user.is_authenticated and session.get("admin_session"):
+            logout_user()
+            session.clear()
+            return redirect(url_for("auth.login"))
         if current_user.is_authenticated:
             if current_user.role == "admin" or (current_user.admin_enabled and session.get("admin_session")):
                 if request.endpoint in {"main.index", "auth.login"}:
