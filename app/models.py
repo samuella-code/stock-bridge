@@ -36,6 +36,18 @@ class Sale(db.Model):
  def total(self): return self.unit_price*self.quantity
  @property
  def profit(self): return (self.unit_price-self.unit_cost)*self.quantity
+class Restock(db.Model):
+ id=db.Column(db.Integer,primary_key=True)
+ business_id=db.Column(db.Integer,db.ForeignKey("business.id"),nullable=False,index=True)
+ product_id=db.Column(db.Integer,db.ForeignKey("product.id"),nullable=False)
+ quantity=db.Column(db.Integer,nullable=False)
+ unit_cost=db.Column(db.Numeric(12,2),nullable=False)
+ supplier=db.Column(db.String(140))
+ received_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False)
+ product=db.relationship("Product")
+ @property
+ def total(self): return self.quantity*self.unit_cost
+
 class Expense(db.Model):
  id=db.Column(db.Integer,primary_key=True); business_id=db.Column(db.Integer,db.ForeignKey("business.id"),nullable=False,index=True); description=db.Column(db.String(180),nullable=False); amount=db.Column(db.Numeric(12,2),nullable=False); spent_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False,index=True)
 class Payment(db.Model):

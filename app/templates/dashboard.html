@@ -11,7 +11,7 @@
             <h2>Good to see you, {{ current_user.full_name.split(' ')[0] }}.</h2>
             <p class="muted">Here’s your business snapshot for today. As you record sales and expenses, these numbers will update automatically.</p>
         </div>
-        <a class="primary-btn button-link" href="{{ url_for('sales.index') }}">+ Record sale</a>
+        <div><a class="primary-btn button-link" href="{{ url_for('sales.index') }}">+ New sale</a> <a class="secondary-btn button-link" href="{{ url_for('restocking.index') }}">+ Restock</a> <a class="secondary-btn button-link" href="{{ url_for('expenses.index') }}">+ Expense</a> <a class="secondary-btn button-link" href="{{ url_for('products.create') }}">+ Add product</a></div>
     </div>
 
     <div class="metric-grid">

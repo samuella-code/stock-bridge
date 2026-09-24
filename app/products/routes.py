@@ -3,7 +3,7 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, u
 from flask_login import current_user, login_required
 from sqlalchemy import or_
 from app import db
-from app.models import Product
+from app.models import Product, Restock, Sale
 
 products_bp = Blueprint("products", __name__, url_prefix="/products")
 
@@ -90,6 +90,8 @@ def edit(product_id):
         if duplicate:
             errors.append("That SKU is already used in this business.")
         if not errors:
+            # Stock is changed only by sales and restock receipts after setup.
+            data.pop("stock_quantity", None)
             for key, value in data.items():
                 setattr(product, key, value)
             db.session.commit()
@@ -103,6 +105,9 @@ def edit(product_id):
 @login_required
 def delete(product_id):
     product = owned_product(product_id)
+    if Sale.query.filter_by(product_id=product.id).first() or Restock.query.filter_by(product_id=product.id).first():
+        flash("This product has transaction history and cannot be deleted.", "error")
+        return redirect(url_for("products.index"))
     name = product.name
     db.session.delete(product)
     db.session.commit()
