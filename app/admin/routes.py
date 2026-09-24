@@ -20,7 +20,7 @@ def admin_required(view):
             if request.blueprint=="admin_api":
                 return jsonify(error="Admin authentication required"),401
             return redirect(url_for("admin.login"))
-        if current_user.role!="admin" or not session.get("admin_session") or current_user.suspended_at:
+        if not (current_user.role=="admin" or current_user.admin_enabled) or not session.get("admin_session") or current_user.suspended_at:
             abort(403)
         return view(*args,**kwargs)
     return wrapped
@@ -39,9 +39,10 @@ def _login_key(email):
 @admin_bp.route("/login",methods=["GET","POST"])
 def login():
     if current_user.is_authenticated:
-        if current_user.role=="admin" and session.get("admin_session"):
+        if (current_user.role=="admin" or current_user.admin_enabled) and session.get("admin_session"):
             return redirect(url_for("admin.index"))
-        abort(403)
+        if current_user.role=="admin":
+            abort(403)
     if request.method=="POST":
         email=request.form.get("email","").strip().lower()
         password=request.form.get("password","")
@@ -51,7 +52,7 @@ def login():
             AdminLoginAttempt.attempted_at>=cutoff).count()
         if count>=5:
             return render_template("admin/login.html",error="Too many attempts. Try again in 15 minutes."),429
-        user=User.query.filter_by(email=email,role="admin").first()
+        user=User.query.filter(User.email==email,or_(User.role=="admin",User.admin_enabled.is_(True))).first()
         valid=user.check_password(password) if user else check_password_hash(_DUMMY_HASH,password)
         if not valid or not user or user.suspended_at:
             db.session.add(AdminLoginAttempt(identifier=key))
@@ -139,6 +140,8 @@ def user_detail(user_id):
 @admin_required
 def suspend_user(user_id):
     user=User.query.filter_by(id=user_id,role="user").first_or_404()
+    if user.admin_enabled:
+        abort(403)
     reason=request.form.get("reason","").strip()
     if not reason:
         flash("Enter a reason for this action.","error")
@@ -175,6 +178,8 @@ def business_detail(business_id):
 def suspend_business(business_id):
     b=db.session.get(Business,business_id)
     if not b: abort(404)
+    if b.user_id==current_user.id:
+        abort(403)
     reason=request.form.get("reason","").strip()
     if not reason:
         flash("Enter a reason for this action.","error")
