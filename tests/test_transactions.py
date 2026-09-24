@@ -51,3 +51,22 @@ def test_expense_and_dashboard(client):
     with client.application.app_context():
         assert Expense.query.one().amount == Decimal("2500.00")
     assert b"2,500" in client.get("/dashboard").data
+
+def test_restock_creates_record_and_updates_stock(client):
+    from app.models import Restock
+    product_id = seed(client)
+    response = client.post("/restocking/receive", data={"product_id": product_id, "quantity": "4", "unit_cost": "120.50", "supplier": "Distributor"}, follow_redirects=True)
+    assert b"Received 4 units" in response.data
+    with client.application.app_context():
+        assert db.session.get(Product, product_id).stock_quantity == 14
+        assert Restock.query.one().total == Decimal("482.00")
+    client.post("/sales/", data={"product_id": product_id, "quantity": "3"})
+    with client.application.app_context():
+        assert db.session.get(Product, product_id).stock_quantity == 11
+        assert Sale.query.one().unit_cost == Decimal("120.50")
+
+def test_invalid_restock_does_not_change_inventory(client):
+    product_id = seed(client)
+    client.post("/restocking/receive", data={"product_id": product_id, "quantity": "-1", "unit_cost": "120"})
+    with client.application.app_context():
+        assert db.session.get(Product, product_id).stock_quantity == 10
