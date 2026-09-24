@@ -1,1 +1,50 @@
-{% extends "base.html" %}{% block page_title %}Sales{% endblock %}{% block content %}<section class="dashboard-wrap"><div class="welcome-row"><div><p class="eyebrow">Money in</p><h2>Record a sale</h2><p class="muted">Stock reduces automatically. Removing a mistaken sale restores it.</p></div><div><strong class="page-total">₦{{'{:,.2f}'.format(total)}}</strong><small class="block-muted">Gross profit ₦{{'{:,.2f}'.format(profit)}}</small></div></div><div class="data-layout"><form class="panel-card form-stack" method="POST"><label><span>Product</span><select name="product_id" required>{% for p in products %}<option value="{{p.id}}">{{p.name}} — {{p.stock_quantity}} available</option>{% endfor %}</select></label><label><span>Quantity</span><input type="number" name="quantity" min="1" required></label><label><span>Actual unit price (₦)</span><input type="number" name="unit_price" min="0" step=".01" placeholder="0 uses saved selling price"></label><label><span>Date</span><input type="date" name="sold_at"></label><button class="primary-btn" {{'disabled' if not products}}>Record sale</button>{% if not products %}<small>Add a product first.</small>{% endif %}</form><div class="panel-card"><h3>Sales history</h3>{% if sales %}<div class="table-wrap"><table><tr><th>Product</th><th>Qty</th><th>Total</th><th>Date</th><th></th></tr>{% for s in sales %}<tr><td>{{s.product.name}}</td><td>{{s.quantity}}</td><td>₦{{'{:,.2f}'.format(s.total)}}</td><td>{{s.sold_at.strftime('%d %b %Y')}}</td><td><form method="POST" action="{{url_for('sales.delete',sale_id=s.id)}}" onsubmit="return confirm('Remove this sale and restore its stock?')"><button class="danger-link">Remove</button></form></td></tr>{% endfor %}</table></div>{% else %}<div class="empty-state">No sales recorded yet.</div>{% endif %}</div></div></section>{% endblock %}
+{% extends "base.html" %}
+{% block page_title %}Sales{% endblock %}
+{% block content %}
+<section class="dashboard-wrap">
+  <div class="welcome-row"><div><p class="eyebrow">Money in</p><h2>New sale</h2><p class="muted">Add every item the customer bought. Stock and profit update when you complete the sale.</p></div><div><strong class="page-total">₦{{'{:,.2f}'.format(total)}}</strong><small class="block-muted">Estimated gross profit ₦{{'{:,.2f}'.format(profit)}}</small></div></div>
+  <div class="data-layout">
+    <form class="panel-card form-stack" method="POST" id="sale-form">
+      <div id="sale-lines"><div class="sale-line"><label>Product<select name="product_id" required>{% for p in products %}<option value="{{p.id}}" data-price="{{p.selling_price}}">{{p.name}} — {{p.stock_quantity}} {{p.unit}} available</option>{% endfor %}</select></label><label>Quantity<input type="number" name="quantity" min="1" value="1" required></label><label>Unit price (₦)<input type="number" name="unit_price" min="0" step=".01" placeholder="Saved selling price"></label><button type="button" class="secondary-btn remove-line" hidden>Remove</button></div></div>
+      <button type="button" id="add-sale-line" class="secondary-btn" {{'disabled' if not products}}>+ Add another product</button>
+      <strong id="sale-preview">Estimated total: ₦0.00</strong>
+      <label>How customer paid<select name="payment_method">{% for method in payment_methods %}<option>{{method}}</option>{% endfor %}</select></label>
+      <label>Date<input type="date" name="sold_at"></label><label>Note (optional)<input name="note" maxlength="500"></label>
+      <button class="primary-btn" {{'disabled' if not products}}>Complete sale</button>
+      {% if not products %}<p><a href="{{url_for('products.create')}}">Add your first product</a> to record a sale.</p>{% endif %}
+    </form>
+    <div class="panel-card"><h3>Sales history</h3>{% if sales.items %}
+      <div class="table-wrap"><table><tr><th>Items</th><th>Total</th><th>Payment</th><th>Date</th><th>Action</th></tr>
+      {% for s in sales.items %}<tr><td>{% for item in s.items %}<div>{{item.product.name}} × {{item.quantity}} @ ₦{{'{:,.2f}'.format(item.unit_price)}}</div>{% endfor %}{% if s.voided_at %}<small>Voided: {{s.void_reason}}</small>{% endif %}</td><td>₦{{'{:,.2f}'.format(s.total)}}</td><td>{{s.payment_method}}</td><td>{{s.sold_at.strftime('%d %b %Y')}}</td><td>{% if not s.voided_at %}<form method="POST" action="{{url_for('sales.delete',sale_id=s.id)}}"><input name="reason" required maxlength="300" placeholder="Reason to void"><button class="danger-link">Void sale</button></form>{% endif %}</td></tr>{% endfor %}</table></div>
+      <nav class="pager">{% if sales.has_prev %}<a href="{{url_for('sales.index',page=sales.prev_num)}}">Previous</a>{% endif %} Page {{sales.page}} of {{sales.pages}} {% if sales.has_next %}<a href="{{url_for('sales.index',page=sales.next_num)}}">Next</a>{% endif %}</nav>
+      {% else %}<div class="empty-state">No sales yet. Add products, then record your first sale.</div>{% endif %}
+    </div>
+  </div>
+</section>
+<script>
+const lines = document.querySelector('#sale-lines');
+function updateSaleTotal() {
+  let total = 0;
+  for (const row of lines.querySelectorAll('.sale-line')) {
+    const select = row.querySelector('select');
+    const price = row.querySelector('[name="unit_price"]').value;
+    total += Number(row.querySelector('[name="quantity"]').value || 0) * Number(price === '' ? select.selectedOptions[0]?.dataset.price || 0 : price);
+  }
+  document.querySelector('#sale-preview').textContent = 'Estimated total: ₦' + total.toLocaleString('en-NG', {minimumFractionDigits:2,maximumFractionDigits:2});
+}
+document.querySelector('#add-sale-line').addEventListener('click', () => {
+  const row = lines.firstElementChild.cloneNode(true);
+  row.querySelector('[name="quantity"]').value = 1;
+  row.querySelector('[name="unit_price"]').value = '';
+  row.querySelector('.remove-line').hidden = false;
+  lines.append(row);
+  updateSaleTotal();
+});
+lines.addEventListener('click', event => {
+  if (event.target.matches('.remove-line')) { event.target.closest('.sale-line').remove(); updateSaleTotal(); }
+});
+lines.addEventListener('input', updateSaleTotal);
+lines.addEventListener('change', updateSaleTotal);
+updateSaleTotal();
+</script>
+{% endblock %}

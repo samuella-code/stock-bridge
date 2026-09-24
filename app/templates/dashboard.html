@@ -1,121 +1,17 @@
-{% extends "base.html" %}
-
-{% block title %}Dashboard · StockBridge{% endblock %}
-{% block page_title %}Dashboard{% endblock %}
-
-{% block content %}
-<section class="dashboard-wrap">
-    <div class="welcome-row">
-        <div>
-            <p class="eyebrow">{{ business.name if business else 'Your business' }}</p>
-            <h2>Good to see you, {{ current_user.full_name.split(' ')[0] }}.</h2>
-            <p class="muted">Here’s your business snapshot for today. As you record sales and expenses, these numbers will update automatically.</p>
-        </div>
-        <div><a class="primary-btn button-link" href="{{ url_for('sales.index') }}">+ New sale</a> <a class="secondary-btn button-link" href="{{ url_for('restocking.index') }}">+ Restock</a> <a class="secondary-btn button-link" href="{{ url_for('expenses.index') }}">+ Expense</a> <a class="secondary-btn button-link" href="{{ url_for('products.create') }}">+ Add product</a></div>
-    </div>
-
-    <div class="metric-grid">
-        <article class="metric-card">
-            <div class="metric-top"><span>Sales today</span><span class="metric-icon">↗</span></div>
-            <strong>₦{{ "{:,.0f}".format(metrics.sales_today) }}</strong>
-            <small>{{ 'Updated from today’s sales' if metrics.sales_today else 'No sales recorded yet' }}</small>
-        </article>
-        <article class="metric-card">
-            <div class="metric-top"><span>Expenses today</span><span class="metric-icon">₦</span></div>
-            <strong>₦{{ "{:,.0f}".format(metrics.expenses_today) }}</strong>
-            <small>Keep costs visible</small>
-        </article>
-        <article class="metric-card">
-            <div class="metric-top"><span>Estimated gross profit</span><span class="metric-icon">◎</span></div>
-            <strong>₦{{ "{:,.0f}".format(metrics.gross_profit) }}</strong>
-            <small>Based on recorded product costs</small>
-        </article>
-        <article class="metric-card accent-card">
-            <div class="metric-top"><span>Low-stock products</span><span class="metric-icon">!</span></div>
-            <strong>{{ metrics.low_stock_count }}</strong>
-            <small>{{ metrics.product_count }} products in inventory</small>
-        </article>
-    </div>
-
-    <div class="dashboard-grid">
-        <article class="panel-card chart-card">
-            <div class="panel-heading">
-                <div>
-                    <p class="eyebrow">Performance</p>
-                    <h3>Sales overview</h3>
-                </div>
-                <span class="panel-chip">Last 7 days</span>
-            </div>
-            <div class="empty-chart">
-                <div class="chart-bars real-chart">{% for day in chart %}<span style="height: {{ day.height }}%" title="{{ day.label }}: ₦{{ '{:,.2f}'.format(day.total) }}"><small>{{ day.label }}</small></span>{% endfor %}</div><div class="empty-copy"><strong>₦{{ '{:,.2f}'.format(chart|sum(attribute='total')) }} in the last 7 days</strong><p>Hover over a bar to see its daily total.</p></div>
-            </div>
-        </article>
-
-        <article class="panel-card recommendation-card">
-            <div class="recommendation-badge">SMART RESTOCK</div>
-            <h3>Know what to reorder before it runs out.</h3>
-            <p>StockBridge will use your recent sales rate, supplier lead time, and safety stock to recommend when and how much to reorder.</p>
-            <div class="formula-box">
-                <span>Reorder point</span>
-                <strong>(Avg. daily sales × Lead time) + Safety stock</strong>
-            </div>
-            <a class="secondary-btn button-link" href="{{ url_for('restocking.index') }}">View recommendations</a>
-        </article>
-    </div>
-
-    <div class="dashboard-grid lower-grid">
-        <article class="panel-card">
-            <div class="panel-heading">
-                <div>
-                    <p class="eyebrow">Inventory watch</p>
-                    <h3>Low-stock products</h3>
-                </div>
-                <span class="count-badge">{{ metrics.low_stock_count }}</span>
-            </div>
-            {% if low_stock_products %}
-                <div class="table-wrap">
-                    <table>
-                        <thead><tr><th>Product</th><th>Stock</th><th>Status</th></tr></thead>
-                        <tbody>
-                        {% for product in low_stock_products %}
-                            <tr><td>{{ product.name }}</td><td>{{ product.stock_quantity }}</td><td><span class="status danger">Restock</span></td></tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <div class="empty-state compact">
-                    <div class="empty-icon">▦</div>
-                    <strong>No inventory yet</strong>
-                    <p>Once products are added, StockBridge will flag items that need attention.</p>
-                </div>
-            {% endif %}
-        </article>
-
-        <article class="panel-card">
-            <div class="panel-heading">
-                <div>
-                    <p class="eyebrow">Activity</p>
-                    <h3>Recent transactions</h3>
-                </div>
-            </div>
-            {% if recent_transactions %}
-                <div class="transaction-list">
-                {% for transaction in recent_transactions %}
-                    <div class="transaction-row">
-                        <div><strong>{{ transaction.title }}</strong><span>{{ transaction.date.strftime('%d %b, %H:%M') }}</span></div>
-                        <strong>{{ transaction.amount }}</strong>
-                    </div>
-                {% endfor %}
-                </div>
-            {% else %}
-                <div class="empty-state compact">
-                    <div class="empty-icon">↗</div>
-                    <strong>No transactions yet</strong>
-                    <p>Your latest sales and expenses will show here.</p>
-                </div>
-            {% endif %}
-        </article>
-    </div>
-</section>
-{% endblock %}
+{% extends "base.html" %}{% block title %}Dashboard · StockBridge{% endblock %}{% block page_title %}Dashboard{% endblock %}{% block content %}
+<section class="dashboard-wrap"><div class="welcome-row"><div><p class="eyebrow">{{business.name}}</p><h2>How is your business doing?</h2><p class="muted">Record each sale, restock and expense once. StockBridge keeps these figures up to date.</p></div></div>
+<div class="quick-actions"><a class="primary-btn button-link" href="{{url_for('sales.index')}}">+ New sale</a><a class="secondary-btn button-link" href="{{url_for('products.create')}}">+ Add product</a><a class="secondary-btn button-link" href="{{url_for('restocking.index')}}">+ Restock</a><a class="secondary-btn button-link" href="{{url_for('expenses.index')}}">+ Expense</a></div>
+{% if metrics.product_count == 0 %}<div class="panel-card onboarding"><h3>Set up your shop in a few steps</h3><p>1. Add products with the quantities you already have. 2. Record sales as customers buy. 3. Record new stock and running costs. Your dashboard builds itself.</p><a class="primary-btn button-link" href="{{url_for('products.create')}}">Add your first product</a></div>{% endif %}
+<form class="period-picker" method="GET"><label>Show <select name="period" onchange="this.form.submit()">{% for key,label in [('today','Today'),('week','This week'),('month','This month'),('custom','Custom dates')] %}<option value="{{key}}" {{'selected' if period==key}}>{{label}}</option>{% endfor %}</select></label><label>From <input type="date" name="from" value="{{request.args.get('from','')}}"></label><label>To <input type="date" name="to" value="{{request.args.get('to','')}}"></label><button class="secondary-btn">Apply</button></form>
+<div class="metric-grid">{% for label,value,explanation in [
+('Sales',metrics.revenue,'Revenue from completed sales'),
+('Estimated gross profit',metrics.gross_profit,'Sales minus cost of products sold'),
+('Operating expenses',metrics.expenses,'Running costs recorded'),
+('Estimated net profit',metrics.net_profit,'Gross profit minus operating expenses'),
+('Number of sales',metrics.number_of_sales,'Customer transactions'),
+('Units sold',metrics.units_sold,'Products sold'),
+('Products running low',metrics.low_stock_count,'Above zero, at or below alert threshold'),
+('Out of stock',metrics.out_stock_count,'No units available')] %}<article class="metric-card"><div class="metric-top"><span>{{label}}</span></div><strong>{{'₦{:,.0f}'.format(value) if label in ['Sales','Estimated gross profit','Operating expenses','Estimated net profit'] else value}}</strong><small>{{explanation}}</small></article>{% endfor %}</div>
+<div class="dashboard-grid"><article class="panel-card chart-card"><h3>Sales in the last 7 days</h3><div class="empty-chart"><div class="chart-bars real-chart">{% for day in chart %}<span style="height:{{day.height}}%" title="{{day.label}}: ₦{{'{:,.2f}'.format(day.total)}}"><small>{{day.label}}</small></span>{% endfor %}</div></div>{% if metrics.number_of_sales==0 %}<p>No sales in this period. Record a sale to see your performance.</p>{% endif %}</article><article class="panel-card"><h3>Best-selling products by units</h3>{% for p,units,revenue in top %}<p>{{p.name}} · {{units}} units · ₦{{'{:,.2f}'.format(revenue)}}</p>{% else %}<p>No sales in this period.</p>{% endfor %}<a href="{{url_for('main.reports')}}">View reports</a></article></div>
+<div class="dashboard-grid lower-grid"><article class="panel-card"><h3>Stock needing attention</h3>{% for p in low_stock_products %}<p><a href="{{url_for('products.detail',product_id=p.id)}}">{{p.name}}</a> · {{p.stock_quantity}} {{p.unit}} · {{p.stock_status}}</p>{% else %}<p>No products need restocking right now.</p>{% endfor %}</article><article class="panel-card"><h3>Recent activity</h3>{% for row in recent_transactions %}<div class="transaction-row"><div><strong>{{row.title}}</strong><span>{{row.date.strftime('%d %b, %H:%M')}}</span></div><strong>{{row.amount}}</strong></div>{% else %}<p>No activity yet. Add a product to get started.</p>{% endfor %}</article></div>
+</section>{% endblock %}

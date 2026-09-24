@@ -26,16 +26,66 @@ class Business(db.Model):
    return not self.subscription_ends_at or self.subscription_ends_at > datetime.utcnow()
   return False
 class Product(db.Model):
- id=db.Column(db.Integer,primary_key=True); business_id=db.Column(db.Integer,db.ForeignKey("business.id"),nullable=False,index=True); name=db.Column(db.String(140),nullable=False); sku=db.Column(db.String(60)); category=db.Column(db.String(80)); buying_price=db.Column(db.Numeric(12,2),nullable=False,default=0); selling_price=db.Column(db.Numeric(12,2),nullable=False,default=0); stock_quantity=db.Column(db.Integer,nullable=False,default=0); minimum_stock_level=db.Column(db.Integer,nullable=False,default=0); supplier_name=db.Column(db.String(140)); supplier_lead_time=db.Column(db.Integer,nullable=False,default=2); safety_stock=db.Column(db.Integer,nullable=False,default=0); created_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False); updated_at=db.Column(db.DateTime,default=datetime.utcnow,onupdate=datetime.utcnow,nullable=False)
- sales=db.relationship("Sale",backref="product",cascade="all, delete-orphan"); __table_args__=(db.UniqueConstraint("business_id","sku",name="uq_product_business_sku"),)
+ id=db.Column(db.Integer,primary_key=True); business_id=db.Column(db.Integer,db.ForeignKey("business.id"),nullable=False,index=True); name=db.Column(db.String(140),nullable=False); sku=db.Column(db.String(60)); category=db.Column(db.String(80)); buying_price=db.Column(db.Numeric(12,2),nullable=False,default=0); selling_price=db.Column(db.Numeric(12,2),nullable=False,default=0); stock_quantity=db.Column(db.Integer,nullable=False,default=0); minimum_stock_level=db.Column(db.Integer,nullable=False,default=0); supplier_name=db.Column(db.String(140)); unit=db.Column(db.String(30),nullable=False,default="unit"); description=db.Column(db.String(500)); active=db.Column(db.Boolean,nullable=False,default=True); opening_quantity=db.Column(db.Integer,nullable=False,default=0); supplier_lead_time=db.Column(db.Integer,nullable=False,default=2); safety_stock=db.Column(db.Integer,nullable=False,default=0); created_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False); updated_at=db.Column(db.DateTime,default=datetime.utcnow,onupdate=datetime.utcnow,nullable=False)
+ __table_args__=(db.UniqueConstraint("business_id","sku",name="uq_product_business_sku"),)
  @property
  def is_low_stock(self): return self.stock_quantity<=self.minimum_stock_level
+ @property
+ def stock_status(self):
+  return "Out of stock" if self.stock_quantity==0 else "Low stock" if self.is_low_stock else "In stock"
 class Sale(db.Model):
- id=db.Column(db.Integer,primary_key=True); business_id=db.Column(db.Integer,db.ForeignKey("business.id"),nullable=False,index=True); product_id=db.Column(db.Integer,db.ForeignKey("product.id"),nullable=False); quantity=db.Column(db.Integer,nullable=False); unit_price=db.Column(db.Numeric(12,2),nullable=False); unit_cost=db.Column(db.Numeric(12,2),nullable=False); sold_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False,index=True)
+ id=db.Column(db.Integer,primary_key=True)
+ business_id=db.Column(db.Integer,db.ForeignKey("business.id"),nullable=False,index=True)
+ # Legacy line columns remain nullable so existing records and migrations remain valid.
+ product_id=db.Column(db.Integer,db.ForeignKey("product.id"))
+ quantity=db.Column(db.Integer)
+ unit_price=db.Column(db.Numeric(12,2))
+ unit_cost=db.Column(db.Numeric(12,2))
+ sold_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False,index=True)
+ payment_method=db.Column(db.String(20),nullable=False,default="Other")
+ note=db.Column(db.String(500))
+ voided_at=db.Column(db.DateTime)
+ void_reason=db.Column(db.String(300))
+ items=db.relationship("SaleItem",backref="sale",cascade="all, delete-orphan",lazy="select")
  @property
- def total(self): return self.unit_price*self.quantity
+ def total(self): return sum((item.subtotal for item in self.items),0)
  @property
- def profit(self): return (self.unit_price-self.unit_cost)*self.quantity
+ def cost(self): return sum((item.cost for item in self.items),0)
+ @property
+ def profit(self): return self.total-self.cost
+ @property
+ def units(self): return sum(item.quantity for item in self.items)
+ @property
+ def product(self):
+  return self.items[0].product if self.items else None
+
+class SaleItem(db.Model):
+ id=db.Column(db.Integer,primary_key=True)
+ sale_id=db.Column(db.Integer,db.ForeignKey("sale.id"),nullable=False,index=True)
+ product_id=db.Column(db.Integer,db.ForeignKey("product.id"),nullable=False,index=True)
+ quantity=db.Column(db.Integer,nullable=False)
+ unit_price=db.Column(db.Numeric(12,2),nullable=False)
+ unit_cost=db.Column(db.Numeric(12,2),nullable=False)
+ product=db.relationship("Product")
+ @property
+ def subtotal(self): return self.quantity*self.unit_price
+ @property
+ def cost(self): return self.quantity*self.unit_cost
+ @property
+ def profit(self): return self.subtotal-self.cost
+
+class StockMovement(db.Model):
+ id=db.Column(db.Integer,primary_key=True)
+ business_id=db.Column(db.Integer,db.ForeignKey("business.id"),nullable=False,index=True)
+ product_id=db.Column(db.Integer,db.ForeignKey("product.id"),nullable=False,index=True)
+ kind=db.Column(db.String(30),nullable=False)
+ quantity_change=db.Column(db.Integer,nullable=False)
+ reason=db.Column(db.String(100))
+ note=db.Column(db.String(500))
+ sale_id=db.Column(db.Integer,db.ForeignKey("sale.id"))
+ restock_id=db.Column(db.Integer,db.ForeignKey("restock.id"))
+ occurred_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False,index=True)
+ product=db.relationship("Product")
 class Restock(db.Model):
  id=db.Column(db.Integer,primary_key=True)
  business_id=db.Column(db.Integer,db.ForeignKey("business.id"),nullable=False,index=True)
@@ -43,13 +93,15 @@ class Restock(db.Model):
  quantity=db.Column(db.Integer,nullable=False)
  unit_cost=db.Column(db.Numeric(12,2),nullable=False)
  supplier=db.Column(db.String(140))
+ note=db.Column(db.String(500))
+ batch_id=db.Column(db.String(36),index=True)
  received_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False)
  product=db.relationship("Product")
  @property
  def total(self): return self.quantity*self.unit_cost
 
 class Expense(db.Model):
- id=db.Column(db.Integer,primary_key=True); business_id=db.Column(db.Integer,db.ForeignKey("business.id"),nullable=False,index=True); description=db.Column(db.String(180),nullable=False); amount=db.Column(db.Numeric(12,2),nullable=False); spent_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False,index=True)
+ id=db.Column(db.Integer,primary_key=True); business_id=db.Column(db.Integer,db.ForeignKey("business.id"),nullable=False,index=True); description=db.Column(db.String(180),nullable=False); amount=db.Column(db.Numeric(12,2),nullable=False); spent_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False,index=True); category=db.Column(db.String(80),nullable=False,default="Miscellaneous"); note=db.Column(db.String(500)); voided_at=db.Column(db.DateTime); void_reason=db.Column(db.String(300))
 class Payment(db.Model):
  id=db.Column(db.Integer,primary_key=True)
  business_id=db.Column(db.Integer,db.ForeignKey("business.id"),nullable=True,index=True)

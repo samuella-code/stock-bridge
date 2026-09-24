@@ -192,3 +192,39 @@ Track activation rate, weekly active businesses, sales transactions recorded per
 ## Next build target
 
 The next implementation milestone after this scaffold is **authentication + business onboarding**, followed by **product CRUD**.
+
+## Business activity and report calculations
+
+Products begin with an opening quantity, which is recorded as an opening stock
+movement. Subsequent quantity changes are recorded as sales, restock receipts,
+or reasoned adjustments. Voiding a sale keeps its items and creates reversing
+stock movements. Archiving a product requires zero remaining stock and keeps
+its historical sales and receipts.
+
+A customer checkout has one `Sale` and one `SaleItem` per product. Each item
+saves its selling price and the product's latest known unit cost at checkout.
+This is a **transaction-time cost snapshot** for estimated cost of goods sold,
+not FIFO or weighted-average costing. A restock saves its own purchase unit cost
+and changes the product's current unit cost for future sales. Historical sale
+profit never changes when a later restock has a different cost. Older one-item
+sales are converted to one-item transactions by migration 0007. Previously
+manual stock edits are reconciled into the opening balance during migration.
+
+- Revenue = sum of completed sale item quantities × saved selling prices.
+- Estimated cost of goods sold = sum of completed sale item quantities × saved costs.
+- Estimated gross profit = revenue − cost of goods sold.
+- Estimated net profit = gross profit − recorded operating expenses.
+- Inventory purchased = restock quantities × saved receipt costs, shown
+  separately and **not subtracted again** from estimated net profit.
+- Current estimated inventory value = active product quantity × latest unit cost.
+
+Dashboard and report date filters use the stored UTC transaction timestamps.
+Current stock and inventory value reflect the present inventory regardless of
+the selected reporting period. Restock suggestions are estimates based on
+sales in the past 30 days; no sales means no velocity estimate.
+
+Before applying migration 0007 to a database with existing records, back up
+that database, deploy the matching code and run `flask db upgrade`. The
+migration preserves existing users, businesses, products, sales and expenses.
+It has no automatic downgrade because a multi-item checkout and reasoned stock
+adjustments cannot be expressed safely in the older schema.
