@@ -3,6 +3,7 @@ import getpass
 from datetime import datetime
 from app import create_app, db
 from app.models import User
+from app.admin.security import valid_admin_password
 
 def main():
     app=create_app()
@@ -15,8 +16,8 @@ def main():
             raise SystemExit("That email already belongs to an account. Choose a separate admin email; existing business accounts are not promoted.")
         password=getpass.getpass("Admin password (at least 12 characters): ")
         confirmation=getpass.getpass("Confirm password: ")
-        if len(password)<12 or password!=confirmation:
-            raise SystemExit("Passwords must match and contain at least 12 characters.")
+        if not valid_admin_password(password) or password!=confirmation:
+            raise SystemExit("Passwords must match, contain at least 12 characters, and not be a common password.")
         admin=User(full_name=name,email=email,role="admin",email_verified_at=datetime.utcnow())
         admin.set_password(password)
         db.session.add(admin)

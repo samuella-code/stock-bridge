@@ -1,1 +1,19 @@
-{% extends "admin/base.html" %}{% block content %}<section class="login-box"><h1>Administrator sign in</h1><p>For authorized StockBridge team members.</p>{% if error %}<p class="notice error">{{error}}</p>{% endif %}<form method="post"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><label>Email<input type="email" name="email" autocomplete="username" required></label><label>Password<input type="password" name="password" autocomplete="current-password" required></label><button>Sign in</button></form></section>{% endblock %}
+{% extends "admin/base.html" %}
+{% block title %}Administrator sign in · StockBridge{% endblock %}
+{% block content %}
+<section class="auth-shell" aria-labelledby="login-title">
+  <div class="auth-intro"><span class="auth-mark" aria-hidden="true">S</span><p class="eyebrow">StockBridge · Admin Portal</p>
+    <h1 id="login-title">Administrator Sign In</h1><p>For authorized StockBridge team members only.</p></div>
+  <div class="login-box">
+    {% if error %}<p class="notice error" role="alert">{{ error }}</p>{% endif %}
+    <form method="post" class="auth-form">
+      <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
+      <label for="admin-email">Email</label><input id="admin-email" type="email" name="email" autocomplete="username" required autofocus>
+      <div class="field-heading"><label for="admin-password">Password</label><a href="{{url_for('admin.forgot_password')}}">Forgot Password?</a></div>
+      <div class="password-field"><input id="admin-password" type="password" name="password" autocomplete="current-password" required><button type="button" class="password-toggle" data-password-toggle="admin-password" aria-controls="admin-password" aria-label="Show password" aria-pressed="false">Show</button></div>
+      <button class="primary-action" type="submit">Sign In</button>
+    </form>
+    <a class="back-link" href="{{url_for('main.index')}}">← Back to StockBridge</a>
+  </div>
+</section>
+{% endblock %}

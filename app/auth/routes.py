@@ -142,6 +142,8 @@ def reset_password(token):
             flash("The passwords do not match.", "error")
         else:
             user.set_password(password)
+            if user.admin_enabled:
+                user.admin_auth_version += 1
             db.session.commit()
             flash("Your password has been updated. You can now log in.", "success")
             return redirect(url_for("auth.login"))

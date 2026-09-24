@@ -3,7 +3,7 @@ from flask_login import UserMixin
 from werkzeug.security import check_password_hash,generate_password_hash
 from app import db,login_manager
 class User(UserMixin,db.Model):
- id=db.Column(db.Integer,primary_key=True); full_name=db.Column(db.String(120),nullable=False); email=db.Column(db.String(180),unique=True,nullable=False,index=True); password_hash=db.Column(db.String(255),nullable=False); created_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False); email_verified_at=db.Column(db.DateTime); verification_sent_at=db.Column(db.DateTime); role=db.Column(db.String(20),nullable=False,default="user"); admin_enabled=db.Column(db.Boolean,nullable=False,default=False,server_default="false"); suspended_at=db.Column(db.DateTime); last_activity_at=db.Column(db.DateTime)
+ id=db.Column(db.Integer,primary_key=True); full_name=db.Column(db.String(120),nullable=False); email=db.Column(db.String(180),unique=True,nullable=False,index=True); password_hash=db.Column(db.String(255),nullable=False); created_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False); email_verified_at=db.Column(db.DateTime); verification_sent_at=db.Column(db.DateTime); role=db.Column(db.String(20),nullable=False,default="user"); admin_enabled=db.Column(db.Boolean,nullable=False,default=False,server_default="false"); admin_auth_version=db.Column(db.Integer,nullable=False,default=0,server_default="0"); suspended_at=db.Column(db.DateTime); last_activity_at=db.Column(db.DateTime)
  businesses=db.relationship("Business",backref="owner",lazy=True,cascade="all, delete-orphan")
  def set_password(self,p): self.password_hash=generate_password_hash(p)
  def check_password(self,p): return check_password_hash(self.password_hash,p)
@@ -108,6 +108,9 @@ class AuditLog(db.Model):
  business_id=db.Column(db.Integer,db.ForeignKey("business.id"),index=True)
  action=db.Column(db.String(50),nullable=False,index=True)
  description=db.Column(db.String(300),nullable=False)
+ target_type=db.Column(db.String(40))
+ target_id=db.Column(db.Integer)
+ ip_address=db.Column(db.String(45))
  created_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False,index=True)
  actor=db.relationship("User")
  business=db.relationship("Business")
@@ -116,6 +119,15 @@ class AdminLoginAttempt(db.Model):
  id=db.Column(db.Integer,primary_key=True)
  identifier=db.Column(db.String(64),nullable=False,index=True)
  attempted_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False,index=True)
+
+class AdminPasswordReset(db.Model):
+ id=db.Column(db.Integer,primary_key=True)
+ user_id=db.Column(db.Integer,db.ForeignKey("user.id"),nullable=False,index=True)
+ token_digest=db.Column(db.String(64),nullable=False,unique=True)
+ expires_at=db.Column(db.DateTime,nullable=False)
+ used_at=db.Column(db.DateTime)
+ created_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False)
+ user=db.relationship("User")
 
 class Payment(db.Model):
  id=db.Column(db.Integer,primary_key=True)

@@ -103,9 +103,10 @@ expense, restocking recommendation, and owner dashboard access.
 
 ## Admin Portal setup
 
-After the production schema reaches migration 0008, run
+After the production schema reaches migration 0010, run
 `python scripts/create_admin.py` from a trusted local clone connected to the
 production database. Enter a dedicated administrator email and a strong
-password interactively. Visit `/admin/login`. Do not promote a customer account
-or commit admin credentials. The production database is separate from your
-local SQLite database.
+password interactively. To grant an existing account access, use
+`python scripts/grant_admin.py` from the same trusted environment. Visit
+`/admin/login`. Admin recovery emails use the existing SMTP settings. Do not
+commit credentials. The production database is separate from your local SQLite database.
