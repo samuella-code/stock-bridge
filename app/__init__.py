@@ -55,6 +55,8 @@ def create_app(test_config=None):
     def require_lifetime_access():
         if current_user.is_authenticated:
             if current_user.role == "admin" or (current_user.admin_enabled and session.get("admin_session")):
+                if request.endpoint in {"main.index", "auth.login"}:
+                    return redirect(url_for("admin.index" if session.get("admin_session") else "admin.login"))
                 if request.blueprint not in {"admin", "admin_api"} and request.endpoint not in {"health", "static", "auth.logout"}:
                     abort(403)
             elif current_user.suspended_at or any(b.suspended_at for b in current_user.businesses):
