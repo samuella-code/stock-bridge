@@ -262,6 +262,49 @@ def test_existing_business_owner_can_use_both_logins_without_losing_data(client)
         assert user.role == "user" and user.admin_enabled
         assert user.businesses[0].id == business_id
 
+def test_customer_and_admin_hosts_keep_sessions_and_pages_separate():
+    app=create_app({"TESTING":True,"SQLALCHEMY_DATABASE_URI":"sqlite:///:memory:",
+        "SECRET_KEY":"test"})
+    with app.app_context():
+        db.create_all()
+        client=app.test_client()
+        _, user_id, _ = seed(client)
+        db.session.get(User, user_id).admin_enabled = True
+        db.session.commit()
+    customer = "https://stock-bridge-one.vercel.app"
+    admin = "https://stock-bridge-admin.vercel.app"
+    assert client.get("/", base_url=customer).headers["Location"].endswith("/auth/login")
+    assert client.get("/admin/login", base_url=customer).headers["Location"] == admin + "/admin/login"
+    assert client.get("/auth/login", base_url=admin).headers["Location"] == customer + "/auth/login"
+    assert client.get("/", base_url=admin).headers["Location"].endswith("/admin/")
+    login_page=client.get("/admin/login", base_url=admin)
+    assert login_page.status_code == 200
+    assert (customer + "/").encode() in login_page.data
+    response = client.post("/admin/login", base_url=admin,
+        data={"email":"owner@example.com", "password":"customer-password123"})
+    assert response.status_code == 302
+    assert client.get("/admin/", base_url=admin).status_code == 200
+    assert b"Business sign in" in client.get("/admin/", base_url=admin).data
+    # Admin cookies are scoped to the admin host; the customer host remains public.
+    assert client.get("/", base_url=customer).headers["Location"].endswith("/auth/login")
+    assert client.get("/auth/login", base_url=customer).status_code == 200
+    assert client.post("/admin/switch-to-business", base_url=admin).headers["Location"] == customer + "/auth/login"
+    assert client.get("/admin/", base_url=admin).headers["Location"].endswith("/admin/login")
+    assert client.post("/admin/login", base_url=customer).status_code == 404
+    with app.app_context():
+        db.session.remove()
+        db.drop_all()
+
+def test_existing_admin_cookie_on_customer_host_returns_to_customer_login(client):
+    seed(client)
+    admin_login(client)
+    with client.session_transaction(base_url="https://stock-bridge-one.vercel.app") as state:
+        state["_user_id"] = "1"
+        state["admin_session"] = True
+    response=client.get("/", base_url="https://stock-bridge-one.vercel.app")
+    assert response.headers["Location"].endswith("/auth/login")
+    assert client.get("/auth/login", base_url="https://stock-bridge-one.vercel.app").status_code == 200
+
 def test_migration_keeps_customer_and_payment_without_promoting_email(tmp_path):
     from flask_migrate import upgrade
     from sqlalchemy import text
