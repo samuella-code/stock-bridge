@@ -29,8 +29,8 @@ use a database):
 | `SECRET_KEY` | A new random value of at least 32 bytes |
 | `DATABASE_URL` | The private pooled PostgreSQL URL from Neon |
 | `FLASK_ENV` | `production` |
-| `PAYSTACK_SECRET_KEY` | Paystack secret key |
-| `PAYSTACK_PUBLIC_KEY` | Matching Paystack public key |
+| `PAYSTACK_SECRET_KEY` | Paystack `sk_live_` secret key on Production |
+| `PAYSTACK_PUBLIC_KEY` | Matching `pk_live_` public key on Production |
 | `LIFETIME_PRICE_NAIRA` | `3000` |
 | `ADMIN_EMAILS` | Legacy setting; no longer grants Admin Portal access |
 | `SMTP_HOST` | SMTP server, for example `smtp.gmail.com` |
@@ -71,11 +71,17 @@ Deploy the project in Vercel. Once the production domain exists, configure this
 Paystack webhook URL in the Paystack dashboard:
 
 ```text
-https://YOUR-VERCEL-DOMAIN/payments/webhook
+https://stock-bridge-one.vercel.app/payments/webhook
 ```
 
-Paystack must send a signed `charge.success` webhook before StockBridge grants
-lifetime access.
+Use the **Live** webhook setting in Paystack's API Keys & Webhooks dashboard.
+StockBridge initializes the ₦3,000 transaction on the server and verifies the
+reference, amount, currency, metadata, and Paystack mode on callback or on a
+signed `charge.success` webhook before granting lifetime access. Preview
+deployments cannot accept payments, even when Vercel has a preview key, because
+they may share the production database. Do not reuse production live keys in
+local development or previews. Check that both Vercel key variables are scoped
+to Production and redeploy after changing environment variables.
 
 ## 6. Verify the deployment
 
@@ -87,7 +93,7 @@ https://YOUR-VERCEL-DOMAIN/auth/signup
 https://YOUR-VERCEL-DOMAIN/auth/login
 ```
 
-Then test the complete flow with Paystack test keys: signup, email verification,
+Then test the complete flow locally with Paystack test keys: signup, email verification,
 login, payment gate, test payment, webhook activation, product creation, sale,
 expense, restocking recommendation, and owner dashboard access.
 

@@ -1,9 +1,11 @@
 import hashlib
 import hmac
 import json
+import os
 import secrets
 import uuid
 from datetime import datetime
+from urllib.parse import urlparse
 
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required
@@ -18,7 +20,19 @@ payments_bp = Blueprint("payments", __name__, url_prefix="/payments")
 
 def _confirm(payment, data):
     metadata = data.get("metadata") or {}
-    valid = isinstance(metadata, dict) and data.get("status") == "success" and data.get("reference") == payment.reference and int(data.get("amount", 0)) == payment.amount_kobo and data.get("currency") == payment.currency and metadata.get("product") == "stockbridge_lifetime" and metadata.get("customer_email", "").lower() == payment.customer_email.lower()
+    if isinstance(metadata, str):
+        try:
+            metadata = json.loads(metadata)
+        except json.JSONDecodeError:
+            return False
+    secret = current_app.config["PAYSTACK_SECRET_KEY"]
+    mode = "live" if secret.startswith("sk_live_") else "test" if secret.startswith("sk_test_") else None
+    valid = (mode is not None and isinstance(metadata, dict) and type(data.get("amount")) is int
+        and data.get("status") == "success" and data.get("reference") == payment.reference
+        and data["amount"] == payment.amount_kobo and data.get("currency") == payment.currency
+        and data.get("domain") == mode and metadata.get("product") == "stockbridge_lifetime"
+        and isinstance(metadata.get("customer_email"), str)
+        and metadata["customer_email"].lower() == payment.customer_email.lower())
     if not valid:
         return False
     payment.status = "success"
@@ -47,7 +61,7 @@ def _activate_account(payment):
 def checkout():
     if current_user.is_authenticated and current_user.businesses[0].has_write_access:
         return redirect(url_for("main.dashboard"))
-    configured = bool(current_app.config["PAYSTACK_PUBLIC_KEY"] and current_app.config["PAYSTACK_SECRET_KEY"])
+    configured = _payments_configured()
     return render_template("payments/checkout.html", price=current_app.config["LIFETIME_PRICE_NAIRA"], configured=configured, account_email=current_user.email)
 
 
@@ -62,28 +76,58 @@ def initialize():
     if existing_user and existing_user.businesses[0].has_write_access:
         flash("That account already has lifetime access. Log in instead.", "success")
         return redirect(url_for("auth.login"))
-    public_key = current_app.config["PAYSTACK_PUBLIC_KEY"]
-    if not public_key or not current_app.config["PAYSTACK_SECRET_KEY"]:
+    if not _payments_configured():
         flash("Payments are being configured. Please try again later.", "warning")
         return redirect(url_for("payments.checkout"))
     amount_kobo = current_app.config["LIFETIME_PRICE_NAIRA"] * 100
     reference = f"SB-{uuid.uuid4().hex}"
     payment = Payment(customer_email=email, reference=reference, amount_kobo=amount_kobo)
     db.session.add(payment)
-    db.session.commit()
-    return render_template("payments/launch.html", payment=payment, public_key=public_key)
+    callback_url = (f"https://{current_app.config['CUSTOMER_HOST']}{url_for('payments.callback')}"
+        if os.getenv("VERCEL_ENV") == "production" else url_for("payments.callback", _external=True))
+    try:
+        details = initialize_transaction(current_app.config["PAYSTACK_SECRET_KEY"], email,
+            amount_kobo, reference, callback_url)
+        checkout_url = details.get("authorization_url", "")
+        parsed = urlparse(checkout_url)
+        if (details.get("reference") != reference or parsed.scheme != "https"
+                or parsed.hostname != "checkout.paystack.com"):
+            raise PaystackError("Invalid checkout response from Paystack.")
+        db.session.commit()
+    except PaystackError:
+        db.session.rollback()
+        current_app.logger.exception("Could not initialize Paystack transaction")
+        flash("Secure checkout could not open. Please try again.", "error")
+        return redirect(url_for("payments.checkout"))
+    return redirect(checkout_url, code=303)
+
+
+def _payments_configured():
+    public = current_app.config["PAYSTACK_PUBLIC_KEY"]
+    secret = current_app.config["PAYSTACK_SECRET_KEY"]
+    if os.getenv("VERCEL_ENV") and os.getenv("VERCEL_ENV") != "production":
+        return False
+    return ((public.startswith("pk_live_") and secret.startswith("sk_live_"))
+        or (public.startswith("pk_test_") and secret.startswith("sk_test_")))
 
 
 @payments_bp.get("/callback")
 def callback():
     reference = request.args.get("reference", "")
-    payment = Payment.query.filter_by(reference=reference).first()
+    payment = Payment.query.filter_by(reference=reference,
+        customer_email=current_user.email).first() if current_user.is_authenticated else None
     if not payment:
         flash("We could not find that payment.", "error")
         return redirect(url_for("payments.checkout"))
     if payment.business_id:
         flash("This payment has already been used.", "warning")
         return redirect(url_for("auth.login"))
+    if payment.status != "success" and _payments_configured():
+        try:
+            verified = verify_transaction(current_app.config["PAYSTACK_SECRET_KEY"], reference)
+            _confirm(payment, verified)
+        except PaystackError:
+            current_app.logger.warning("Paystack verification pending for %s", reference)
     if _activate_account(payment):
         flash("Payment confirmed. Your lifetime access is active.", "success")
         return redirect(url_for("main.dashboard"))
@@ -102,6 +146,8 @@ def status(reference):
 @payments_bp.post("/webhook")
 @csrf.exempt
 def webhook():
+    if os.getenv("VERCEL_ENV") and os.getenv("VERCEL_ENV") != "production":
+        return jsonify(status="not available"), 404
     secret = current_app.config["PAYSTACK_SECRET_KEY"]
     signature = request.headers.get("x-paystack-signature", "")
     expected = hmac.new(secret.encode(), request.get_data(), hashlib.sha512).hexdigest() if secret else ""
@@ -114,6 +160,9 @@ def webhook():
     if event.get("event") == "charge.success":
         data = event.get("data") or {}
         payment = Payment.query.filter_by(reference=data.get("reference")).first()
-        if payment and payment.status != "success":
-            _confirm(payment, data)
+        if payment:
+            if payment.status != "success":
+                _confirm(payment, data)
+            if payment.status == "success":
+                _activate_account(payment)
     return jsonify(status="ok"), 200
