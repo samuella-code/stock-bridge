@@ -27,7 +27,7 @@ def create_account(client, app):
 
 
 def transaction(payment, amount=300_000):
-    return {"status":"success", "reference":payment.reference, "amount":amount, "currency":"NGN", "metadata":{"customer_email":payment.customer_email, "product":"stockbridge_lifetime"}}
+    return {"status":"success", "reference":payment.reference, "amount":amount, "currency":"NGN", "domain":"test", "metadata":{"customer_email":payment.customer_email, "product":"stockbridge_lifetime"}}
 
 
 def test_logged_in_user_initializes_payment(client, app):
