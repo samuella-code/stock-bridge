@@ -20,8 +20,12 @@ def _request(path, secret_key, method="GET", payload=None):
             result = json.loads(response.read().decode())
     except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as error:
         raise PaystackError("Paystack could not be reached. Please try again.") from error
+    if not isinstance(result, dict):
+        raise PaystackError("Paystack returned an invalid response.")
     if not result.get("status"):
         raise PaystackError(result.get("message") or "Paystack rejected the transaction.")
+    if not isinstance(result.get("data"), dict):
+        raise PaystackError("Paystack returned an invalid response.")
     return result["data"]
 
 
@@ -32,7 +36,7 @@ def initialize_transaction(secret_key, email, amount_kobo, reference, callback_u
         "currency": "NGN",
         "reference": reference,
         "callback_url": callback_url,
-        "metadata": {"customer_email": email, "product": "stockbridge_lifetime"},
+        "metadata": json.dumps({"customer_email": email, "product": "stockbridge_lifetime"}),
     })
 
 
