@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required
+from sqlalchemy import func
 
 from app import csrf, db
 from app.models import Payment, User
@@ -18,7 +19,7 @@ from app.payments.service import PaystackError, initialize_transaction, verify_t
 payments_bp = Blueprint("payments", __name__, url_prefix="/payments")
 
 
-def _confirm(payment, data):
+def _confirm(payment, data, *, commit=True):
     metadata = data.get("metadata") or {}
     if isinstance(metadata, str):
         try:
@@ -35,24 +36,33 @@ def _confirm(payment, data):
         and metadata["customer_email"].lower() == payment.customer_email.lower())
     if not valid:
         return False
+    first_confirmation = payment.status != "success" or payment.paid_at is None
     payment.status = "success"
     payment.paid_at = payment.paid_at or datetime.utcnow()
     payment.claim_token = payment.claim_token or secrets.token_urlsafe(32)
-    log("ACCESS_PAYMENT_SUCCESSFUL", f"Verified access payment {payment.reference}.", business_id=payment.business_id)
-    db.session.commit()
+    if first_confirmation:
+        log("ACCESS_PAYMENT_SUCCESSFUL", f"Verified access payment {payment.reference}.", business_id=payment.business_id)
+    if commit:
+        db.session.commit()
     return True
 
 
-def _activate_account(payment):
-    existing_user = User.query.filter_by(email=payment.customer_email).first()
-    if not existing_user or payment.status != "success":
+def _activate_account(payment, *, commit=True):
+    users = User.query.filter(func.lower(User.email) == payment.customer_email.lower()).limit(2).all()
+    if len(users) != 1 or users[0].role != "user" or users[0].admin_enabled or payment.status != "success":
+        return False
+    existing_user = users[0]
+    if len(existing_user.businesses) != 1:
         return False
     business = existing_user.businesses[0]
+    if payment.business_id is not None and payment.business_id != business.id:
+        return False
     business.subscription_plan = "lifetime"
     business.subscription_status = "active"
     business.subscription_ends_at = None
     payment.business_id = business.id
-    db.session.commit()
+    if commit:
+        db.session.commit()
     return True
 
 

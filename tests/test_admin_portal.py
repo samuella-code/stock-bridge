@@ -31,6 +31,85 @@ def seed(client):
 def admin_login(client):
     return client.post("/admin/login",data={"email":"admin@example.com","password":"safe-admin-password123"})
 
+def paystack_details(reference, email="owner@example.com", amount=300000, domain="test"):
+    return {"status":"success","reference":reference,"amount":amount,"currency":"NGN",
+            "domain":domain,"metadata":{"product":"stockbridge_lifetime","customer_email":email}}
+
+def test_admin_verification_checks_paystack_and_is_repeat_safe(client,monkeypatch):
+    _,customer_id,business_id=seed(client)
+    with client.application.app_context():
+        business=db.session.get(Business,business_id)
+        business.subscription_plan="starter"
+        business.subscription_status="inactive"
+        p=Payment(customer_email="OWNER@example.com",reference="SB-admin-verify",amount_kobo=300000)
+        db.session.add(p)
+        db.session.commit()
+        payment_id=p.id
+    client.application.config.update(PAYSTACK_PUBLIC_KEY="pk_test_dummy",PAYSTACK_SECRET_KEY="sk_test_dummy")
+    admin_login(client)
+    assert b"Verify with Paystack" in client.get(f"/admin/payments/{payment_id}").data
+    assert client.post(f"/admin/payments/{payment_id}/verify").status_code==302
+    assert client.get("/admin/reports?period=custom&start=2026-09-01&end=2026-09-30").status_code==200
+    assert client.get("/admin/notifications").status_code==200
+    assert client.get("/admin/activity?action=payments&q=SB-admin-verify").status_code==200
+    for wrong in (paystack_details("wrong"),paystack_details("SB-admin-verify",amount=200000),
+                  paystack_details("SB-admin-verify",email="someone@example.com"),
+                  paystack_details("SB-admin-verify",domain="live")):
+        monkeypatch.setattr("app.admin.routes.verify_transaction",lambda *a, result=wrong: result)
+        assert client.post(f"/admin/payments/{payment_id}/verify",data={"confirm":"on"}).status_code==302
+        with client.application.app_context():
+            assert db.session.get(Payment,payment_id).status=="initialized"
+            assert db.session.get(Business,business_id).subscription_status=="inactive"
+    monkeypatch.setattr("app.admin.routes.verify_transaction",
+                        lambda *a: paystack_details("SB-admin-verify"))
+    for _ in range(2):
+        assert client.post(f"/admin/payments/{payment_id}/verify",data={"confirm":"on"}).status_code==302
+    with client.application.app_context():
+        payment=db.session.get(Payment,payment_id)
+        assert payment.status=="success" and payment.business_id==business_id and payment.paid_at
+        assert db.session.get(Business,business_id).subscription_status=="active"
+        assert Payment.query.count()==1
+        assert AuditLog.query.filter_by(action="LIFETIME_ACCESS_GRANTED").count()==1
+        assert AuditLog.query.filter_by(action="ACCESS_PAYMENT_SUCCESSFUL").count()==1
+    metrics=client.get("/api/admin/dashboard").json
+    assert metrics["successful_payments"]==1 and metrics["access_revenue_kobo"]==300000
+    assert b"3,000.00" in client.get("/admin/reports?period=today").data
+
+def test_admin_payment_verification_cannot_touch_admin_owned_or_mismatched_business(client,monkeypatch):
+    admin_id,customer_id,customer_business=seed(client)
+    with client.application.app_context():
+        dual=User(full_name="Dual",email="dual@example.com",admin_enabled=True)
+        dual.set_password("password123456")
+        db.session.add(dual)
+        db.session.flush()
+        protected=Business(user_id=dual.id,name="Protected",subscription_status="inactive")
+        db.session.add(protected)
+        db.session.flush()
+        payments=[
+            Payment(customer_email="dual@example.com",business_id=protected.id,reference="SB-admin",
+                    amount_kobo=300000),
+            Payment(customer_email="owner@example.com",business_id=protected.id,reference="SB-mismatch",
+                    amount_kobo=300000),
+        ]
+        db.session.add_all(payments)
+        db.session.commit()
+        ids=[p.id for p in payments]
+        protected_id=protected.id
+        dual_id=dual.id
+    client.application.config.update(PAYSTACK_PUBLIC_KEY="pk_test_dummy",PAYSTACK_SECRET_KEY="sk_test_dummy")
+    monkeypatch.setattr("app.admin.routes.verify_transaction",lambda *a: pytest.fail("Must not query Paystack"))
+    admin_login(client)
+    for payment_id in ids:
+        assert client.post(f"/admin/payments/{payment_id}/verify",data={"confirm":"on"}).status_code==302
+    assert client.post(f"/admin/businesses/{protected_id}/suspension",
+                       data={"reason":"bad","confirm":"on"}).status_code==403
+    assert client.get(f"/admin/users/{dual_id}").status_code==404
+    with client.application.app_context():
+        assert db.session.get(Business,protected_id).subscription_status=="inactive"
+        assert all(db.session.get(Payment,pid).status=="initialized" for pid in ids)
+    assert b"Protected" not in client.get("/admin/businesses").data
+    assert client.get("/api/admin/dashboard").json["users"]==1
+
 def test_admin_is_separate_and_never_needs_business_or_payment(client):
     admin_id,user_id,business_id=seed(client)
     assert client.get("/api/admin/users").status_code==401
