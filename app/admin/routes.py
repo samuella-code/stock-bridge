@@ -194,24 +194,27 @@ def overview():
     week=start-timedelta(days=7)
     month=start-timedelta(days=30)
     success=Payment.query.filter_by(status="success",product="lifetime")
+    # Dual-role admins retain their business records, but are not customers.
+    customer_ids=db.session.query(User.id).filter(User.role=="user",User.admin_enabled.is_(False))
+    customer_business_ids=db.session.query(Business.id).filter(Business.user_id.in_(customer_ids))
     return {
-        "users":User.query.filter_by(role="user").count(),
-        "active_users":User.query.filter(User.role=="user",User.suspended_at.is_(None)).count(),
-        "new_today":User.query.filter(User.role=="user",User.created_at>=start).count(),
-        "new_week":User.query.filter(User.role=="user",User.created_at>=week).count(),
-        "new_month":User.query.filter(User.role=="user",User.created_at>=month).count(),
-        "businesses":Business.query.count(),
-        "active_businesses":Business.query.filter(Business.suspended_at.is_(None),Business.subscription_status=="active").count(),
-        "paid_users":Business.query.filter(Business.subscription_plan=="lifetime",Business.subscription_status=="active").count(),
+        "users":User.query.filter(User.id.in_(customer_ids)).count(),
+        "active_users":User.query.filter(User.id.in_(customer_ids),User.suspended_at.is_(None)).count(),
+        "new_today":User.query.filter(User.id.in_(customer_ids),User.created_at>=start).count(),
+        "new_week":User.query.filter(User.id.in_(customer_ids),User.created_at>=week).count(),
+        "new_month":User.query.filter(User.id.in_(customer_ids),User.created_at>=month).count(),
+        "businesses":Business.query.filter(Business.id.in_(customer_business_ids)).count(),
+        "active_businesses":Business.query.filter(Business.id.in_(customer_business_ids),Business.suspended_at.is_(None),Business.subscription_status=="active").count(),
+        "paid_users":Business.query.filter(Business.id.in_(customer_business_ids),Business.subscription_plan=="lifetime",Business.subscription_status=="active").count(),
         "successful_payments":success.count(),
         "pending_payments":Payment.query.filter(Payment.product=="lifetime",Payment.status.in_(("initialized","pending"))).count(),
         "failed_payments":Payment.query.filter_by(status="failed",product="lifetime").count(),
         "access_revenue_kobo":db.session.query(func.coalesce(func.sum(Payment.amount_kobo),0)).filter(Payment.status=="success",Payment.product=="lifetime",Payment.currency=="NGN").scalar(),
-        "sales_today":Sale.query.filter(Sale.sold_at>=start,Sale.voided_at.is_(None)).count(),
-        "products":Product.query.count(),
-        "sales":Sale.query.count(),
-        "restocks":Restock.query.count(),
-        "expenses":Expense.query.count(),
+        "sales_today":Sale.query.filter(Sale.business_id.in_(customer_business_ids),Sale.sold_at>=start,Sale.voided_at.is_(None)).count(),
+        "products":Product.query.filter(Product.business_id.in_(customer_business_ids)).count(),
+        "sales":Sale.query.filter(Sale.business_id.in_(customer_business_ids)).count(),
+        "restocks":Restock.query.filter(Restock.business_id.in_(customer_business_ids)).count(),
+        "expenses":Expense.query.filter(Expense.business_id.in_(customer_business_ids)).count(),
     }
 
 def recent_activity():
