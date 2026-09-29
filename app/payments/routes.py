@@ -104,10 +104,14 @@ def initialize():
                 or parsed.hostname != "checkout.paystack.com"):
             raise PaystackError("Invalid checkout response from Paystack.")
         db.session.commit()
-    except PaystackError:
+    except PaystackError as error:
         db.session.rollback()
-        current_app.logger.exception("Could not initialize Paystack transaction")
-        flash("Secure checkout could not open. Please try again.", "error")
+        current_app.logger.warning("Paystack checkout initialization failed: http_status=%s code=%s reference=%s",
+            error.status_code, error.code, reference)
+        if error.status_code in (401, 403):
+            flash("Secure checkout is temporarily unavailable. Please contact StockBridge support.", "error")
+        else:
+            flash("Secure checkout could not open. Please try again.", "error")
         return redirect(url_for("payments.checkout"))
     return redirect(checkout_url, code=303)
 
