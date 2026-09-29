@@ -175,6 +175,35 @@ def test_paystack_http_error_retains_only_safe_diagnostic_fields(monkeypatch):
     assert "sk_live_do_not_log" not in str(failure.value)
 
 
+def test_paystack_initialize_sends_documented_user_agent(monkeypatch):
+    from app.payments.service import initialize_transaction
+    seen=[]
+    class Reply:
+        def __enter__(self): return self
+        def __exit__(self,*args): return False
+        def read(self): return b'{"status":true,"data":{"reference":"SB-ua","authorization_url":"https://checkout.paystack.com/abc"}}'
+    def fake_open(request, timeout):
+        seen.append(request)
+        return Reply()
+    monkeypatch.setattr("app.payments.service.urlopen",fake_open)
+    initialize_transaction("sk_test_hidden","ada@example.com",300000,"SB-ua",
+        "https://stock-bridge-one.vercel.app/payments/callback")
+    assert seen[0].get_header("User-agent").startswith("Mozilla/5.0")
+    assert seen[0].get_header("Authorization")=="Bearer sk_test_hidden"
+
+
+def test_paystack_cloudflare_error_is_classified_without_logging_response(monkeypatch):
+    from app.payments.service import PaystackError, verify_transaction
+    def rejected(_request, timeout):
+        raise HTTPError("https://api.paystack.co/transaction/verify/SB-ua",403,
+            "Forbidden",{"cf-ray":"hidden"},io.BytesIO(b"<html>Cloudflare blocked request</html>"))
+    monkeypatch.setattr("app.payments.service.urlopen",rejected)
+    with pytest.raises(PaystackError) as failure:
+        verify_transaction("sk_test_hidden","SB-ua")
+    assert failure.value.status_code==403 and failure.value.code=="cloudflare_block"
+    assert "Cloudflare blocked request" not in str(failure.value)
+
+
 def test_live_checkout_auth_failure_is_clear_and_creates_no_payment(client, app, monkeypatch):
     from app.payments.service import PaystackError
     create_account(client, app)
