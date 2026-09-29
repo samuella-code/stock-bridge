@@ -54,6 +54,24 @@ def test_admin_is_separate_and_never_needs_business_or_payment(client):
     client.post("/admin/logout")
     assert client.get("/api/admin/users").status_code==401
 
+
+def test_dashboard_customer_counts_exclude_dual_role_admin_and_owned_business(client):
+    seed(client)
+    with client.application.app_context():
+        dual=User(full_name="Dual administrator",email="dual@example.com",admin_enabled=True,
+                  email_verified_at=datetime.utcnow())
+        dual.set_password("dual-admin-password123")
+        db.session.add(dual)
+        db.session.flush()
+        db.session.add(Business(user_id=dual.id,name="Admin shop",subscription_plan="lifetime",
+                                subscription_status="active"))
+        db.session.commit()
+    admin_login(client)
+    metrics=client.get("/api/admin/dashboard").json
+    assert metrics["users"]==1 and metrics["active_users"]==1
+    assert metrics["businesses"]==1 and metrics["active_businesses"]==1
+    assert metrics["paid_users"]==1 and metrics["new_today"]==1
+
 def test_normal_user_cannot_self_promote_or_access_admin_api(client):
     _,user_id,_=seed(client)
     client.post("/auth/login",data={"email":"owner@example.com","password":"customer-password123"})

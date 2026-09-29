@@ -4,9 +4,26 @@ The one-time `scripts/reset_customer_data.py` command removes ordinary customer
 accounts and their business records. It preserves dedicated administrators
 (`role=admin`) and dual-role administrators (`admin_enabled=true`) with their
 business data. Customer-related audit entries and password reset tokens are
-removed; independent admin logs and login attempts remain. Payments are removed
-when their business or customer email belongs to a deleted customer. Unlinked
-payments with no matching customer account remain for manual review.
+removed; independent admin logs and login attempts remain.
+
+Payment cleanup follows ownership first, then case-insensitive email matching:
+
+1. Payments linked to an ordinary customer's business are removed, whether
+   successful, pending, failed, or initialized.
+2. Payments linked to an admin-owned business are preserved, even if their
+   `customer_email` happens to match an ordinary customer.
+3. Unlinked payments (`business_id IS NULL`) matching an ordinary customer's
+   email are removed. Unlinked payments matching an admin's email are preserved.
+4. All other unlinked payments are treated as obsolete pre-launch records and
+   removed, including successful and pending records. **This also removes an
+   unclaimed real payment if it has no business and no admin email match.**
+   Review the dry-run counts and payment records before choosing to execute.
+
+The dry run reports all five groups and the total unlinked count. If a customer
+and admin have the same email ignoring case, or a customer-owned business has a
+payment with an admin's email, the command stops for manual review. It also
+stops on a payment pointing at a missing business. Admin-owned business
+payments cannot be deleted by an email match alone.
 
 This script never runs during startup or deployment. It does not change tables,
 migrations, access rules, Paystack settings, or the ₦3,000 lifetime price.
@@ -39,5 +56,7 @@ migrations, access rules, Paystack settings, or the ₦3,000 lifetime price.
    customer signup works. Resume customer traffic.
 
 The script refuses a missing database URL, incomplete schema, unexpected user
-roles, cross-business transaction links, or an unknown table with a foreign key
-to deleted records. Investigate those cases before trying again.
+roles, ambiguous admin/customer payment ownership or email identity,
+cross-business transaction links, or an unknown table with a foreign key to
+deleted records. Investigate those cases before trying again. Protected admin
+payments can still appear in platform payment and revenue counts after reset.

@@ -21,7 +21,7 @@ def deletion_plan():
     businesses = select(Business.id).where(Business.user_id.in_(customers))
     products = select(Product.id).where(Product.business_id.in_(businesses))
     sales = select(Sale.id).where(Sale.business_id.in_(businesses))
-    customer_emails = select(func.lower(User.email)).where(User.id.in_(customers))
+    payment_rules = payment_categories()
     return [
         ("audit_log", AuditLog, or_(AuditLog.actor_id.in_(customers),
             AuditLog.business_id.in_(businesses),
@@ -33,12 +33,31 @@ def deletion_plan():
         ("restock", Restock, Restock.business_id.in_(businesses)),
         ("sale", Sale, Sale.business_id.in_(businesses)),
         ("expense", Expense, Expense.business_id.in_(businesses)),
-        ("payment", Payment, or_(Payment.business_id.in_(businesses),
-            func.lower(Payment.customer_email).in_(customer_emails))),
+        ("payment", Payment, or_(payment_rules["customer_business"],
+            payment_rules["customer_email"], payment_rules["orphan"])),
         ("product", Product, Product.business_id.in_(businesses)),
         ("business", Business, Business.user_id.in_(customers)),
         ("user", User, User.id.in_(customers)),
     ]
+
+
+def payment_categories():
+    """Disjoint payment groups; ownership takes precedence over email."""
+    customers = select(User.id).where(User.role == "user", User.admin_enabled.is_(False))
+    admins = select(User.id).where(or_(User.role == "admin", User.admin_enabled.is_(True)))
+    customer_businesses = select(Business.id).where(Business.user_id.in_(customers))
+    admin_businesses = select(Business.id).where(Business.user_id.in_(admins))
+    customer_emails = select(func.lower(User.email)).where(User.id.in_(customers))
+    admin_emails = select(func.lower(User.email)).where(User.id.in_(admins))
+    unlinked = Payment.business_id.is_(None)
+    email = func.lower(Payment.customer_email)
+    return {
+        "customer_business": Payment.business_id.in_(customer_businesses),
+        "customer_email": and_(unlinked, email.in_(customer_emails)),
+        "orphan": and_(unlinked, email.not_in(customer_emails), email.not_in(admin_emails)),
+        "admin_business": Payment.business_id.in_(admin_businesses),
+        "admin_email": and_(unlinked, email.in_(admin_emails)),
+    }
 
 
 def check_schema():
@@ -60,6 +79,19 @@ def check_schema():
     products = select(Product.id).where(Product.business_id.in_(businesses))
     sales = select(Sale.id).where(Sale.business_id.in_(businesses))
     restocks = select(Restock.id).where(Restock.business_id.in_(businesses))
+    admins = select(User.id).where(or_(User.role == "admin", User.admin_enabled.is_(True)))
+    admin_emails = select(func.lower(User.email)).where(User.id.in_(admins))
+    customer_emails = select(func.lower(User.email)).where(User.id.in_(customers))
+    if db.session.execute(customer_emails.intersect(admin_emails).limit(1)).first():
+        raise RuntimeError("A customer and an admin share an email ignoring case; review identities first.")
+    if db.session.execute(select(Payment.id).where(
+            Payment.business_id.in_(businesses),
+            func.lower(Payment.customer_email).in_(admin_emails)).limit(1)).first():
+        raise RuntimeError("A customer-owned business has an admin-email payment; review it first.")
+    if db.session.execute(select(Payment.id).where(
+            Payment.business_id.is_not(None),
+            Payment.business_id.not_in(select(Business.id))).limit(1)).first():
+        raise RuntimeError("A payment references a missing business; review it first.")
     checks = [
         select(Sale.id).where(Sale.product_id.in_(products), Sale.business_id.not_in(businesses)),
         select(SaleItem.id).where(SaleItem.product_id.in_(products), SaleItem.sale_id.not_in(sales)),
@@ -81,6 +113,8 @@ def reset_customer_data(*, execute=False):
         plan = deletion_plan()
         counts = {name: db.session.scalar(select(func.count()).select_from(model).where(condition))
                   for name, model, condition in plan}
+        payment_counts = {name: db.session.scalar(select(func.count()).select_from(Payment).where(condition))
+                          for name, condition in payment_categories().items()}
         admins = db.session.scalar(select(func.count()).select_from(User).where(
             or_(User.role == "admin", User.admin_enabled.is_(True))))
         if execute:
@@ -89,7 +123,7 @@ def reset_customer_data(*, execute=False):
             db.session.commit()
         else:
             db.session.rollback()
-        return counts, admins
+        return counts, admins, payment_counts
     except Exception:
         db.session.rollback()
         raise
@@ -104,12 +138,20 @@ def main():
     app = create_app()
     with app.app_context():
         check_schema()
-        counts, admins = reset_customer_data()
+        counts, admins, payment_counts = reset_customer_data()
         print(f"Database: {db.engine.url.render_as_string(hide_password=True)}")
         print("Preserved: admin accounts, including dual-role administrators, their businesses, and schema/migrations.")
         print("Customer records to remove:")
         for name, count in counts.items():
             print(f"  {name}: {count}")
+        print("Payment breakdown (customer-business ownership takes precedence over email):")
+        for label, key in (("Linked to deleted customer businesses", "customer_business"),
+                           ("Unlinked, matched by deleted customer email", "customer_email"),
+                           ("Unlinked/orphaned, no admin email match", "orphan"),
+                           ("Protected: admin-owned business", "admin_business"),
+                           ("Protected: unlinked admin email", "admin_email")):
+            print(f"  {label}: {payment_counts[key]}")
+        print(f"  Total unlinked/orphaned: {payment_counts['customer_email'] + payment_counts['orphan'] + payment_counts['admin_email']}")
         print(f"Admin accounts preserved: {admins}")
         if not args.execute:
             print("DRY RUN: no records changed. Back up the database before executing.")
@@ -117,7 +159,7 @@ def main():
         print("This permanently removes the customer records listed above. Stop new signups and payments first.")
         if input("Type RESET CUSTOMER DATA to confirm: ").strip() != "RESET CUSTOMER DATA":
             raise SystemExit("Cancelled; no records changed.")
-        removed, preserved = reset_customer_data(execute=True)
+        removed, preserved, _ = reset_customer_data(execute=True)
         print("Customer records removed:")
         for name, count in removed.items():
             print(f"  {name}: {count}")

@@ -7,7 +7,7 @@ from app import create_app, db
 from app.models import (AdminLoginAttempt, AdminPasswordReset, AuditLog, Business,
                         Expense, Payment, Product, Restock, Sale, SaleItem,
                         StockMovement, User)
-from scripts.reset_customer_data import reset_customer_data
+from scripts.reset_customer_data import main, reset_customer_data
 
 
 @pytest.fixture
@@ -43,9 +43,13 @@ def seed():
         StockMovement(business_id=shop.id, product_id=product.id, kind="sale",
                       quantity_change=-1, sale_id=sale.id),
         Expense(business_id=shop.id, description="Transport", amount=100),
-        Payment(business_id=shop.id, customer_email=customer.email, reference="customer-ref", amount_kobo=300000),
-        Payment(customer_email=customer.email, reference="unclaimed-ref", amount_kobo=300000),
-        Payment(business_id=admin_shop.id, customer_email=dual.email, reference="admin-ref", amount_kobo=300000),
+        Payment(business_id=shop.id, customer_email=customer.email, reference="customer-ref", amount_kobo=300000, status="success"),
+        Payment(customer_email="CUSTOMER@example.com", reference="unclaimed-ref", amount_kobo=300000, status="pending"),
+        Payment(customer_email="legacy@example.com", reference="orphan-success", amount_kobo=300000, status="success"),
+        Payment(customer_email="other@example.com", reference="orphan-pending", amount_kobo=300000, status="pending"),
+        Payment(business_id=admin_shop.id, customer_email=dual.email, reference="admin-ref", amount_kobo=300000, status="success"),
+        Payment(business_id=admin_shop.id, customer_email="CUSTOMER@example.com", reference="admin-email-collision", amount_kobo=300000, status="success"),
+        Payment(customer_email="DUAL@example.com", reference="admin-unlinked", amount_kobo=300000, status="pending"),
         AuditLog(actor_id=admin.id, business_id=shop.id, action="USER_SUSPENDED",
                  description="Customer action", target_type="user", target_id=customer.id),
         AuditLog(actor_id=admin.id, action="ADMIN_LOGIN_SUCCESS", description="Admin signed in"),
@@ -60,16 +64,19 @@ def test_dry_run_and_actual_reset_preserve_admins_and_schema(app):
     with app.app_context():
         seed()
         tables_before = set(inspect(db.engine).get_table_names())
-        counts, admins = reset_customer_data()
+        counts, admins, payments = reset_customer_data()
         assert admins == 2
         assert counts["user"] == 1 and counts["business"] == 1
-        assert counts["payment"] == 2 and counts["sale_item"] == 1
+        assert counts["payment"] == 4 and counts["sale_item"] == 1
+        assert payments == {"customer_business": 1, "customer_email": 1, "orphan": 2,
+                            "admin_business": 2, "admin_email": 1}
         assert User.query.count() == 3 and SaleItem.query.count() == 1
-        removed, preserved = reset_customer_data(execute=True)
+        removed, preserved, _ = reset_customer_data(execute=True)
         assert removed == counts and preserved == 2
         assert [u.email for u in User.query.order_by(User.id)] == ["admin@example.com", "dual@example.com"]
         assert Business.query.one().name == "Admin shop"
-        assert [p.reference for p in Payment.query] == ["admin-ref"]
+        assert {p.reference for p in Payment.query} == {"admin-ref", "admin-email-collision", "admin-unlinked"}
+        assert {p.status for p in Payment.query} == {"success", "pending"}
         assert AuditLog.query.one().action == "ADMIN_LOGIN_SUCCESS"
         assert AdminPasswordReset.query.one().token_digest == "admin-token"
         assert AdminLoginAttempt.query.count() == 1
@@ -98,3 +105,44 @@ def test_failed_reset_rolls_back_every_delete(app, monkeypatch):
         assert User.query.count() == 3
         assert SaleItem.query.count() == 1
         assert AuditLog.query.count() == 2
+
+
+def test_ambiguous_customer_admin_email_stops_before_any_deletion(app):
+    with app.app_context():
+        seed()
+        db.session.add(Payment(business_id=Business.query.filter_by(name="Customer shop").one().id,
+                               customer_email="ADMIN@example.com", reference="ambiguous", amount_kobo=300000))
+        db.session.commit()
+        with pytest.raises(RuntimeError, match="admin-email payment"):
+            reset_customer_data(execute=True)
+        assert User.query.count() == 3 and Payment.query.count() == 8
+
+
+def test_casefolded_identity_collision_stops_before_any_deletion(app):
+    with app.app_context():
+        seed()
+        db.session.add(User(full_name="Other admin", email="CUSTOMER@example.com", role="admin",
+                            password_hash="unused"))
+        db.session.commit()
+        with pytest.raises(RuntimeError, match="share an email"):
+            reset_customer_data(execute=True)
+        assert User.query.count() == 4 and Payment.query.count() == 7
+
+
+def test_cli_dry_run_reports_payment_groups_without_deleting(app, monkeypatch, capsys):
+    with app.app_context():
+        seed()
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///test-only.db")
+    monkeypatch.setattr("scripts.reset_customer_data.create_app", lambda: app)
+    monkeypatch.setattr("sys.argv", ["reset_customer_data"])
+    main()
+    output = capsys.readouterr().out
+    assert "Linked to deleted customer businesses: 1" in output
+    assert "Unlinked, matched by deleted customer email: 1" in output
+    assert "Unlinked/orphaned, no admin email match: 2" in output
+    assert "Protected: admin-owned business: 2" in output
+    assert "Protected: unlinked admin email: 1" in output
+    assert "Total unlinked/orphaned: 4" in output
+    assert "DRY RUN: no records changed" in output
+    with app.app_context():
+        assert Payment.query.count() == 7 and User.query.count() == 3
