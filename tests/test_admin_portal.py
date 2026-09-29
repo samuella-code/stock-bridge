@@ -273,7 +273,7 @@ def test_customer_and_admin_hosts_keep_sessions_and_pages_separate():
         db.session.commit()
     customer = "https://stock-bridge-one.vercel.app"
     admin = "https://stock-bridge-admin.vercel.app"
-    assert client.get("/", base_url=customer).headers["Location"].endswith("/auth/login")
+    assert client.get("/", base_url=customer).status_code == 200
     assert client.get("/admin/login", base_url=customer).headers["Location"] == admin + "/admin/login"
     assert client.get("/auth/login", base_url=admin).headers["Location"] == customer + "/auth/login"
     assert client.get("/", base_url=admin).headers["Location"].endswith("/admin/")
@@ -286,7 +286,7 @@ def test_customer_and_admin_hosts_keep_sessions_and_pages_separate():
     assert client.get("/admin/", base_url=admin).status_code == 200
     assert b"Business sign in" in client.get("/admin/", base_url=admin).data
     # Admin cookies are scoped to the admin host; the customer host remains public.
-    assert client.get("/", base_url=customer).headers["Location"].endswith("/auth/login")
+    assert client.get("/", base_url=customer).status_code == 200
     assert client.get("/auth/login", base_url=customer).status_code == 200
     assert client.post("/admin/switch-to-business", base_url=admin).headers["Location"] == customer + "/auth/login"
     assert client.get("/admin/", base_url=admin).headers["Location"].endswith("/admin/login")
