@@ -1,7 +1,9 @@
 import hashlib
 import hmac
+import io
 import json
 from datetime import datetime
+from urllib.error import HTTPError
 import pytest
 
 from app import create_app, db
@@ -155,6 +157,38 @@ def test_failed_initialization_does_not_save_a_pending_payment(client, app, monk
         lambda *args: (_ for _ in ()).throw(PaystackError("rejected")))
     assert client.post("/payments/initialize").status_code==302
     with app.app_context(): assert Payment.query.count()==0
+
+
+def test_paystack_http_error_retains_only_safe_diagnostic_fields(monkeypatch):
+    from app.payments.service import PaystackError, initialize_transaction
+    def rejected(_request, timeout):
+        raise HTTPError("https://api.paystack.co/transaction/initialize", 401,
+            "Unauthorized", {}, io.BytesIO(json.dumps({
+                "status":False,"message":"Sensitive provider detail sk_live_do_not_log",
+                "code":"invalid_api_key"}).encode()))
+    monkeypatch.setattr("app.payments.service.urlopen", rejected)
+    with pytest.raises(PaystackError) as failure:
+        initialize_transaction("sk_live_do_not_log","ada@example.com",300000,"SB-error",
+            "https://stock-bridge-one.vercel.app/payments/callback")
+    assert failure.value.status_code==401
+    assert failure.value.code=="invalid_api_key"
+    assert "sk_live_do_not_log" not in str(failure.value)
+
+
+def test_live_checkout_auth_failure_is_clear_and_creates_no_payment(client, app, monkeypatch):
+    from app.payments.service import PaystackError
+    create_account(client, app)
+    app.config.update(PAYSTACK_SECRET_KEY="sk_live_do_not_log",PAYSTACK_PUBLIC_KEY="pk_live_public")
+    warnings=[]
+    monkeypatch.setattr(app.logger,"warning",lambda *args: warnings.append(args))
+    monkeypatch.setattr("app.payments.routes.initialize_transaction",lambda *args:
+        (_ for _ in ()).throw(PaystackError("Rejected",status_code=401,code="invalid_api_key")))
+    response=client.post("/payments/initialize",follow_redirects=True)
+    assert b"contact StockBridge support" in response.data
+    assert warnings and warnings[0][1:3]==(401,"invalid_api_key")
+    assert "sk_live_do_not_log" not in repr(warnings)
+    with app.app_context():
+        assert Payment.query.count()==0
 
 
 def test_webhook_rejects_bad_signature(client):
