@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}StockBridge · Know your business at a glance{% endblock %}
+{% block content %}
+<div class="public-home">
+  <header class="public-nav">
+    <a class="public-brand" href="{{ url_for('main.index') }}" aria-label="StockBridge home"><span class="brand-mark">SB</span><strong>StockBridge</strong></a>
+    <nav aria-label="Customer navigation"><a class="public-signin" href="{{ url_for('auth.login') }}">Sign In</a><a class="primary-btn" href="{{ url_for('auth.signup') }}">Create Account</a></nav>
+  </header>
+  <main>
+    <section class="public-hero">
+      <div><p class="eyebrow">A clearer view of your shop</p><h1>Track stock, sales, expenses and profit. Know when to restock.</h1><p class="public-lead">Record what happens in your business once. StockBridge keeps the numbers up to date for you.</p><div class="public-actions"><a class="primary-btn" href="{{ url_for('auth.signup') }}">Create Account</a><a class="secondary-btn" href="{{ url_for('auth.login') }}">Sign In</a></div><p class="muted">Create an account → Verify Email → Explore StockBridge → Unlock Lifetime Access</p></div>
+      <div class="public-example" aria-label="What StockBridge helps you see"><p class="eyebrow">Your business at a glance</p><div><span>Stock on hand</span><strong>Know what you have</strong></div><div><span>Sales and expenses</span><strong>See what happened</strong></div><div><span>Products running low</span><strong>Know when to restock</strong></div></div>
+    </section>
+    <section class="public-features" aria-label="StockBridge tools"><article><h2>Stay on top of stock</h2><p>Keep product quantities up to date as you record sales and restocks.</p></article><article><h2>Understand your numbers</h2><p>See sales, recorded expenses and estimated profit from your business activity.</p></article><article><h2>Restock with confidence</h2><p>See low-stock alerts and insights based on the sales history you have.</p></article></section>
+    <section class="public-offer"><div><p class="eyebrow">StockBridge Lifetime Access</p><h2>₦{{ '{:,.0f}'.format(config['LIFETIME_PRICE_NAIRA']) }} once</h2><p>No subscription. No recurring charges. Lifetime access for one business.</p></div><a class="primary-btn" href="{{ url_for('auth.signup') }}">Create Account</a></section>
+  </main>
+</div>
+{% endblock %}

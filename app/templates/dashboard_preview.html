@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Explore StockBridge{% endblock %}
+{% block page_title %}Explore StockBridge{% endblock %}
+{% block content %}
+<section class="dashboard-wrap preview-page">
+  <div class="panel-card preview-welcome"><p class="eyebrow">{{ business.name }}</p><h2>Welcome to StockBridge</h2><p>You've verified your email. Explore what StockBridge can help you track, then unlock the business tools when you're ready.</p><div class="preview-steps"><span>✓ Create Account</span><span>✓ Verify Email</span><span>Explore StockBridge</span><span>Unlock Lifetime Access</span></div></div>
+  <div class="public-features"><article><h3>Products and stock</h3><p>Enter the stock you already have, then let sales and restocks update quantities.</p></article><article><h3>Sales and expenses</h3><p>Record daily activity once and see the figures update.</p></article><article><h3>Dashboard and reports</h3><p>See estimated profit, low stock and what sells most from your records.</p></article></div>
+  <div class="panel-card preview-unlock"><div><p class="eyebrow">StockBridge Lifetime Access</p><h2>₦{{ '{:,.0f}'.format(lifetime_price) }} once</h2><p>No subscription. No recurring charges. Lifetime access for one business.</p></div><a class="primary-btn" href="{{ url_for('subscriptions.index') }}">Unlock Lifetime Access</a></div>
+</section>
+{% endblock %}

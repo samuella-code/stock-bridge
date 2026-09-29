@@ -1,6 +1,6 @@
 from datetime import datetime, time, timedelta
 from decimal import Decimal
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func, case, distinct
 from app import db
@@ -75,12 +75,15 @@ def recent_activity(b):
 
 @main_bp.get("/")
 def index():
-    return redirect(url_for("main.dashboard")) if current_user.is_authenticated else redirect(url_for("auth.login"))
+    return redirect(url_for("main.dashboard")) if current_user.is_authenticated else render_template("home.html")
 
 @main_bp.get("/dashboard")
 @login_required
 def dashboard():
     b = current_user.businesses[0]
+    if not b.has_write_access:
+        return render_template("dashboard_preview.html", business=b,
+            lifetime_price=current_app.config["LIFETIME_PRICE_NAIRA"])
     try:
         period, start, end = period_dates(request.args)
     except (ValueError, KeyError):

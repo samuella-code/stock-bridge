@@ -82,7 +82,7 @@ def create_app(test_config=None):
                     return render_template("admin/suspended.html"), 403
         verified_areas = {"main", "products", "sales", "expenses", "restocking", "profile"}
         paid_areas = {"products", "sales", "expenses", "restocking"}
-        if current_user.is_authenticated and request.blueprint in verified_areas:
+        if current_user.is_authenticated and (request.blueprint in verified_areas or request.endpoint in {"payments.checkout", "payments.initialize"}):
             if not current_user.email_verified_at:
                 flash("Verify your email to access StockBridge.", "warning")
                 return redirect(url_for("auth.verification_pending"))
