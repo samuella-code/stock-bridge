@@ -69,6 +69,26 @@ def test_forgot_password_does_not_reveal_unknown_email(client):
     assert b"If that email belongs to a StockBridge account" in response.data
 
 
+def test_verification_email_uses_configured_sender_name(app,monkeypatch):
+    sent=[]
+    class SMTP:
+        def __init__(self,*args,**kwargs): pass
+        def __enter__(self): return self
+        def __exit__(self,*args): return False
+        def starttls(self): pass
+        def login(self,*args): pass
+        def send_message(self,message): sent.append(message)
+    monkeypatch.setattr("app.email_service.smtplib.SMTP",SMTP)
+    app.config.update(SMTP_HOST="smtp.gmail.com",SMTP_USERNAME="sender@example.com",
+                      SMTP_PASSWORD="test",SMTP_FROM_EMAIL="sender@example.com",
+                      SMTP_FROM_NAME="StockBridge")
+    with app.app_context():
+        from app.email_service import _send_email
+        assert _send_email("Verify your StockBridge email","customer@example.com","Verify your account")
+    assert sent[0]["From"]=="StockBridge <sender@example.com>"
+    assert sent[0]["To"]=="customer@example.com"
+
+
 def test_email_allowlist_does_not_grant_admin_access(client, app):
     add_user(app, "owner@example.com", verified=True)
     client.post("/auth/login", data={"email": "owner@example.com", "password": "password123"})
