@@ -19,17 +19,28 @@ def _request(path, secret_key, method="GET", payload=None):
         f"https://api.paystack.co{path}",
         data=body,
         method=method,
-        headers={"Authorization": f"Bearer {secret_key}", "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {secret_key}",
+            "Content-Type": "application/json",
+            # Paystack documents that its Cloudflare layer can reject API
+            # requests made with a default CLI/client User-Agent.
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36",
+        },
     )
     try:
         with urlopen(request, timeout=15) as response:
             result = json.loads(response.read().decode())
     except HTTPError as error:
         try:
-            failure = json.loads(error.read(4096).decode())
+            response_body = error.read(4096)
+            failure = json.loads(response_body.decode())
         except (ValueError, UnicodeError):
             failure = {}
         code = failure.get("code") if isinstance(failure, dict) else None
+        if not code and error.code == 403 and (
+            b"cloudflare" in response_body.lower() or b"just a moment" in response_body.lower()
+        ):
+            code = "cloudflare_block"
         raise PaystackError("Paystack rejected the request.", status_code=error.code, code=code) from error
     except (URLError, TimeoutError, json.JSONDecodeError) as error:
         raise PaystackError("Paystack could not be reached. Please try again.") from error
