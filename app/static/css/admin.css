@@ -26,3 +26,32 @@ button:hover{background:#0e4d30}.filters input{flex:1;min-width:210px;max-width:
 .empty-state{padding:18px;border-radius:10px;background:#f5f8f7;color:#506470}.section-heading{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
 @media(max-width:600px){.admin-header{min-height:68px}.admin-name{display:none}.admin-auth-page main{min-height:calc(100vh - 68px)}.admin-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-cards article{padding:14px}.table-scroll{max-width:100%}.admin-card{padding:16px}.login-box{margin-top:22px}.admin-nav{scrollbar-width:thin}}
 @media(max-width:380px){.admin-cards{grid-template-columns:1fr}}
+
+.mobile-admin-menu{display:none}
+.business-short{display:none}
+.status-badge{display:inline-block;border-radius:999px;padding:4px 9px;font-size:12px;font-weight:700;background:#e7eeec;color:#365347}
+.status-badge.success,.status-badge.active{background:#ddf4e6;color:#176343}
+.status-badge.pending{background:#fff1d2;color:#775000}
+.status-badge.failed,.status-badge.suspended{background:#fce3e2;color:#8e2824}
+.admin-card p{line-height:1.55}.admin-card a{font-weight:600}.admin-card form button{min-height:44px}
+.report-periods{display:flex;gap:10px;flex-wrap:wrap;align-items:end}.report-periods label{display:grid;gap:5px;margin:0}
+.report-periods input,.report-periods select{max-width:180px}.detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px 20px}
+.admin-table tbody tr:hover{background:#f8fbf9}
+@media(max-width:700px){
+ .business-short{display:inline}.business-long{display:none}
+ .admin-header{gap:8px;padding:10px 12px}.admin-header .brand{gap:7px;font-size:15px}.brand-mark{width:32px;height:32px;flex:none}.admin-header .brand small{font-size:10px}
+ .admin-identity{gap:5px}.admin-header .logout-button{font-size:12px;padding:8px;min-height:40px}
+ .admin-nav{display:none}.mobile-admin-menu{display:block;background:#fff;border-bottom:1px solid #dbe7e1;padding:8px 12px}
+ .mobile-admin-menu summary{cursor:pointer;list-style:none;font-weight:700;color:#155a39;padding:9px 4px}.mobile-admin-menu summary::-webkit-details-marker{display:none}
+ .mobile-admin-menu nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;padding:8px 0}
+ .mobile-admin-menu a{display:block;text-decoration:none;color:#314d43;padding:11px;border-radius:8px;font-weight:600}
+ .mobile-admin-menu a.selected{background:#e0f3e8;color:#155a39}
+ .table-scroll{overflow:visible;background:transparent;border:0}
+ .admin-table{min-width:0;display:block}.admin-table thead{display:none}.admin-table tbody{display:grid;gap:12px}
+ .admin-table tr{display:block;background:white;border:1px solid #dce7e2;border-radius:12px;padding:10px 14px;box-shadow:0 4px 16px rgba(22,52,41,.04)}
+ .admin-table td{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:7px 0;border-bottom:1px solid #edf1ee;text-align:right;overflow-wrap:anywhere;min-width:0}
+ .admin-table td:last-child{border:0}.admin-table td::before{content:attr(data-label);color:#526673;font-weight:700;text-align:left;flex:0 0 39%}
+ .admin-table .empty-row td{display:block;text-align:left}.admin-table .empty-row td::before{display:none}
+ .admin-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:370px){.admin-header .brand small{display:none}.admin-cards{grid-template-columns:1fr}}
