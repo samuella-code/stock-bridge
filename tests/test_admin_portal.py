@@ -420,7 +420,7 @@ def test_migration_keeps_customer_and_payment_without_promoting_email(tmp_path):
         assert User.query.one().role=="user"
         assert User.query.one().businesses[0].name=="Shop"
         assert Payment.query.one().amount_kobo==300000
-        assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()=="0010_admin_security"
+        assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()=="0011_payment_receipt_email"
         assert User.query.one().admin_enabled is False
 
 
@@ -439,4 +439,4 @@ def test_security_migration_preserves_dual_role_and_audit_data(tmp_path):
         owner=User.query.one()
         assert owner.admin_enabled and owner.admin_auth_version==0
         assert AuditLog.query.one().description=="Granted"
-        assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()=="0010_admin_security"
+        assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()=="0011_payment_receipt_email"

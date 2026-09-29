@@ -1,0 +1,13 @@
+{% extends "email/base.html" %}{% block content %}
+<h1 style="font-size:24px;color:#102437;margin:0 0 16px;">Payment successful ✓</h1>
+<p>Hi {{ name.split()[0] }},</p><p>Your StockBridge Lifetime Access is active.</p>
+<table role="presentation" cellpadding="8" cellspacing="0" width="100%" style="background:#f3f8f5;border:1px solid #dcece3;font-size:14px;">
+<tr><td>Business</td><td>{{ business.name }}</td></tr>
+<tr><td>Amount</td><td>{{ amount }} ({{ payment.currency }})</td></tr>
+<tr><td>Reference</td><td>{{ payment.reference }}</td></tr>
+<tr><td>Paid</td><td>{{ paid_at }}</td></tr>
+<tr><td>Access</td><td>Lifetime Access</td></tr>
+<tr><td>Status</td><td>Active</td></tr></table>
+<p style="margin:28px 0;"><a href="{{ link }}" style="display:inline-block;background:#138450;color:#ffffff;text-decoration:none;padding:13px 22px;border-radius:6px;font-weight:bold;">Open StockBridge</a></p>
+<p style="font-size:13px;">One-time payment. No subscription. No recurring charges.<br>Or visit <a href="{{ link }}">{{ link }}</a>.</p>
+{% endblock %}

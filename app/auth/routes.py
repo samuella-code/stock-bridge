@@ -9,6 +9,9 @@ from app.email_service import (
     read_verification_token,
     send_password_reset_email,
     send_verification_email,
+    send_welcome_email,
+    send_password_changed_email,
+    safely_send,
 )
 from app.models import Business, Payment, User
 from app.admin.routes import log
@@ -145,6 +148,7 @@ def reset_password(token):
             if user.admin_enabled:
                 user.admin_auth_version += 1
             db.session.commit()
+            safely_send(send_password_changed_email, user)
             flash("Your password has been updated. You can now log in.", "success")
             return redirect(url_for("auth.login"))
 
@@ -172,8 +176,11 @@ def verify_email(token):
     user = User.query.filter_by(email=email.lower()).first_or_404()
     if user.role != "user":
         return redirect(url_for("auth.login"))
+    first_verification = user.email_verified_at is None
     user.email_verified_at = user.email_verified_at or datetime.utcnow()
     db.session.commit()
+    if first_verification:
+        safely_send(send_welcome_email, user)
     if not current_user.is_authenticated:
         login_user(user)
     flash("Email verified. Welcome to StockBridge.", "success")
