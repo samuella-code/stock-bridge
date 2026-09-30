@@ -1,0 +1,5 @@
+{% if recognition %}
+{% if recognition.status == 'recognized' %}{% set reference = recognition.reference %}
+<div class="form-tip"><strong>We found this product</strong><p>{{ reference.product_name }}</p>{% if reference.brand %}<p>Brand: {{ reference.brand }}</p>{% endif %}{% if reference.variant %}<p>Pack size: {{ reference.variant }}</p>{% endif %}<p>Check the details, enter your stock and prices, then save. Reference information may be incomplete or outdated.</p><small>Contains information from <a href="{{ reference.source_url }}" target="_blank" rel="noopener noreferrer">{{ reference.provider }}</a>, available under the <a href="{{ reference.license_url }}" target="_blank" rel="noopener noreferrer">Open Database License</a>.</small></div>
+{% else %}<p>We couldn't automatically identify this product. You can still add it manually. We've saved the barcode for you.</p>{% endif %}
+{% endif %}
