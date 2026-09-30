@@ -82,3 +82,39 @@ python -m flask --app app:create_app run
 For eventual production release: verify the actual production PostgreSQL target and recoverable backup, install requirements, then run the same migration command in an environment securely configured for that verified target. Expect `0012_product_catalogue (head)`. Merge only after schema verification, or let the guarded production build run the additive migration before serving this code. Review the build logs and public health check. Do not copy a database URL into chat. No new email/payment/barcode API keys are required.
 
 No production migration, customer-data modification, reset or live transaction is performed as part of this implementation. No production deployment or merge is performed. The existing live version remains unchanged pending release.
+
+## Files changed
+
+- `app/models.py`
+- `app/products/catalogue.py`
+- `app/products/routes.py`
+- `app/restocking/routes.py`
+- `app/sales/routes.py`
+- `app/static/css/catalogue.css`
+- `app/static/js/app.js`
+- `app/static/js/barcode.js`
+- `app/static/js/basket.js`
+- `app/static/js/import-preview.js`
+- `app/static/js/quick-add.js`
+- `app/templates/base.html`
+- `app/templates/products/basket.html`
+- `app/templates/products/detail.html`
+- `app/templates/products/entry_choices.html`
+- `app/templates/products/form.html`
+- `app/templates/products/import.html`
+- `app/templates/products/import_preview.html`
+- `app/templates/products/index.html`
+- `app/templates/products/quick_add.html`
+- `app/templates/products/scan.html`
+- `app/templates/restocking/index.html`
+- `app/templates/sales/index.html`
+- `docs/PRODUCT_CATALOGUE.md`
+- `migrations/versions/0012_product_catalogue.py`
+- `requirements.txt`
+- `scripts/vercel_build.py`
+- `tests/catalogue_dom.cjs`
+- `tests/render_catalogue_dom.py`
+- `tests/test_admin_portal.py`
+- `tests/test_business_workflows.py`
+- `tests/test_catalogue.py`
+- `vercel.json`
