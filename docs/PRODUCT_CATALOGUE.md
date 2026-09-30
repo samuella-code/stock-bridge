@@ -12,7 +12,11 @@ This extends the existing Flask products, Sale/SaleItem, Restock (batch_id), Sto
 
 ## Barcode and transaction baskets
 
-Scanning uses the native BarcodeDetector API for supported EAN/UPC/Code128/Code39/ITF formats. No paid service or external product catalogue is called. HTTPS and compatible hardware/browser support are required. Permission is requested only after a user taps Scan Barcode; streams stop on close, cancel, detection, failure or page exit. Unsupported browsers and denied permissions have manual entry. USB/Bluetooth scanners that type into a field also work.
+Scanning uses the native BarcodeDetector API for supported EAN/UPC/Code128/Code39/ITF formats. If that API is absent, incomplete, or fails, a pinned, locally served ZXing browser decoder reads the rear-camera stream instead. This removes the native-detector dependency for iPhone Safari and Android browsers. It does not guarantee camera access on every phone: HTTPS, camera hardware and browser permission are still required, and some in-app or older browsers block camera access.
+
+The decoder loads only when needed, from StockBridge's own static assets; no CDN, paid service or external product catalogue is called. Barcode photos are decoded on the device using temporary object URLs and are not uploaded. Users can retry camera access, scan a clear photo, type the barcode, or use a USB/Bluetooth scanner that types into a field. Camera permission is requested only after Scan Barcode / Try camera again. Streams and decode loops stop on close, cancel, detection, failure, page exit or when the tab is hidden. The dialog initially focuses its close control instead of opening the keyboard over the camera.
+
+The mobile navigation has an explicit Close menu button, an outside-tap backdrop, Escape dismissal, focus containment and automatic closure when a link is selected. The underlying content is inert while the drawer is open. The sidebar scrolls within the visible viewport so controls remain reachable on short screens; switching to desktop clears mobile state.
 
 Product barcode lookup opens an existing active or archived product; unknown codes offer Add New Product with the barcode preserved. Archived matches can be restored, rather than duplicated. Sales/restocks only select active products. Unknown transaction barcodes direct users to add the product in Products first. Scanning provides an identifier, not a product name or Nigerian prices.
 
@@ -56,6 +60,15 @@ npm install --prefix /tmp/stockbridge-dom-tests jsdom@26.1.0
 PYTHONPATH=. python tests/render_catalogue_dom.py /tmp/stockbridge-dom-html
 NODE_PATH=/tmp/stockbridge-dom-tests/node_modules node tests/catalogue_dom.cjs /tmp/stockbridge-dom-html
 ```
+
+Additional mobile scanner/navigation regression checks:
+
+```sh
+npm install --prefix /tmp/stockbridge-dom-tests jsdom@26.1.0 bwip-js@4.7.0
+NODE_PATH=/tmp/stockbridge-dom-tests/node_modules node tests/mobile_ui.cjs /tmp/stockbridge-dom-html
+```
+
+These checks use the shipped decoder to read real generated EAN-13, EAN-8, UPC-A, Code128, Code39 and ITF pixel data, including leading zeros. Camera lifecycle checks mock browser media APIs to cover native decoding, fallback decoding, incomplete/failed native support, denied permission, pending initialization cancellation, decoder-load failure/retry, dismissal, local photo decoding and navigation focus/dismissal. Actual phone hardware and camera permission still require device testing.
 
 Coverage includes entry with zero/nonzero stock, Save & Add Another, Quick Add, CSV/XLSX preview/confirmation, duplicate identifiers, physical error rows, malformed/oversized files, formula/XSS protection, token tampering/expiry/replay, CSRF, a 1,000-row import, 5,000-product pagination/bounded selectors, active/archived lookup, business isolation, price bounds, historical cost preservation, stock histories and dashboard/report agreement. Injected failure on the second insert verifies rollback for sales, restocks, Quick Add and imports. Existing payment/admin/security/email/reset tests remain in the full suite.
 
