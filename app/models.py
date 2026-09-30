@@ -26,8 +26,9 @@ class Business(db.Model):
    return not self.subscription_ends_at or self.subscription_ends_at > datetime.utcnow()
   return False
 class Product(db.Model):
+ barcode=db.Column(db.String(80))
  id=db.Column(db.Integer,primary_key=True); business_id=db.Column(db.Integer,db.ForeignKey("business.id"),nullable=False,index=True); name=db.Column(db.String(140),nullable=False); sku=db.Column(db.String(60)); category=db.Column(db.String(80)); buying_price=db.Column(db.Numeric(12,2),nullable=False,default=0); selling_price=db.Column(db.Numeric(12,2),nullable=False,default=0); stock_quantity=db.Column(db.Integer,nullable=False,default=0); minimum_stock_level=db.Column(db.Integer,nullable=False,default=0); supplier_name=db.Column(db.String(140)); unit=db.Column(db.String(30),nullable=False,default="unit"); description=db.Column(db.String(500)); active=db.Column(db.Boolean,nullable=False,default=True); opening_quantity=db.Column(db.Integer,nullable=False,default=0); supplier_lead_time=db.Column(db.Integer,nullable=False,default=2); safety_stock=db.Column(db.Integer,nullable=False,default=0); created_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False); updated_at=db.Column(db.DateTime,default=datetime.utcnow,onupdate=datetime.utcnow,nullable=False)
- __table_args__=(db.UniqueConstraint("business_id","sku",name="uq_product_business_sku"),)
+ __table_args__=(db.UniqueConstraint("business_id","sku",name="uq_product_business_sku"), db.UniqueConstraint("business_id","barcode",name="uq_product_business_barcode"), db.Index("ix_product_business_active_name", "business_id", "active", "name"), db.Index("ix_product_business_active_category", "business_id", "active", "category"))
  @property
  def is_low_stock(self): return self.stock_quantity<=self.minimum_stock_level
  @property
