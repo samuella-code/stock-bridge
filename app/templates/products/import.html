@@ -1,0 +1,5 @@
+{% extends 'base.html' %}{% block page_title %}Import Spreadsheet{% endblock %}{% block content %}
+<section class="dashboard-wrap"><a href="{{url_for('products.index')}}">← Products</a><h2>Already have your products in a spreadsheet?</h2><p>Upload them instead of entering everything again. You will review the products before saving.</p><div class="panel-card form-stack">
+<a href="{{url_for('products.import_template')}}" class="secondary-btn button-link">Download StockBridge product template</a>
+<p>Product Name is required. Optional prices, quantities and thresholds default to zero; Unit defaults to “unit”. Use one worksheet, up to 1,000 rows and 2 MB per file. Larger catalogues can be added in batches.</p><p>Keep SKU and Barcode columns formatted as Text, especially codes beginning with zero. Use plain values, without formulas. Existing products are never overwritten.</p>
+<form method="POST" enctype="multipart/form-data" class="form-stack"><label>CSV or Excel (.xlsx) file<input type="file" name="spreadsheet" accept=".csv,.xlsx" required></label><button class="primary-btn">Validate &amp; Preview</button></form></div></section>{% endblock %}

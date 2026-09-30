@@ -1,11 +1,12 @@
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import or_, func, update
 from app import db
 from app.models import Product, Restock, Sale, SaleItem, StockMovement
 from app.admin.routes import log
+from app.products.catalogue import product_data, duplicate_errors, add_product, search_products
+from sqlalchemy.exc import IntegrityError
 
 products_bp = Blueprint("products", __name__, url_prefix="/products")
 ADJUSTMENT_REASONS = ("Damaged", "Expired", "Lost", "Stock count correction", "Returned", "Other")
@@ -20,36 +21,6 @@ def owned_product(product_id):
         abort(404)
     return product
 
-def product_data(form, editing=False):
-    errors = []
-    data = {"name": form.get("name", "").strip(), "sku": form.get("sku", "").strip().upper() or None,
-            "category": form.get("category", "").strip() or None,
-            "supplier_name": form.get("supplier_name", "").strip() or None,
-            "unit": form.get("unit", "unit").strip()[:30] or "unit",
-            "description": form.get("description", "").strip()[:500] or None}
-    if not data["name"] or len(data["name"]) > 140:
-        errors.append("Product name must be 1 to 140 characters.")
-    try:
-        for field in ("buying_price", "selling_price"):
-            value = Decimal(form.get(field, "0"))
-            if not value.is_finite() or value < 0:
-                raise ValueError
-            data[field] = value
-    except (InvalidOperation, ValueError):
-        errors.append("Prices must be valid amounts of zero or more.")
-    fields = [("minimum_stock_level",0),("supplier_lead_time",2),("safety_stock",0)]
-    if not editing:
-        fields.append(("stock_quantity",0))
-    for field, default in fields:
-        try:
-            value = int(form.get(field, default))
-            if value < 0:
-                raise ValueError
-            data[field] = value
-        except ValueError:
-            errors.append(f"{field.replace('_',' ').title()} must be a whole number of zero or more.")
-    return data, errors
-
 @products_bp.get("/")
 @login_required
 def index():
@@ -58,12 +29,11 @@ def index():
     stock_filter = request.args.get("stock", "all")
     category = request.args.get("category", "").strip()
     sort = request.args.get("sort", "recent")
-    rows = Product.query.filter_by(business_id=b.id, active=stock_filter == "archived")
-    if stock_filter != "archived":
-        rows = Product.query.filter_by(business_id=b.id, active=True)
+    rows = Product.query.filter_by(business_id=b.id, active=stock_filter != "archived")
     if query:
-        term = f"%{query}%"
-        rows = rows.filter(or_(Product.name.ilike(term), Product.sku.ilike(term), Product.category.ilike(term), Product.supplier_name.ilike(term)))
+        escaped = query.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')
+        term = f"%{escaped}%"
+        rows = rows.filter(or_(Product.name.ilike(term, escape='\\'), Product.sku.ilike(term, escape='\\'), Product.barcode.ilike(term, escape='\\'), Product.category.ilike(term, escape='\\'), Product.supplier_name.ilike(term, escape='\\')))
     if category:
         rows = rows.filter(Product.category == category)
     if stock_filter == "out":
@@ -73,7 +43,10 @@ def index():
     elif stock_filter in ("healthy", "in"):
         rows = rows.filter(Product.stock_quantity > Product.minimum_stock_level, Product.stock_quantity > 0)
     order = {"name": Product.name.asc(), "stock": Product.stock_quantity.asc(),
-             "price": Product.selling_price.asc(), "recent": Product.created_at.desc()}
+             "price": Product.selling_price.asc(), "cost": Product.buying_price.asc(),
+             "value": (Product.stock_quantity * Product.buying_price).desc(),
+             "oldest": Product.created_at.asc(), "priority": (Product.stock_quantity - Product.minimum_stock_level).asc(),
+             "recent": Product.created_at.desc()}
     page = rows.order_by(order.get(sort, order["recent"]), Product.id.desc()).paginate(
         page=request.args.get("page", 1, type=int), per_page=20, error_out=False)
     summary = db.session.query(func.count(Product.id),
@@ -93,19 +66,22 @@ def create():
     b = current_business()
     if request.method == "POST":
         data, errors = product_data(request.form)
-        if data["sku"] and Product.query.filter_by(business_id=b.id, sku=data["sku"]).first():
-            errors.append("That SKU is already used in this business.")
+        errors.extend(duplicate_errors(b.id, data))
         if not errors:
-            quantity = data.pop("stock_quantity")
-            product = Product(business_id=b.id, stock_quantity=quantity, opening_quantity=quantity, **data)
-            db.session.add(product)
-            db.session.flush()
-            db.session.add(StockMovement(business_id=b.id, product_id=product.id,
-                kind="opening", quantity_change=quantity, occurred_at=product.created_at))
-            log("PRODUCT_CREATED", f"Product {product.id} created.", actor=current_user, business_id=b.id)
-            db.session.commit()
-            flash(f"{product.name} was added to inventory.", "success")
-            return redirect(url_for("products.detail", product_id=product.id))
+            try:
+                product = add_product(b.id, data)
+                log("PRODUCT_CREATED", f"Product {product.id} created.", actor=current_user, business_id=b.id)
+                db.session.commit()
+            except IntegrityError:
+                db.session.rollback()
+                errors.append("Another product already uses this SKU or barcode. Please check it.")
+            else:
+                flash(f"{product.name} was added to inventory.", "success")
+                if request.form.get("after_save") == "another":
+                    return redirect(url_for("products.create"))
+                if request.form.get("after_save") == "scan":
+                    return redirect(url_for("products.scan"))
+                return redirect(url_for("products.detail", product_id=product.id))
         for error in errors: flash(error, "error")
     return render_template("products/form.html", business=b, product=None)
 
@@ -115,14 +91,17 @@ def edit(product_id):
     b, product = current_business(), owned_product(product_id)
     if request.method == "POST":
         data, errors = product_data(request.form, editing=True)
-        duplicate = Product.query.filter(Product.business_id == b.id, Product.sku == data["sku"],
-            Product.id != product.id).first() if data["sku"] else None
-        if duplicate: errors.append("That SKU is already used in this business.")
+        errors.extend(duplicate_errors(b.id, data, product.id))
         if not errors:
-            for key, value in data.items(): setattr(product, key, value)
-            db.session.commit()
-            flash(f"{product.name} was updated.", "success")
-            return redirect(url_for("products.detail", product_id=product.id))
+            try:
+                for key, value in data.items(): setattr(product, key, value)
+                db.session.commit()
+            except IntegrityError:
+                db.session.rollback()
+                errors.append("Another product already uses this SKU or barcode. Please check it.")
+            else:
+                flash(f"{product.name} was updated.", "success")
+                return redirect(url_for("products.detail", product_id=product.id))
         for error in errors: flash(error, "error")
     return render_template("products/form.html", business=b, product=product)
 
@@ -196,3 +175,105 @@ def restore(product_id):
     db.session.commit()
     flash(f"{product.name} is active again.", "success")
     return redirect(url_for("products.detail", product_id=product.id))
+
+@products_bp.get('/lookup')
+@login_required
+def lookup():
+    b = current_business()
+    term = request.args.get('q', '').strip()[:100]
+    barcode = request.args.get('barcode', '').strip()[:80]
+    if barcode:
+        rows = Product.query.filter_by(business_id=b.id, barcode=barcode).filter(
+            db.true() if request.args.get('include_archived') == '1' else Product.active.is_(True)).limit(1).all()
+    else:
+        rows = search_products(b.id, term).order_by(Product.name, Product.id).limit(15).all()
+    response = jsonify(products=[{'id':p.id, 'name':p.name, 'sku':p.sku, 'barcode':p.barcode,
+        'active':p.active, 'stock':p.stock_quantity, 'unit':p.unit, 'price':str(p.selling_price), 'cost':str(p.buying_price),
+        'url':url_for('products.detail', product_id=p.id)} for p in rows])
+    response.headers['Cache-Control'] = 'no-store, private'
+    return response
+
+@products_bp.get('/scan')
+@login_required
+def scan():
+    return render_template('products/scan.html', business=current_business())
+
+@products_bp.route('/quick-add', methods=['GET','POST'])
+@login_required
+def quick_add():
+    from app.products.catalogue import HEADERS, validate_rows, save_batch
+    b = current_business()
+    rows, issues = [{}], []
+    if request.method == 'POST':
+        fields = list(HEADERS.values())
+        values = {key:request.form.getlist(key) for key in fields}
+        count = len(values['name'])
+        if not 1 <= count <= 100 or any(len(items) != count for items in values.values()):
+            flash('Quick Add supports 1 to 100 complete product rows per batch.', 'error')
+        else:
+            rows = [{key:items[i] for key,items in values.items()} for i in range(count)]
+            _, issues = validate_rows(b.id, rows)
+            if not issues:
+                try:
+                    saved = save_batch(b.id, rows, current_user.id)
+                except (ValueError, IntegrityError):
+                    db.session.rollback()
+                    flash('Products could not be saved. Check duplicate SKUs/barcodes and try again.', 'error')
+                else:
+                    flash(f'{saved} products added with opening stock.', 'success')
+                    return redirect(url_for('products.index'))
+    return render_template('products/quick_add.html', business=b, rows=rows, issues=issues)
+
+@products_bp.get('/import/template')
+@login_required
+def import_template():
+    import csv, io
+    from app.products.catalogue import HEADERS
+    buffer = io.StringIO()
+    csv.writer(buffer).writerow([h + (' *' if h == 'Product Name' else '') for h in HEADERS])
+    return send_file(io.BytesIO(buffer.getvalue().encode('utf-8-sig')), mimetype='text/csv',
+                     as_attachment=True, download_name='stockbridge-products.csv')
+
+def import_signer():
+    from itsdangerous import URLSafeTimedSerializer
+    return URLSafeTimedSerializer(current_app.config['SECRET_KEY'], salt='stockbridge-product-import')
+
+@products_bp.route('/import', methods=['GET','POST'])
+@login_required
+def import_products():
+    from app.products.catalogue import read_spreadsheet, validate_rows, save_batch
+    from itsdangerous import BadSignature, SignatureExpired
+    from uuid import uuid4
+    b = current_business()
+    if request.method == 'GET':
+        return render_template('products/import.html', business=b)
+    # Applies only here, leaving payment/auth upload/request behavior unchanged.
+    if request.content_length and request.content_length > 4 * 1024 * 1024:
+        abort(413)
+    try:
+        if request.form.get('confirm') == 'yes':
+            token = request.form.get('preview', '')
+            if len(token) > 450000:
+                raise ValueError('This preview is too large. Upload a smaller file.')
+            payload = import_signer().loads(token, max_age=1200)
+            if payload['business'] != b.id or payload['user'] != current_user.id:
+                abort(403)
+            saved = save_batch(b.id, payload['rows'], current_user.id, receipt='Import ' + payload['nonce'])
+            flash(f'{saved} products imported.' if saved else 'This import was already completed. No products were added again.', 'success')
+            return redirect(url_for('products.index'))
+        upload = request.files.get('spreadsheet')
+        if not upload:
+            raise ValueError('Choose a CSV or Excel spreadsheet.')
+        rows = read_spreadsheet(upload)
+        _, issues = validate_rows(b.id, rows)
+        token = import_signer().dumps({'business':b.id,'user':current_user.id,'rows':rows,'nonce':str(uuid4())}) if not issues else None
+        if token and len(token) > 450000:
+            raise ValueError('This preview is too large. Split the spreadsheet into smaller files.')
+        return render_template('products/import_preview.html', business=b, rows=rows, issues=issues,
+            ready=len(rows)-len(issues), preview=token)
+    except (BadSignature, SignatureExpired):
+        flash('This preview expired or was changed. Upload the spreadsheet again.', 'error')
+    except (ValueError, IntegrityError) as error:
+        db.session.rollback()
+        flash(str(error) if isinstance(error, ValueError) else 'A SKU or barcode was added since the preview. Upload and review the file again.', 'error')
+    return render_template('products/import.html', business=b), 400
