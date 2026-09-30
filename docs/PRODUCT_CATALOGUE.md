@@ -1,133 +1,67 @@
-# StockBridge catalogue update
+# StockBridge product catalogue
 
-This extends the existing Flask products, Sale/SaleItem, Restock (batch_id), StockMovement and reporting flows. No payment, access, authentication, admin, reset or email implementation is changed. Existing quantities and historical transactions are retained.
+The existing Flask/SQLAlchemy catalogue reuses Product, Sale/SaleItem, Restock (batch_id), StockMovement and reports. This update removes barcode functionality without changing authentication, email, payments, lifetime access, admin, reset safeguards, expenses, dashboard or reports.
 
-## Product entry
+## Three product-entry methods
 
-- **Add One Product** retains opening stock, cost/selling prices, category, unit, SKU, description and settings. Optional Barcode is new. Save Product opens details; Save & Add Another opens a fresh form; Save & Scan Next returns to barcode lookup.
-- **Quick Add Products** accepts 1–100 products together, reuses the last category/unit in new rows, supports removal before submission, and preserves fields after validation errors. Opening stock and its movement are recorded even for zero quantity.
-- **Import Spreadsheet** downloads a CSV template that can be opened in Excel. CSV and XLSX are supported. Only Product Name is required. Blank prices, opening quantity and threshold default to zero; Unit defaults to `unit`. Upload → validate → review → Confirm Import. Invalid batches cannot be confirmed. Up to 1,000 rows, 2 MB compressed upload, 10 MB expanded XLSX, one worksheet, no macros/external links/formulas. Larger catalogues use multiple batches. Header names match the template; unknown/duplicate headers are rejected. SKU/barcode cells in Excel must be Text to preserve leading zeros. Blank lines are skipped, but count towards the physical row limit; error numbers match the spreadsheet's physical rows.
-- Previews are signed with the existing application secret, expire after 20 minutes, and bind to both user and business. They are not stored in cookies or the serverless filesystem. Preview tokens over 450 KB are rejected. Confirmation revalidates identifiers under a business write lock and commits all products, movements and an audit receipt together. Reusing a confirmed preview does not add products twice. Re-uploading a file makes a new preview: populated SKU/barcode duplicates are rejected; names alone are not unique, so review files without identifiers carefully.
-- Duplicate SKU/barcode checks include archived products. SKU remains uppercase. Barcode matching is exact and case-sensitive. Products without either identifier continue to work. Both identifiers are unique per business, not globally.
+- **Add a Product:** one product with name, SKU, category, unit, opening quantity, cost/selling prices, low-stock threshold, supplier, description and existing restocking settings. Save Product opens details; Save & Add Another opens a fresh form. Editing does not overwrite current stock.
+- **Quick Add Products:** 1–100 products per batch, including SKU, category, unit and stock threshold. Add/remove unsaved rows, reuse category/unit, retain input after validation errors, and save every product and opening movement together.
+- **Import Products:** CSV/XLSX, pasted names/structured lists and UTF-8 TXT through the same editable signed review; up to 1,000 physical rows per batch; 2 MB uploaded/10 MB expanded XLSX; one worksheet. Product Name is required. Blank quantities/prices/threshold default to zero; Unit defaults to `unit`. Upload/paste → validate → edit review → Import Products. Formula-like values, macros, external workbook links, malformed/oversized files and unknown/duplicate headers remain rejected. Format SKU as Text to retain leading zeros.
 
-## Barcode and transaction baskets
+Old templates containing a single optional `Barcode` column remain compatible: the column is accepted case-insensitively and discarded before preview, duplicate checks and saving. Its values never become SKU values. Ordinary shared workbook security checks still apply, including formula rejection. The downloadable template omits this column. Existing products are never overwritten by imports. SKU duplicates, including archived products, are rejected within each business; SKU remains uppercase. Identical product rows are rejected even without a SKU.
 
-Scanning uses the native BarcodeDetector API for supported EAN/UPC/Code128/Code39/ITF formats. If that API is absent, incomplete, or fails, a pinned, locally served ZXing browser decoder reads the rear-camera stream instead. This removes the native-detector dependency for iPhone Safari and Android browsers. It does not guarantee camera access on every phone: HTTPS, camera hardware and browser permission are still required, and some in-app or older browsers block camera access.
+Import previews remain signed with the existing secret, bound to user/business, expire after 20 minutes and are capped at 450 KB. Confirmation revalidates under a business write lock and commits products, opening movements and the audit receipt together. Reusing the same confirmed preview cannot duplicate products. Previously issued, valid previews containing the retired identifier field are safely normalized without writing that field. Names are not unique: conservative current-business name/SKU suggestions help review repeats; Use Existing skips without overwriting. See `docs/IMPORT_PRODUCTS.md` for syntax, row actions and tests.
 
-The decoder loads only when needed, from StockBridge's own static assets; no CDN, paid service or external product catalogue is called. Barcode photos are decoded on the device using temporary object URLs and are not uploaded. Users can retry camera access, scan a clear photo, type the barcode, or use a USB/Bluetooth scanner that types into a field. Camera permission is requested only after Scan Barcode / Try camera again. Streams and decode loops stop on close, cancel, detection, failure, page exit or when the tab is hidden. The dialog initially focuses its close control instead of opening the keyboard over the camera.
+## Sales and restocking
 
-The mobile navigation has an explicit Close menu button, an outside-tap backdrop, Escape dismissal, focus containment and automatic closure when a link is selected. The underlying content is inert while the drawer is open. The sidebar scrolls within the visible viewport so controls remain reachable on short screens; switching to desktop clears mobile state.
+Search products by name, SKU or category. The debounced, business-scoped lookup returns at most 15 active products; its only supported query parameter is `q`. Old identifier-only query parameters are rejected with HTTP 400 rather than returning unrelated products. The retired scanner page returns HTTP 404.
 
-Product barcode lookup opens an existing active or archived product; unknown codes offer Add New Product with the barcode preserved. Archived matches can be restored, rather than duplicated. Sales/restocks only select active products. Unknown transaction barcodes direct users to add the product in Products first. Scanning provides an identifier, not a product name or Nigerian prices.
+Sales and restocks keep their multi-product baskets, availability display, quantity editing, editable transaction price/cost, line/overall totals, duplicate-selection handling and up to 100 products per operation. Server validation, tenant isolation, conditional inventory updates, product locks in ID order and atomic commits/rollbacks are unchanged.
 
-Sales and restocks use a debounced server search (name, SKU, barcode, category) with at most 15 results. A basket shows availability, quantity, editable unit price/cost, line totals and overall total. Re-selecting a product focuses its existing quantity instead of creating a duplicate line. Each transaction supports up to 100 products. Existing multi-item Sale and batch_id Restock storage are reused. Server validation remains authoritative; sale conditional updates prevent overselling. Postgres locks products in ID order to coordinate sales/restocks and retain the cost snapshot appropriate to that transaction. All records and movements commit together or roll back together.
+Historical SaleItems preserve selling price and cost snapshots. Restocks preserve each receipt's purchase cost. Current inventory valuation uses latest received unit cost; operating expenses are separate from inventory purchases. Stock adjustments require a reason and create movement history. Products can be archived after remaining stock has been resolved through recorded activity; historical records remain and products can be restored.
 
-Latest received purchase cost remains the inventory valuation basis; sales retain their own historical unit cost and price. Restocks preserve each receipt's cost. Inventory purchases remain separate from operating expenses. Adjustments continue to require a reason and create history; current quantity cannot be changed through Edit Product. Details now show barcode, SKU, movement time and sale/receipt references. No unreliable running-balance column was added.
+## Catalogue and mobile use
 
-## Catalogue navigation and mobile layout
+Products paginate at 20/page; search by name, SKU, category or supplier. Category, in/low/out/archived filters and all existing sorts remain. Filters persist across pages. Restocking insights paginate 20 products with bounded sales aggregation; histories remain paginated. Mobile cards, labelled tables, touch controls and the dismissible navigation drawer remain.
 
-Products remain database-paginated at 20/page. Search adds barcode; existing category, in/low/out/archived filtering remains, and the archived-filter bug is corrected. Sorts add cost, inventory value, oldest and low-stock priority. Search/filter/sort parameters persist through product pagination. Low-stock product rows link directly to restocking with that product selected.
+No scanner button, camera dialog, camera permission request, scan-next action, barcode field, barcode search or decoder is shipped. No external product recognition provider is enabled.
 
-Restocking insights paginate 20 products, aggregate sales only for those products, and support search. Histories remain paginated. Catalogue cards, Quick Add forms, transaction baskets and labelled history cards have narrow-screen styles and touch targets. The four product-entry choices remain visible for new users.
+## Schema safety
 
-## Migration and indexes
+Migration `0012_product_catalogue` has already reached production. It is unchanged: never downgrade or delete it to remove this feature. It contains useful business/active/name and business/active/category indexes, which remain intact.
 
-`0012_product_catalogue` follows `0011_payment_receipt_email`. It adds nullable `product.barcode`, business/barcode uniqueness, and composite business/active/name and business/active/category indexes. Existing SKU uniqueness is reused. The additive upgrade leaves existing records and quantities unchanged; SQLite uses the project's batch migration pattern. Downgrade removes the new barcode field and therefore loses newly entered barcodes: prefer reverting application code while retaining the additive schema.
-
-Exact barcode lookup uses the unique composite index. The two non-unique indexes match active-catalogue ordering and category queries. Substring name/SKU/barcode searches do not become index seeks merely because a B-tree exists; at 5,000 products they remain bounded, tenant-scoped scans with small responses. No unmeasured trigram extension or global full-text index is introduced. Pagination/counts and SQL aggregates prevent loading lifetime transactions or all products into the browser. Bulk creation uses one product flush plus movement insertion, instead of flushing each product separately. Production latency and simultaneous writers on Neon still need measurement; local tests are not a production benchmark.
+The nullable legacy `product.barcode` column, its mapping and business-scoped constraint remain temporarily. Business workflows neither read nor write it. Removing a field from the product form must not erase a stored value during an edit. There is no new migration, column drop, database reset or data cleanup in this update. Future permanent removal requires a separate reviewed forward migration and a fresh count/export/backup plan.
 
 ## Verification
 
-Python suite:
-
 ```sh
 python -m pytest -q --disable-warnings
-```
-
-JavaScript syntax:
-
-```sh
-node --check app/static/js/barcode.js
+PYTHONPATH=. python tests/render_catalogue_dom.py /tmp/stockbridge-no-barcode-dom
+NODE_PATH=/tmp/stockbridge-dom-tests/node_modules node tests/catalogue_dom.cjs /tmp/stockbridge-no-barcode-dom
+NODE_PATH=/tmp/stockbridge-dom-tests/node_modules node tests/mobile_ui.cjs /tmp/stockbridge-no-barcode-dom
 node --check app/static/js/basket.js
 node --check app/static/js/quick-add.js
 node --check app/static/js/import-preview.js
 ```
 
-DOM workflow checks against real rendered templates (optional development dependency only):
+DOM checks require the development-only `jsdom@26.1.0` dependency; no barcode decoder/pixel-generation dependency remains. They cover Quick Add reuse/removal, searchable sale/restock baskets, totals, duplicate selection, preview paging, labelled mobile cards, mobile menu dismissal/focus containment and desktop transition.
+
+The Python suite covers product/opening stock, SKU protection, Quick Add validation, CSV/XLSX imports including legacy-column compatibility, signed preview safety/replay, CSRF/XSS, 1,000-row import, 5,000-product pagination, name/SKU/category search, stock filters, business isolation, three-item sales, overselling, bulk restocking, historical prices/costs, stock movements, adjustments, dashboard/report agreement and injected mid-operation rollback. Tests also verify absence of scanner UI/routes/assets, retained legacy data and preserved catalogue indexes. All existing payment/admin/security/email/reset tests remain in the full suite.
+
+## Review and eventual deployment
+
+Do not merge or deploy before reviewing these changes and the keep-column strategy. The implementation remains local; pushing a branch to the connected repository can automatically create a Vercel preview, so publishing also waits for review.
+
+No production migration is needed: production is already at `0012_product_catalogue`. Do not downgrade. After approval, publish the reviewed branch, review its diff and test the preview, then merge only with approval. The existing guarded Vercel production build runs `flask db upgrade`, which has no new revisions to apply. Preview builds do not run migrations. Preview environments must use an appropriate dedicated database; do not run a preview migration against production.
+
+For disposable local testing after publishing the reviewed branch:
 
 ```sh
-npm install --prefix /tmp/stockbridge-dom-tests jsdom@26.1.0
-PYTHONPATH=. python tests/render_catalogue_dom.py /tmp/stockbridge-dom-html
-NODE_PATH=/tmp/stockbridge-dom-tests/node_modules node tests/catalogue_dom.cjs /tmp/stockbridge-dom-html
-```
-
-Additional mobile scanner/navigation regression checks:
-
-```sh
-npm install --prefix /tmp/stockbridge-dom-tests jsdom@26.1.0 bwip-js@4.7.0
-NODE_PATH=/tmp/stockbridge-dom-tests/node_modules node tests/mobile_ui.cjs /tmp/stockbridge-dom-html
-```
-
-These checks use the shipped decoder to read real generated EAN-13, EAN-8, UPC-A, Code128, Code39 and ITF pixel data, including leading zeros. Camera lifecycle checks mock browser media APIs to cover native decoding, fallback decoding, incomplete/failed native support, denied permission, pending initialization cancellation, decoder-load failure/retry, dismissal, local photo decoding and navigation focus/dismissal. Actual phone hardware and camera permission still require device testing.
-
-Coverage includes entry with zero/nonzero stock, Save & Add Another, Quick Add, CSV/XLSX preview/confirmation, duplicate identifiers, physical error rows, malformed/oversized files, formula/XSS protection, token tampering/expiry/replay, CSRF, a 1,000-row import, 5,000-product pagination/bounded selectors, active/archived lookup, business isolation, price bounds, historical cost preservation, stock histories and dashboard/report agreement. Injected failure on the second insert verifies rollback for sales, restocks, Quick Add and imports. Existing payment/admin/security/email/reset tests remain in the full suite.
-
-The supermarket test adds Coca-Cola 100, Fanta 80, Bread 30 and Indomie 200, adds an unknown barcode product, records one three-item sale, bulk-restocks three products, records damage and an expense, and verifies stock/movements/revenue/cost/profit/report consistency.
-
-DOM checks exercise search-to-basket, totals, duplicate scan selection, manual scanner fallback, unknown-code product creation link, Quick Add reuse/removal, preview paging and labelled mobile cards. They simulate dialog/browser APIs; they are not real camera or visual viewport tests. Real mobile visual and camera verification remains required because browser installation in this workspace failed certificate validation and an alternate download was truncated.
-
-## Review and deployment
-
-Do not merge until the target database and backup/restore point have been verified. Do not reset the database or customer data. Keep database URLs/secrets out of terminal output, code and chat.
-
-This repository previously ran `flask db upgrade` during every Vercel build, while its preview integration was connected to the production Neon resource. `scripts/vercel_build.py` now runs that existing migration command only when `VERCEL_ENV=production`. Preview/local builds do not migrate any database. A preview requires a **dedicated preview database**, its normal environment variables and an explicit migration there before product routes can work. Do not run a preview migration using a production URL.
-
-For local review, use a disposable local database configured through the project's existing environment precedence, not production credentials:
-
-```sh
-git switch feat/scalable-catalogue
+git switch feat/import-products
 python -m pip install -r requirements.txt
 python -m flask --app app:create_app db upgrade
 python -m flask --app app:create_app db current
 python -m flask --app app:create_app run
 ```
 
-For eventual production release: verify the actual production PostgreSQL target and recoverable backup, install requirements, then run the same migration command in an environment securely configured for that verified target. Expect `0012_product_catalogue (head)`. Merge only after schema verification, or let the guarded production build run the additive migration before serving this code. Review the build logs and public health check. Do not copy a database URL into chat. No new email/payment/barcode API keys are required.
-
-No production migration, customer-data modification, reset or live transaction is performed as part of this implementation. No production deployment or merge is performed. The existing live version remains unchanged pending release.
-
-## Files changed
-
-- `app/models.py`
-- `app/products/catalogue.py`
-- `app/products/routes.py`
-- `app/restocking/routes.py`
-- `app/sales/routes.py`
-- `app/static/css/catalogue.css`
-- `app/static/js/app.js`
-- `app/static/js/barcode.js`
-- `app/static/js/basket.js`
-- `app/static/js/import-preview.js`
-- `app/static/js/quick-add.js`
-- `app/templates/base.html`
-- `app/templates/products/basket.html`
-- `app/templates/products/detail.html`
-- `app/templates/products/entry_choices.html`
-- `app/templates/products/form.html`
-- `app/templates/products/import.html`
-- `app/templates/products/import_preview.html`
-- `app/templates/products/index.html`
-- `app/templates/products/quick_add.html`
-- `app/templates/products/scan.html`
-- `app/templates/restocking/index.html`
-- `app/templates/sales/index.html`
-- `docs/PRODUCT_CATALOGUE.md`
-- `migrations/versions/0012_product_catalogue.py`
-- `requirements.txt`
-- `scripts/vercel_build.py`
-- `tests/catalogue_dom.cjs`
-- `tests/render_catalogue_dom.py`
-- `tests/test_admin_portal.py`
-- `tests/test_business_workflows.py`
-- `tests/test_catalogue.py`
-- `vercel.json`
+Expected migration: `0012_product_catalogue (head)`. Configure the existing environment precedence for a disposable local database before these commands. Never print/share/commit a database URL. There are no new dependencies or keys. Follow the detailed review record in `docs/BARCODE_REMOVAL.md`.

@@ -14,8 +14,8 @@ def main():
         user=User(full_name='Demo',email='demo@example.invalid',email_verified_at=datetime.utcnow());user.set_password('test-password')
         db.session.add(user);db.session.flush();db.session.add(Business(user_id=user.id,name='Demo',subscription_plan='lifetime',subscription_status='active'));db.session.commit()
         client=app.test_client();client.post('/auth/login',data={'email':user.email,'password':'test-password'})
-        client.post('/products/new',data={'name':'Coca-Cola','barcode':'001234','stock_quantity':20,'buying_price':250,'selling_price':350})
-        for name,url in [('quick','/products/quick-add'),('sale','/sales/'),('restock','/restocking/'),('scan','/products/scan'),('products','/products/'),('product-form','/products/new')]:
+        client.post('/products/new',data={'name':'Coca-Cola','sku':'001234','stock_quantity':20,'buying_price':250,'selling_price':350})
+        for name,url in [('quick','/products/quick-add'),('sale','/sales/'),('restock','/restocking/'),('products','/products/'),('product-form','/products/new'),('import','/products/import')]:
             response=client.get(url);assert response.status_code==200
             (destination/f'{name}.html').write_bytes(response.data)
         csv='Product Name\n'+'\n'.join(f'P{i}' for i in range(51))

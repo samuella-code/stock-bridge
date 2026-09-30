@@ -12,11 +12,11 @@ MAX_UPLOAD = 2 * 1024 * 1024
 HEADERS = {'Product Name': 'name', 'Category': 'category', 'Unit': 'unit',
            'Opening Quantity': 'stock_quantity', 'Cost Price': 'buying_price',
            'Selling Price': 'selling_price', 'Low Stock Threshold': 'minimum_stock_level',
-           'SKU': 'sku', 'Barcode': 'barcode', 'Description': 'description'}
+           'SKU': 'sku', 'Description': 'description'}
 
 def product_data(form, editing=False):
     errors, data = [], {}
-    for field, limit in [('name',140),('sku',60),('barcode',80),('category',80),
+    for field, limit in [('name',140),('sku',60),('category',80),
                          ('supplier_name',140),('unit',30),('description',500)]:
         value = str(form.get(field) or '').strip()
         if len(value) > limit or any(ord(c) < 32 for c in value):
@@ -49,35 +49,33 @@ def product_data(form, editing=False):
 
 def duplicate_errors(bid, data, excluding=None):
     errors = []
-    for field in ('sku', 'barcode'):
+    for field in ('sku',):
         value = data.get(field)
         if value:
             query = Product.query.filter(Product.business_id == bid, getattr(Product, field) == value)
             if excluding is not None:
                 query = query.filter(Product.id != excluding)
             if query.first():
-                errors.append(f"That {field.upper() if field == 'sku' else field} is already used in this business (including archived products).")
+                errors.append('That SKU is already used in this business (including archived products).')
     return errors
 
 def validate_rows(bid, rows):
     if not rows or len(rows) > MAX_ROWS:
         raise ValueError(f'Enter between 1 and {MAX_ROWS} products per batch.')
     normalized, issues = [], []
-    # One query per identifier type, rather than one query per uploaded product.
+    # One SKU query, rather than one query per uploaded product.
     skus = {str(r.get('sku') or '').strip().upper() for r in rows} - {''}
-    codes = {str(r.get('barcode') or '').strip() for r in rows} - {''}
     existing_skus = {r[0] for r in db.session.query(Product.sku).filter(Product.business_id == bid, Product.sku.in_(skus))} if skus else set()
-    existing_codes = {r[0] for r in db.session.query(Product.barcode).filter(Product.business_id == bid, Product.barcode.in_(codes))} if codes else set()
-    seen_skus, seen_codes, seen_rows = set(), set(), set()
+    seen_skus, seen_rows = set(), set()
     for number, raw in enumerate(rows, 2):
         data, errors = product_data(raw)
-        for field, seen, existing in [('sku',seen_skus,existing_skus),('barcode',seen_codes,existing_codes)]:
+        for field, seen, existing in [('sku',seen_skus,existing_skus)]:
             value = data.get(field)
             if value:
                 if value in seen or value in existing:
-                    errors.append(f'Duplicate {field.upper() if field == "sku" else field}.')
+                    errors.append('Duplicate SKU.')
                 seen.add(value)
-        key = tuple(sorted((k,str(v)) for k,v in data.items()))
+        key = tuple(sorted((k,str(v).casefold() if k == 'name' else str(v)) for k,v in data.items()))
         if key in seen_rows:
             errors.append('Duplicate product row.')
         seen_rows.add(key)
@@ -103,7 +101,10 @@ def save_batch(bid, rows, actor_id, receipt=None):
     if receipt and AuditLog.query.filter_by(business_id=bid, action='PRODUCT_IMPORT', description=receipt).first():
         db.session.rollback()
         return 0
-    normalized, issues = validate_rows(bid, rows)
+    normalized, issues = validate_rows(bid, rows) if rows else ([], [])
+    if not rows and not receipt:
+        db.session.rollback()
+        raise ValueError('Enter at least one product.')
     if issues:
         db.session.rollback()
         raise ValueError('Some rows changed or have duplicate identifiers. Preview the products again.')
@@ -132,7 +133,7 @@ def search_products(bid, term):
         escaped = term.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')
         pattern = f'%{escaped}%'
         query = query.filter(or_(Product.name.ilike(pattern, escape='\\'), Product.sku.ilike(pattern, escape='\\'),
-                                 Product.barcode.ilike(pattern, escape='\\'), Product.category.ilike(pattern, escape='\\')))
+                                 Product.category.ilike(pattern, escape='\\')))
     return query
 
 def read_spreadsheet(upload):
@@ -162,7 +163,7 @@ def read_spreadsheet(upload):
             if len(workbook.worksheets) != 1:
                 raise ValueError('Use one worksheet per import.')
             sheet = workbook.worksheets[0]
-            if sheet.max_column and sheet.max_column > len(HEADERS):
+            if sheet.max_column and sheet.max_column > len(HEADERS) + 1:
                 raise ValueError('Use only the columns in the StockBridge template.')
             sheet.reset_dimensions()
             def values():
@@ -183,25 +184,30 @@ def grid_to_rows(grid):
     headers = next(iterator, [])
     headers = [str(h or '').strip().removesuffix(' *') for h in headers]
     lookup = {k.lower():v for k,v in HEADERS.items()}
+    # Backward compatibility: discard this optional column from older templates.
+    # Never validate, save or overwrite retained legacy identifier values.
+    lookup['barcode'] = None
     if not headers or len(set(h.lower() for h in headers)) != len(headers) or any(h.lower() not in lookup for h in headers):
         raise ValueError('Use the StockBridge template column names; duplicate or unknown headers are not allowed.')
     fields = [lookup[h.lower()] for h in headers]
     if 'name' not in fields:
         raise ValueError('The Product Name column is required.')
     rows = []
-    scanned = 0
+    physical_rows = 0
     for cells in iterator:
-        scanned += 1
-        if scanned > MAX_ROWS:
+        physical_rows += 1
+        if physical_rows > MAX_ROWS:
             raise ValueError(f'Use at most {MAX_ROWS} spreadsheet rows per import; split larger catalogues into batches.')
         if not any(v is not None and str(v).strip() for v in cells):
             continue
         if len(cells) > len(fields) and any(str(v or '').strip() for v in cells[len(fields):]):
             raise ValueError('A row has extra columns. Check the template and CSV separators.')
-        raw = {'_row': scanned + 1}
+        raw = {'_row': physical_rows + 1}
         for field, value in zip(fields, cells):
-            if field in ('sku','barcode') and value is not None and not isinstance(value,str):
-                raise ValueError('Format SKU and Barcode columns as Text to preserve leading zeros.')
+            if field is None:
+                continue
+            if field == 'sku' and value is not None and not isinstance(value,str):
+                raise ValueError('Format the SKU column as Text to preserve leading zeros.')
             text = '' if value is None else str(value)
             if text.lstrip().startswith(('=','+','@')):
                 raise ValueError('Formula-like cells are not allowed. Paste plain values instead.')

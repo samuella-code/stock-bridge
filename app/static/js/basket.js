@@ -15,16 +15,15 @@
    const price=field(mode==='sale'?'Unit price (₦)':'Purchase cost per unit (₦)',mode==='sale'?'unit_price':'unit_cost',mode==='sale'?product.price:product.cost,'0.01');price.className='line-price';
    const subtotal=document.createElement('strong');subtotal.className='line-total';row.append(subtotal);const remove=document.createElement('button');remove.type='button';remove.className='secondary-btn';remove.textContent='Remove item';remove.onclick=()=>{row.remove();total();};row.append(remove);lines.append(row);results.replaceChildren();search.value='';message.textContent='Product added. Add another or review your basket.';qty.focus();total();
   }
-  async function lookup(term,barcode=false){controller?.abort();controller=new AbortController();const mine=++sequence;results.textContent='Searching…';
-   try{const response=await fetch(`${basket.dataset.lookup}?${barcode?'barcode':'q'}=${encodeURIComponent(term)}`,{signal:controller.signal,headers:{Accept:'application/json'}});if(!response.ok)throw Error();const data=await response.json();if(mine!==sequence)return;results.replaceChildren();
-    if(barcode&&data.products.length){add(data.products[0]);return;}
-    if(!data.products.length){results.textContent=barcode?'No active product matches this barcode. Add it in Products first.':'No matching products. Try another name, SKU or barcode.';return;}
+  async function lookup(term){controller?.abort();controller=new AbortController();const mine=++sequence;results.textContent='Searching…';
+   try{const response=await fetch(`${basket.dataset.lookup}?q=${encodeURIComponent(term)}`,{signal:controller.signal,headers:{Accept:'application/json'}});if(!response.ok)throw Error();const data=await response.json();if(mine!==sequence)return;results.replaceChildren();
+    if(!data.products.length){results.textContent='No matching products. Try another name, SKU or category.';return;}
     data.products.forEach(product=>{const button=document.createElement('button');button.type='button';button.className='search-result';button.textContent=`${product.name} · ${product.stock} ${product.unit} · ${money(mode==='sale'?product.price:product.cost)}`;button.disabled=mode==='sale'&&product.stock===0;button.onclick=()=>add(product);results.append(button);});
    }catch(error){if(error.name!=='AbortError'&&mine===sequence)results.textContent='Could not search products. Check your connection and try again.';}
   }
   search.addEventListener('input',()=>{clearTimeout(timer);controller?.abort();sequence++;const term=search.value.trim();if(!term){results.replaceChildren();return;}timer=setTimeout(()=>lookup(term),200);});
   search.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();clearTimeout(timer);if(search.value.trim())lookup(search.value.trim());}});
-  basket.querySelector('.basket-scan').onclick=()=>window.StockBridgeScan(code=>lookup(code,true));lines.addEventListener('input',total);
+  lines.addEventListener('input',total);
   form.addEventListener('submit',e=>{if(!lines.children.length){e.preventDefault();message.textContent='Add at least one product to the basket.';search.focus();}else if(form.checkValidity()){form.querySelector('button[type=submit]').disabled=true;}});
   const initial=basket.querySelector('.basket-initial');if(initial)add(JSON.parse(initial.textContent));
  });
