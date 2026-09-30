@@ -11,7 +11,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
 from app.models import (AdminLoginAttempt, AdminPasswordReset, AuditLog, Business, Expense,
                         Payment, Product, Restock, Sale, User)
-from app.email_service import _send_email
+from app.email_service import _send_email, safely_send, send_account_status_email, send_access_receipt_once
 from app.admin.security import valid_admin_password
 from app.payments.service import PaystackError, verify_transaction
 
@@ -329,6 +329,7 @@ def suspend_user(user_id):
         business_id=user.businesses[0].id if user.businesses else None,
         target_type="user",target_id=user.id)
     db.session.commit()
+    safely_send(send_account_status_email,user,active=user.suspended_at is None)
     return redirect(url_for("admin.user_detail",user_id=user_id))
 
 @admin_bp.get("/businesses")
@@ -372,6 +373,7 @@ def suspend_business(business_id):
         f"Business {b.id}: {reason}",actor=current_user,business_id=b.id,
         target_type="business",target_id=b.id)
     db.session.commit()
+    safely_send(send_account_status_email,b.owner,active=b.suspended_at is None,business=b)
     return redirect(url_for("admin.business_detail",business_id=b.id))
 
 @admin_bp.get("/payments")
@@ -446,6 +448,7 @@ def verify_payment(payment_id):
         log("LIFETIME_ACCESS_GRANTED",f"Lifetime Access confirmed for business {business.id}.",
             actor=current_user,business_id=business.id,target_type="business",target_id=business.id)
     db.session.commit()
+    safely_send(send_access_receipt_once,payment)
     flash("Paystack verified the payment and Lifetime Access is active.","success")
     return redirect(destination)
 

@@ -14,6 +14,7 @@ from sqlalchemy import func
 from app import csrf, db
 from app.models import Payment, User
 from app.admin.routes import log
+from app.email_service import safely_send, send_access_receipt_once
 from app.payments.service import PaystackError, initialize_transaction, verify_transaction
 
 payments_bp = Blueprint("payments", __name__, url_prefix="/payments")
@@ -143,6 +144,7 @@ def callback():
         except PaystackError:
             current_app.logger.warning("Paystack verification pending for %s", reference)
     if _activate_account(payment):
+        safely_send(send_access_receipt_once, payment)
         flash("Payment confirmed. Your lifetime access is active.", "success")
         return redirect(url_for("main.dashboard"))
     return render_template("payments/pending.html", reference=reference)
@@ -153,7 +155,8 @@ def callback():
 def status(reference):
     payment = Payment.query.filter_by(reference=reference, customer_email=current_user.email).first_or_404()
     if payment.status == "success":
-        _activate_account(payment)
+        if _activate_account(payment):
+            safely_send(send_access_receipt_once, payment)
     return jsonify(status=payment.status, redirect=url_for("main.dashboard") if payment.business_id else None)
 
 
@@ -178,5 +181,6 @@ def webhook():
             if payment.status != "success":
                 _confirm(payment, data)
             if payment.status == "success":
-                _activate_account(payment)
+                if _activate_account(payment):
+                    safely_send(send_access_receipt_once, payment)
     return jsonify(status="ok"), 200

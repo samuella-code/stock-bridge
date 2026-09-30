@@ -141,6 +141,8 @@ class Payment(db.Model):
  currency=db.Column(db.String(3),nullable=False,default="NGN")
  status=db.Column(db.String(20),nullable=False,default="initialized",index=True)
  paid_at=db.Column(db.DateTime)
+ receipt_email_claimed_at=db.Column(db.DateTime)
+ receipt_email_sent_at=db.Column(db.DateTime)
  created_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False)
 @login_manager.user_loader
 def load_user(i): return db.session.get(User,int(i))

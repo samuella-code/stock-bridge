@@ -1,0 +1,8 @@
+{% extends "email/base.html" %}{% block content %}
+<h1 style="font-size:24px;color:#102437;margin:0 0 16px;">Welcome to StockBridge</h1>
+<p>Hi {{ name.split()[0] }},</p><p>Track stock, sales, expenses and profit, and know when to restock.</p>
+<p>Create Account → Verify Email → Explore StockBridge → Pay ₦3,000 once → Lifetime Access.</p>
+<p>Explore StockBridge now. The business tools unlock after the one-time payment.</p>
+<p style="margin:28px 0;"><a href="{{ link }}" style="display:inline-block;background:#138450;color:#ffffff;text-decoration:none;padding:13px 22px;border-radius:6px;font-weight:bold;">Open StockBridge</a></p>
+<p style="font-size:13px;">Or visit <a href="{{ link }}">{{ link }}</a>.</p>
+{% endblock %}
