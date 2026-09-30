@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/inventory.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modules.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/billing.css') }}">
+<link rel="stylesheet" href="{{url_for('static',filename='css/catalogue.css')}}">
 </head>
 <body>
     <div class="app-shell">
@@ -90,5 +91,6 @@
     </div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% block scripts %}{% endblock %}
 </body>
 </html>

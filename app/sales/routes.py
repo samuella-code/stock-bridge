@@ -36,14 +36,14 @@ def index():
             for raw_id, raw_qty, raw_price in zip(ids, quantities, prices):
                 pid, qty = int(raw_id), int(raw_qty)
                 price = Decimal(raw_price) if raw_price.strip() else None
-                if pid in seen or qty < 1 or (price is not None and (not price.is_finite() or price < 0)):
+                if pid in seen or not 1 <= qty <= 2147483647 or (price is not None and (not price.is_finite() or price < 0 or price > Decimal('9999999999.99') or price.as_tuple().exponent < -2)):
                     raise ValueError
                 seen.add(pid)
                 parsed.append((pid, qty, price))
         except (KeyError, ValueError, InvalidOperation):
             flash("Check products, quantities, prices and date. Each product should appear once.", "error")
             return redirect(url_for("sales.index"))
-        products = {p.id: p for p in Product.query.filter(Product.business_id == b.id, Product.id.in_(seen), Product.active.is_(True)).all()}
+        products = {p.id: p for p in Product.query.filter(Product.business_id == b.id, Product.id.in_(seen), Product.active.is_(True)).order_by(Product.id).with_for_update().all()}
         if len(products) != len(parsed):
             abort(404)
         for pid, qty, _ in parsed:
@@ -55,7 +55,7 @@ def index():
                         note=request.form.get("note", "").strip()[:500])
             db.session.add(sale)
             db.session.flush()
-            for pid, qty, price in parsed:
+            for pid, qty, price in sorted(parsed):
                 product = products[pid]
                 result = db.session.execute(
                     update(Product).where(Product.id == pid, Product.business_id == b.id,
@@ -79,7 +79,7 @@ def index():
             raise
         flash("Sale recorded and stock updated.", "success")
         return redirect(url_for("sales.index"))
-    products = Product.query.filter_by(business_id=b.id, active=True).order_by(Product.name).all()
+    has_products = Product.query.filter_by(business_id=b.id, active=True).first() is not None
     sales = (Sale.query.options(selectinload(Sale.items).selectinload(SaleItem.product))
              .filter_by(business_id=b.id).order_by(Sale.sold_at.desc(), Sale.id.desc())
              .paginate(page=request.args.get("page", 1, type=int), per_page=20, error_out=False))
@@ -87,7 +87,7 @@ def index():
         func.coalesce(func.sum(SaleItem.quantity * SaleItem.unit_price), 0),
         func.coalesce(func.sum(SaleItem.quantity * (SaleItem.unit_price - SaleItem.unit_cost)), 0)
     ).join(Sale).filter(Sale.business_id == b.id, Sale.voided_at.is_(None)).one()
-    return render_template("sales/index.html", business=b, products=products, sales=sales,
+    return render_template("sales/index.html", business=b, has_products=has_products, sales=sales,
                            total=totals[0], profit=totals[1], payment_methods=PAYMENT_METHODS)
 
 @sales_bp.post("/<int:sale_id>/delete")
