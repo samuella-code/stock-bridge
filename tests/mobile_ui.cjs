@@ -9,6 +9,8 @@ function scanner(){
  w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'));};
  w.HTMLMediaElement.prototype.play=async function(){};Object.defineProperty(w.HTMLMediaElement.prototype,'readyState',{get:()=>2});
  Object.defineProperty(w,'isSecureContext',{value:true});
+ w.Image=class{naturalWidth=800;naturalHeight=600;set src(value){queueMicrotask(()=>this.onload());}};
+ w.HTMLCanvasElement.prototype.getContext=()=>({fillRect(){},translate(){},rotate(){},drawImage(){}});
  const track={stopped:0,stop(){this.stopped++;}},stream={getTracks:()=>[track]};
  Object.defineProperty(w.navigator,'mediaDevices',{value:{getUserMedia:async constraints=>{assert.equal(constraints.video.facingMode.ideal,'environment');assert.equal(constraints.audio,false);return stream;}}});
  w.eval(source);return {dom,w,d:w.document,track,stream};
@@ -17,7 +19,7 @@ function fallback(env,returning){
  const state={calls:0,stops:0};
  env.w.ZXingBrowser={BrowserMultiFormatOneDReader:class{
   async decodeFromStream(stream,video,callback){state.calls++;state.callback=callback;state.controls={stop(){state.stops++;}};return returning?returning.promise:state.controls;}
-  async decodeFromImageUrl(url){state.photo=url;return {getText:()=> '000555'};}
+  decodeFromCanvas(){state.photo='blob:test-photo';return {getText:()=> '000555'};}
  }};return state;
 }
 function cleanup(env){env.dom.window.close();}
@@ -60,6 +62,23 @@ function cleanup(env){env.dom.window.close();}
  attempts=env.w.StockBridgeScan(()=>{});await tick();state=fallback(env);script=env.d.querySelector('script');script.dispatchEvent(new env.w.Event('load'));await attempts;assert.equal(state.calls,1);env.d.querySelector('.scanner-close').click();cleanup(env);
  // Decode selected photos locally and revoke their temporary object URL.
  env=scanner();state=fallback(env);let revoked=0;env.w.URL.createObjectURL=()=> 'blob:test-photo';env.w.URL.revokeObjectURL=()=>revoked++;await env.w.StockBridgeScan(code=>env.d.querySelector('#code').value=code);const photo=env.d.querySelector('.scanner-photo');Object.defineProperty(photo,'files',{value:[new env.w.File(['x'],'barcode.jpg',{type:'image/jpeg'})]});photo.dispatchEvent(new env.w.Event('change'));await tick();await tick();assert.equal(state.photo,'blob:test-photo');assert.equal(revoked,1);assert.equal(env.d.querySelector('#code').value,'000555');assert.ok(env.track.stopped);cleanup(env);
+ // Distinguish unreadable image files from readable images with no barcode.
+ for(const failure of ['image','barcode','cancel']){
+  env=scanner();state=fallback(env);let released=0,decoded=0;
+  env.w.URL.createObjectURL=()=> 'blob:failure';env.w.URL.revokeObjectURL=()=>released++;
+  if(failure==='image')env.w.Image=class{set src(value){queueMicrotask(()=>this.onerror());}};
+  if(failure==='barcode')env.w.ZXingBrowser.BrowserMultiFormatOneDReader.prototype.decodeFromCanvas=()=>{decoded++;throw Error('NotFound');};
+  if(failure==='cancel')env.w.Image=class{naturalWidth=800;naturalHeight=600;set src(value){setTimeout(()=>this.onload(),10);}};
+  await env.w.StockBridgeScan(()=>assert.fail('failed or cancelled photo accepted'));
+  const selected=env.d.querySelector('.scanner-photo');Object.defineProperty(selected,'files',{value:[new env.w.File(['x'],'test.jpg')]});selected.dispatchEvent(new env.w.Event('change'));
+  if(failure==='cancel'){await tick();env.d.querySelector('.scanner-close').click();}
+  for(let i=0;i<100&&!released;i++)await new Promise(r=>setTimeout(r,2));
+  assert.equal(released,1,failure);
+  if(failure==='image')assert.match(env.d.querySelector('.scanner-message').textContent,/could not be opened/);
+  if(failure==='barcode'){assert.equal(decoded,18);assert.match(env.d.querySelector('.scanner-message').textContent,/after several attempts/);}
+  if(failure==='cancel')assert.equal(env.d.querySelector('dialog').open,false);
+  cleanup(env);
+ }
  // Mobile menu behavior against the actual Flask-rendered business page.
  const dom=new JSDOM(fs.readFileSync(path.join(process.argv[2],'products.html'),'utf8'),{url:'https://stockbridge.example/products/',runScripts:'outside-only'}),w=dom.window,d=w.document,media={matches:true,addEventListener(event,cb){this.change=cb;}};w.matchMedia=()=>media;w.eval(fs.readFileSync(path.join(root,'app/static/js/app.js'),'utf8'));
  const menu=d.querySelector('#menuButton'),sidebar=d.querySelector('#sidebar'),close=d.querySelector('#sidebarClose'),backdrop=d.querySelector('#sidebarBackdrop'),main=d.querySelector('.main-panel');assert.equal(sidebar.inert,true);
