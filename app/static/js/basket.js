@@ -18,7 +18,7 @@
   async function lookup(term,barcode=false){controller?.abort();controller=new AbortController();const mine=++sequence;results.textContent='Searching…';
    try{const response=await fetch(`${basket.dataset.lookup}?${barcode?'barcode':'q'}=${encodeURIComponent(term)}`,{signal:controller.signal,headers:{Accept:'application/json'}});if(!response.ok)throw Error();const data=await response.json();if(mine!==sequence)return;results.replaceChildren();
     if(barcode&&data.products.length){add(data.products[0]);return;}
-    if(!data.products.length){results.textContent=barcode?'No active product matches this barcode. Add it in Products first.':'No matching products. Try another name, SKU or barcode.';return;}
+    if(!data.products.length){results.textContent=barcode?'Product not in your active catalogue. Add or restore it before recording this transaction.':'No matching products. Try another name, SKU or barcode.';if(barcode){const link=document.createElement('a');link.className='secondary-btn button-link';link.textContent='Add Product';link.href=`${basket.dataset.create}?barcode=${encodeURIComponent(term)}`;results.append(link);}return;}
     data.products.forEach(product=>{const button=document.createElement('button');button.type='button';button.className='search-result';button.textContent=`${product.name} · ${product.stock} ${product.unit} · ${money(mode==='sale'?product.price:product.cost)}`;button.disabled=mode==='sale'&&product.stock===0;button.onclick=()=>add(product);results.append(button);});
    }catch(error){if(error.name!=='AbortError'&&mine===sequence)results.textContent='Could not search products. Check your connection and try again.';}
   }

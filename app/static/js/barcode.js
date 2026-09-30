@@ -114,13 +114,31 @@
   const input=document.querySelector(button.dataset.scanTarget);
   window.StockBridgeScan(code=>{input.value=code;input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));});
  });
+ function referencePreview(container,reference){
+  container.replaceChildren();const heading=document.createElement('strong');heading.textContent='We found this product';container.append(heading);
+  for(const value of [reference.product_name,reference.brand?`Brand: ${reference.brand}`:'',reference.variant?`Pack size: ${reference.variant}`:'','Check the details, enter your stock and prices, then save. Reference information may be incomplete or outdated.'])if(value){const p=document.createElement('p');p.textContent=value;container.append(p);}
+  const note=document.createElement('small'),source=document.createElement('a'),license=document.createElement('a');source.textContent=reference.provider;source.href=reference.source_url;license.textContent='Open Database License';license.href=reference.license_url;
+  for(const link of [source,license]){link.target='_blank';link.rel='noopener noreferrer';}note.append('Contains information from ',source,', available under the ',license,'.');container.append(note);
+ }
+ const productForm=document.querySelector('.product-form[data-recognize]');
+ if(productForm){
+  const barcode=productForm.querySelector('[name=barcode]'),preview=productForm.querySelector('#product-recognition');let sequence=0;
+  async function identify(){const code=barcode.value.trim(),mine=++sequence;if(!code){preview.textContent='Scan or enter a barcode first.';return;}preview.textContent='Trying to identify this product…';
+   try{const response=await fetch(`${productForm.dataset.recognize}?barcode=${encodeURIComponent(code)}`,{headers:{Accept:'application/json'}});if(!response.ok)throw Error();const data=await response.json();if(mine!==sequence||barcode.value.trim()!==code)return;
+    if(data.products?.length){preview.replaceChildren();const text=document.createElement('p'),link=document.createElement('a');text.textContent=`Product already exists: ${data.products[0].name}${data.products[0].active?'':' (archived)'}.`;link.textContent='View Product';link.href=data.products[0].url;preview.append(text,link);return;}
+    if(data.reference){referencePreview(preview,data.reference);for(const [field,value] of Object.entries({name:data.reference.product_name,category:data.reference.category,description:data.reference.description})){const input=productForm.querySelector(`[name=${field}]`);if(input&&!input.value.trim())input.value=value||'';}}
+    else preview.textContent="We couldn't automatically identify this product. You can still add it manually. We've saved the barcode for you.";
+   }catch{if(mine===sequence&&barcode.value.trim()===code)preview.textContent='Product lookup is unavailable. You can still enter the details and save manually.';}
+  }
+  productForm.querySelector('.identify-product').onclick=identify;barcode.addEventListener('change',identify);barcode.addEventListener('input',()=>sequence++);
+ }
  const lookup=document.querySelector('#barcode-lookup');if(!lookup)return;
  const input=document.querySelector('#barcode-value'),result=document.querySelector('#barcode-result');let request=0;
  async function find(){const code=input.value.trim();if(!code)return;const sequence=++request;result.textContent='Finding product…';
   try{const response=await fetch(`${lookup.dataset.lookup}?include_archived=1&barcode=${encodeURIComponent(code)}`,{headers:{Accept:'application/json'}});if(!response.ok)throw Error();const data=await response.json();if(sequence!==request)return;
    result.replaceChildren();const product=data.products[0];const text=document.createElement('p'),link=document.createElement('a');link.className='primary-btn button-link';
    if(product){text.textContent=`${product.name} · ${product.stock} ${product.unit} available${product.active ? '' : ' · Archived — restore this product to use it again'}`;link.textContent='Open Product';link.href=product.url;}
-   else{text.textContent='No active product matches this barcode. Add its name, stock and prices.';link.textContent='Add New Product';link.href=`${lookup.dataset.create}?include_archived=1&barcode=${encodeURIComponent(code)}`;}
+   else{if(data.reference){referencePreview(result,data.reference);text.textContent='Review this product and enter your stock and prices.';link.textContent='Review & Add Product';}else{text.textContent="We couldn't automatically identify this product. You can still add it manually. We've saved the barcode for you.";link.textContent='Add New Product';}link.href=`${lookup.dataset.create}?barcode=${encodeURIComponent(code)}`;}
    result.append(text,link);
   }catch{if(sequence===request)result.textContent='Could not search products. Please try again.';}
  }

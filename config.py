@@ -22,6 +22,7 @@ def database_url():
 
 
 class Config:
+ BARCODE_EXTERNAL_LOOKUP_ENABLED=os.getenv('BARCODE_EXTERNAL_LOOKUP_ENABLED','false').lower()=='true'
  CUSTOMER_HOST=os.getenv("CUSTOMER_HOST","stock-bridge-one.vercel.app")
  ADMIN_HOST=os.getenv("ADMIN_HOST","stock-bridge-admin.vercel.app")
  SECRET_KEY=os.getenv("SECRET_KEY","dev-only-change-me")

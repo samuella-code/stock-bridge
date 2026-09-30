@@ -7,6 +7,7 @@ from app.models import Product, Restock, Sale, SaleItem, StockMovement
 from app.admin.routes import log
 from app.products.catalogue import product_data, duplicate_errors, add_product, search_products
 from sqlalchemy.exc import IntegrityError
+from app.products.recognition import lookup_product_by_barcode
 
 products_bp = Blueprint("products", __name__, url_prefix="/products")
 ADJUSTMENT_REASONS = ("Damaged", "Expired", "Lost", "Stock count correction", "Returned", "Other")
@@ -64,6 +65,20 @@ def index():
 @login_required
 def create():
     b = current_business()
+    recognition, suggested = None, {}
+    if request.method == 'GET' and request.args.get('barcode'):
+        barcode = request.args['barcode'].strip()
+        if len(barcode) > 80 or any(ord(c) < 32 for c in barcode):
+            abort(400)
+        existing = Product.query.filter_by(business_id=b.id, barcode=barcode).first()
+        if existing:
+            flash('Product already exists. Its saved details and inventory were kept.', 'info')
+            return redirect(url_for('products.detail', product_id=existing.id))
+        recognition = lookup_product_by_barcode(barcode, current_user.id)
+        if recognition.get('reference'):
+            reference = recognition['reference']
+            suggested = {'name':reference['product_name'], 'category':reference['category'],
+                         'description':reference['description']}
     if request.method == "POST":
         data, errors = product_data(request.form)
         errors.extend(duplicate_errors(b.id, data))
@@ -83,7 +98,7 @@ def create():
                     return redirect(url_for("products.scan"))
                 return redirect(url_for("products.detail", product_id=product.id))
         for error in errors: flash(error, "error")
-    return render_template("products/form.html", business=b, product=None)
+    return render_template("products/form.html", business=b, product=None, recognition=recognition, suggested=suggested)
 
 @products_bp.route("/<int:product_id>/edit", methods=["GET", "POST"])
 @login_required
@@ -197,6 +212,25 @@ def lookup():
 @login_required
 def scan():
     return render_template('products/scan.html', business=current_business())
+
+@products_bp.get('/recognize')
+@login_required
+def recognize():
+    b = current_business()
+    if not b:
+        abort(404)
+    barcode = request.args.get('barcode', '').strip()
+    if not barcode or len(barcode) > 80 or any(ord(c) < 32 for c in barcode):
+        return jsonify(status='invalid', products=[]), 400
+    product = Product.query.filter_by(business_id=b.id, barcode=barcode).first()
+    if product:
+        result = {'status':'existing', 'products':[{'name':product.name, 'stock':product.stock_quantity,
+            'unit':product.unit, 'active':product.active, 'url':url_for('products.detail', product_id=product.id)}]}
+    else:
+        result = dict(lookup_product_by_barcode(barcode, current_user.id), products=[])
+    response = jsonify(result)
+    response.headers['Cache-Control'] = 'no-store, private'
+    return response
 
 @products_bp.route('/quick-add', methods=['GET','POST'])
 @login_required

@@ -1,4 +1,4 @@
-<div class="basket" data-mode="{{mode}}" data-lookup="{{url_for('products.lookup')}}">
+<div class="basket" data-create="{{url_for('products.create')}}" data-mode="{{mode}}" data-lookup="{{url_for('products.lookup')}}">
 <label>Search products by name, SKU or barcode<input type="search" class="basket-search" autocomplete="off" placeholder="Start typing a product" aria-controls="{{mode}}-results"></label>
 <div class="basket-results" id="{{mode}}-results" aria-live="polite"></div>
 <button type="button" class="secondary-btn basket-scan">Scan Barcode</button>
