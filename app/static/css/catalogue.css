@@ -9,3 +9,5 @@
 .import-edit-grid input { width:100%; min-width:0; box-sizing:border-box; }
 .preview-row h3 { overflow-wrap:anywhere; }
 @media (max-width:700px) { .import-edit-grid { grid-template-columns:1fr; } }
+
+.import-row-options summary { cursor:pointer; padding:12px 0; min-height:44px; box-sizing:border-box; }
