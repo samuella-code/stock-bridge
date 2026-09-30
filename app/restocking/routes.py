@@ -10,15 +10,16 @@ from app.admin.routes import log
 
 restocking_bp = Blueprint("restocking", __name__, url_prefix="/restocking")
 
-def recommendations(b):
+def recommendations(b, products):
     since = datetime.utcnow() - timedelta(days=30)
     now = datetime.utcnow()
     sales = db.session.query(SaleItem.product_id, func.sum(SaleItem.quantity),
         func.min(Sale.sold_at)).join(Sale).filter(Sale.business_id == b.id,
-        Sale.voided_at.is_(None), Sale.sold_at >= since).group_by(SaleItem.product_id).all()
+        Sale.voided_at.is_(None), Sale.sold_at >= since,
+        SaleItem.product_id.in_([p.id for p in products])).group_by(SaleItem.product_id).all()
     observed = {row[0]: (row[1], row[2]) for row in sales}
     rows = []
-    for p in Product.query.filter_by(business_id=b.id, active=True).order_by(Product.name).all():
+    for p in products:
         figures = observed.get(p.id)
         # Recent history is an estimate, not a promise of future demand.
         days = min(30, max(1, (now - max(p.created_at, since)).days + 1))
@@ -38,7 +39,14 @@ def index():
     b = current_user.businesses[0]
     restocks = Restock.query.filter_by(business_id=b.id).order_by(Restock.received_at.desc(), Restock.id.desc()).paginate(
         page=request.args.get("page", 1, type=int), per_page=20, error_out=False)
-    return render_template("restocking/index.html", business=b, recommendations=recommendations(b), restocks=restocks)
+    from app.products.catalogue import search_products
+    term = request.args.get('q', '').strip()[:100]
+    product_page = search_products(b.id, term).order_by(Product.stock_quantity - Product.minimum_stock_level, Product.id).paginate(
+        page=request.args.get('insight_page', 1, type=int), per_page=20, error_out=False)
+    has_products = Product.query.filter_by(business_id=b.id, active=True).first() is not None
+    selected = Product.query.filter_by(business_id=b.id, active=True, id=request.args.get('product_id', type=int)).first()
+    return render_template("restocking/index.html", business=b, recommendations=recommendations(b, product_page.items),
+        restocks=restocks, product_page=product_page, query=term, has_products=has_products, selected=selected)
 
 @restocking_bp.post("/<int:product_id>/settings")
 @login_required
@@ -74,29 +82,38 @@ def receive():
         seen = set()
         for raw_id, raw_qty, raw_cost in zip(ids, quantities, costs):
             pid, qty, cost = int(raw_id), int(raw_qty), Decimal(raw_cost)
-            if pid in seen or qty < 1 or not cost.is_finite() or cost < 0: raise ValueError
+            if pid in seen or not 1 <= qty <= 2147483647 or not cost.is_finite() or cost < 0 or cost > Decimal('9999999999.99') or cost.as_tuple().exponent < -2: raise ValueError
             seen.add(pid)
             parsed.append((pid, qty, cost))
     except (ValueError, InvalidOperation):
         flash("Check the product, quantity and cost. Each product should appear once.", "error")
         return redirect(url_for("restocking.index"))
     products = {p.id: p for p in Product.query.filter(Product.business_id == b.id,
-        Product.active.is_(True), Product.id.in_(seen)).all()}
+        Product.active.is_(True), Product.id.in_(seen)).order_by(Product.id).with_for_update().all()}
     if len(products) != len(parsed): abort(404)
+    if any(products[pid].stock_quantity > 2147483647 - qty for pid, qty, _ in parsed):
+        db.session.rollback()
+        flash('The resulting stock quantity is too large. Check quantities received.', 'error')
+        return redirect(url_for('restocking.index'))
     supplier = request.form.get("supplier", "").strip()[:140]
     note = request.form.get("note", "").strip()[:500]
     batch = str(uuid4())
     try:
-        for pid, qty, cost in parsed:
+        for pid, qty, cost in sorted(parsed):
             product = products[pid]
             receipt = Restock(business_id=b.id, product_id=pid, quantity=qty,
                 unit_cost=cost, supplier=supplier, note=note, batch_id=batch)
             db.session.add(receipt)
             db.session.flush()
-            db.session.execute(update(Product).where(Product.id == pid, Product.business_id == b.id)
+            result = db.session.execute(update(Product).where(Product.id == pid, Product.business_id == b.id,
+                Product.active.is_(True), Product.stock_quantity <= 2147483647 - qty)
                 .values(stock_quantity=Product.stock_quantity + qty,
                         buying_price=cost, updated_at=datetime.utcnow(),
                         supplier_name=supplier or Product.supplier_name))
+            if result.rowcount != 1:
+                db.session.rollback()
+                flash('Stock changed while recording this receipt. Review quantities and try again.', 'error')
+                return redirect(url_for('restocking.index'))
             db.session.add(StockMovement(business_id=b.id, product_id=pid, kind="restock",
                 quantity_change=qty, restock_id=receipt.id, occurred_at=receipt.received_at))
         log("RESTOCK_CREATED", f"Stock receipt {batch} recorded for {len(parsed)} products.", actor=current_user, business_id=b.id)
