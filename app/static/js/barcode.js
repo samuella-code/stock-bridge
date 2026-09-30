@@ -1,5 +1,5 @@
 (() => {
- let stream=null, scanning=false, detector=null, generation=0, controls=null, timer=null, decoderPromise=null;
+ let stream=null, scanning=false, detector=null, generation=0, controls=null, timer=null, decoderPromise=null, cancelPreview=null, openingSession=null, resumeOpening=false;
  const decoderUrl=new URL('vendor/zxing-browser-0.2.1.min.js',document.currentScript?.src||new URL('/static/js/barcode.js',location.href)).href;
  // DecodeHintType.TRY_HARDER = 3 in the pinned ZXing library.
  const readerHints=()=>new Map([[3,true]]);
@@ -46,12 +46,29 @@
  document.body.append(dialog);
  const video=dialog.querySelector('video'),message=dialog.querySelector('.scanner-message'),manual=dialog.querySelector('.manual-barcode');let accept=null;
  const retry=dialog.querySelector('.scanner-retry'),photo=dialog.querySelector('.scanner-photo');
- const stop=()=>{generation++;scanning=false;clearTimeout(timer);timer=null;const active=controls;controls=null;try{active?.stop();}catch{}if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;video.hidden=true;};
- dialog.addEventListener('close',stop);dialog.addEventListener('cancel',stop);window.addEventListener('pagehide',stop);
- document.addEventListener('visibilitychange',()=>{if(document.hidden){stop();retry.hidden=false;if(dialog.open)message.textContent='Camera paused. Tap Try camera again to resume.';}});
+ const stop=()=>{generation++;scanning=false;cancelPreview?.();cancelPreview=null;clearTimeout(timer);timer=null;const active=controls;controls=null;try{active?.stop();}catch{}if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;video.hidden=true;};
+ const dismiss=()=>{resumeOpening=false;stop();};
+ dialog.addEventListener('close',dismiss);dialog.addEventListener('cancel',dismiss);window.addEventListener('pagehide',dismiss);
+ document.addEventListener('visibilitychange',()=>{if(document.hidden){resumeOpening=dialog.open&&openingSession===generation;stop();retry.hidden=false;if(dialog.open)message.textContent='Camera paused. Tap Try camera again to resume.';}else if(resumeOpening&&dialog.open){resumeOpening=false;startCamera();}});
  dialog.querySelector('.scanner-close').onclick=()=>dialog.close();
  const finish=value=>{const code=String(value||'').trim();if(!code||code.length>80){message.textContent='Enter a barcode of 1 to 80 characters.';return;}const callback=accept;accept=null;stop();dialog.close();callback?.(code);};
  dialog.querySelector('.scanner-use').onclick=()=>finish(manual.value);
+ function showPreview(session){
+  // Set properties as well as attributes before attaching the stream. Some
+  // mobile browsers do not apply the markup's muted default to playback.
+  video.muted=true;video.defaultMuted=true;video.autoplay=true;video.playsInline=true;
+  video.setAttribute('playsinline','');video.setAttribute('webkit-playsinline','');
+  video.setAttribute('muted','');video.srcObject=stream;video.hidden=false;
+  return new Promise((resolve,reject)=>{
+   let settled=false,poll,deadline;
+   const cancel=()=>done(Error('PREVIEW_CANCELLED'));
+   function done(error){if(settled)return;settled=true;clearTimeout(poll);clearTimeout(deadline);if(cancelPreview===cancel)cancelPreview=null;error?reject(error):resolve();}
+   function check(){if(settled)return;if(!dialog.open||generation!==session){done(Error('PREVIEW_CANCELLED'));return;}if(video.readyState>=2&&video.videoWidth>0&&video.videoHeight>0&&!video.paused){done();return;}poll=setTimeout(check,50);}
+   cancelPreview=cancel;deadline=setTimeout(()=>done(Error('PREVIEW_TIMEOUT')),6000);
+   try{Promise.resolve(video.play()).catch(()=>done(Error('PREVIEW_PLAY')));}catch{done(Error('PREVIEW_PLAY'));}
+   check();
+  });
+ }
  async function frame(session){
   if(!scanning||generation!==session)return;
   try{if(video.readyState>=2){const results=await detector.detect(video);if(results.length&&scanning&&generation===session){finish(results[0].rawValue);return;}}}
@@ -64,7 +81,8 @@
    const decoder=await loadDecoder();
    if(!dialog.open||generation!==session)return;
    const reader=new decoder.BrowserMultiFormatOneDReader(readerHints(),{delayBetweenScanAttempts:200,delayBetweenScanSuccess:500});
-   const active=await reader.decodeFromStream(stream,video,(result,error,scanControls)=>{
+   // Scan the already-playing video without reattaching/restarting its stream.
+   const active=await reader.scan(video,(result,error,scanControls)=>{
     if(!dialog.open||generation!==session){scanControls?.stop();return;}
     if(result){scanControls?.stop();finish(result.getText());}
    });
@@ -73,8 +91,8 @@
   }catch{if(dialog.open&&generation===session){stop();retry.hidden=false;message.textContent='Scanner could not start. Try again, scan a photo, or enter the barcode.';}}
  }
  async function startCamera(){
-  stop();const session=generation;retry.hidden=true;message.textContent='Opening camera…';
-  if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia){message.textContent='Camera scanning is not supported in this browser. Scan a photo, type the barcode, or use a USB/Bluetooth scanner.';return;}
+  resumeOpening=false;stop();const session=generation;openingSession=session;retry.hidden=true;retry.textContent='Try camera again';message.textContent='Opening camera…';
+  if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia){openingSession=null;message.textContent='Camera scanning is not supported in this browser. Scan a photo, type the barcode, or use a USB/Bluetooth scanner.';return;}
   try{
    detector=null;
    if('BarcodeDetector' in window){try{
@@ -84,11 +102,13 @@
    if(!dialog.open||generation!==session)return;
    const camera=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
    if(!dialog.open||generation!==session){camera.getTracks().forEach(t=>t.stop());return;}
-   stream=camera;video.srcObject=stream;video.hidden=false;await video.play();
+   stream=camera;await showPreview(session);
    if(!dialog.open||generation!==session)return;
    scanning=true;message.textContent='Point the camera at a barcode.';
    if(detector)frame(session);else await startFallback(session);
-  }catch{if(dialog.open&&generation===session){stop();retry.hidden=false;message.textContent='Camera unavailable or permission denied. Allow camera access and try again, scan a photo, or enter the barcode.';}}
+  }catch(error){if(dialog.open&&generation===session){stop();retry.hidden=false;
+   message.textContent=error.message==='PREVIEW_PLAY'?'Camera access was allowed, but the live preview could not play. Tap Try camera again. You can also scan a photo or enter the barcode.':error.message==='PREVIEW_TIMEOUT'?'The camera did not send a live picture. Tap Try camera again, close other apps using the camera, or scan a photo.':'Camera unavailable or permission denied. Allow camera access and try again, scan a photo, or enter the barcode.';
+  }}finally{if(openingSession===session)openingSession=null;}
  }
  retry.onclick=startCamera;
  photo.addEventListener('change',async()=>{

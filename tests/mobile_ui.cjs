@@ -8,6 +8,9 @@ function scanner(){
  const dom=new JSDOM('<button data-scan-target="#code">Scan</button><input id="code">',{url:'https://stockbridge.example/products/new',runScripts:'outside-only'}),w=dom.window;
  w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'));};
  w.HTMLMediaElement.prototype.play=async function(){};Object.defineProperty(w.HTMLMediaElement.prototype,'readyState',{get:()=>2});
+ Object.defineProperty(w.HTMLMediaElement.prototype,'paused',{configurable:true,get:()=>false});
+ Object.defineProperty(w.HTMLVideoElement.prototype,'videoWidth',{configurable:true,get:()=>1280});
+ Object.defineProperty(w.HTMLVideoElement.prototype,'videoHeight',{configurable:true,get:()=>720});
  Object.defineProperty(w,'isSecureContext',{value:true});
  w.Image=class{naturalWidth=800;naturalHeight=600;set src(value){queueMicrotask(()=>this.onload());}};
  w.HTMLCanvasElement.prototype.getContext=()=>({fillRect(){},translate(){},rotate(){},drawImage(){}});
@@ -18,7 +21,7 @@ function scanner(){
 function fallback(env,returning){
  const state={calls:0,stops:0};
  env.w.ZXingBrowser={BrowserMultiFormatOneDReader:class{
-  async decodeFromStream(stream,video,callback){state.calls++;state.callback=callback;state.controls={stop(){state.stops++;}};return returning?returning.promise:state.controls;}
+  async scan(video,callback){state.calls++;state.callback=callback;state.controls={stop(){state.stops++;}};return returning?returning.promise:state.controls;}
   decodeFromCanvas(){state.photo='blob:test-photo';return {getText:()=> '000555'};}
  }};return state;
 }
@@ -36,6 +39,32 @@ function cleanup(env){env.dom.window.close();}
  let env=scanner(),state=fallback(env);await env.w.StockBridgeScan(code=>env.d.querySelector('#code').value=code);assert.equal(state.calls,1);assert.equal(env.d.querySelector('video').hidden,false);assert.notEqual(env.d.activeElement,env.d.querySelector('.manual-barcode'));
  state.callback(undefined,Error('No barcode yet'),state.controls);assert.equal(env.track.stopped,0);
  state.callback({getText:()=> '001234'},undefined,state.controls);assert.equal(env.d.querySelector('#code').value,'001234');assert.ok(env.track.stopped);assert.equal(env.d.querySelector('dialog').open,false);assert.equal(env.d.querySelector('video').srcObject,null);cleanup(env);
+ // Successful playback alone is insufficient: wait for actual nonzero frames.
+ env=scanner();state=fallback(env);let width=0;
+ Object.defineProperty(env.d.querySelector('video'),'videoWidth',{get:()=>width});
+ let startingPreview=env.w.StockBridgeScan(()=>{});await tick();assert.equal(state.calls,0);
+ width=1280;await startingPreview;assert.equal(state.calls,1);assert.equal(env.d.querySelector('video').muted,true);assert.equal(env.d.querySelector('video').playsInline,true);assert.equal(env.d.querySelector('video').getAttribute('webkit-playsinline'),'');
+ env.d.querySelector('.scanner-close').click();cleanup(env);
+ // A blank/hung preview times out, releases the camera and offers explicit retry.
+ for(const mode of ['no-frames','hung-play','rejected-play']){
+  env=scanner();state=fallback(env);const video=env.d.querySelector('video');
+  Object.defineProperty(video,'videoWidth',{get:()=>0});
+  if(mode==='hung-play')video.play=()=>new Promise(()=>{});
+  if(mode==='rejected-play')video.play=async()=>{throw Error('NotAllowed');};
+  const schedule=env.w.setTimeout.bind(env.w);env.w.setTimeout=(cb,delay)=>schedule(cb,delay===6000?15:delay);
+  await env.w.StockBridgeScan(()=>assert.fail('blank preview accepted'));
+  assert.equal(state.calls,0);assert.ok(env.track.stopped);assert.equal(video.srcObject,null);assert.equal(env.d.querySelector('.scanner-retry').hidden,false);
+  assert.match(env.d.querySelector('.scanner-message').textContent,mode==='rejected-play'?/could not play/:/did not send a live picture/);cleanup(env);
+ }
+ // Permission-sheet visibility interruption resumes startup on return, but dismissal never restarts it.
+ for(const dismiss of [false,true]){
+  env=scanner();state=fallback(env);const pending=deferred();let hidden=false,requests=0;
+  Object.defineProperty(env.d,'hidden',{get:()=>hidden});env.w.navigator.mediaDevices.getUserMedia=()=>++requests===1?pending.promise:Promise.resolve(env.stream);
+  const startup=env.w.StockBridgeScan(()=>{});await tick();hidden=true;env.d.dispatchEvent(new env.w.Event('visibilitychange'));
+  if(dismiss)env.d.querySelector('.scanner-close').click();hidden=false;env.d.dispatchEvent(new env.w.Event('visibilitychange'));await tick();await tick();
+  pending.resolve({getTracks:()=>[{stop(){}}]});await startup;
+  assert.equal(requests,dismiss?1:2);assert.equal(state.calls,dismiss?0:1);env.d.querySelector('.scanner-close').click();cleanup(env);
+ }
  // Native scanning remains available. Failed/empty native support uses fallback.
  for(const mode of ['native','detect-error','formats-error','empty']){
   env=scanner();state=fallback(env);env.w.BarcodeDetector=class{static async getSupportedFormats(){if(mode==='formats-error')throw Error();return mode==='empty'?[]:['ean_13'];}async detect(){if(mode==='detect-error')throw Error();return [{rawValue:'5901234123457'}];}};
