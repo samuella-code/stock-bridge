@@ -1,6 +1,34 @@
 (() => {
  let stream=null, scanning=false, detector=null, generation=0, controls=null, timer=null, decoderPromise=null;
  const decoderUrl=new URL('vendor/zxing-browser-0.2.1.min.js',document.currentScript?.src||new URL('/static/js/barcode.js',location.href)).href;
+ // DecodeHintType.TRY_HARDER = 3 in the pinned ZXing library.
+ const readerHints=()=>new Map([[3,true]]);
+ async function readPhoto(decoder,url,session){
+  const image=new Image();
+  await new Promise((resolve,reject)=>{
+   const timeout=setTimeout(()=>reject(Error('PHOTO_LOAD')),15000);
+   image.onload=()=>{clearTimeout(timeout);resolve();};
+   image.onerror=()=>{clearTimeout(timeout);reject(Error('PHOTO_LOAD'));};
+   image.src=url;
+  });
+  if(!image.naturalWidth||!image.naturalHeight)throw Error('PHOTO_LOAD');
+  const reader=new decoder.BrowserMultiFormatOneDReader(readerHints());
+  // Bound canvas memory on phones, retry different scales and orientations.
+  for(const edge of [1600,1000,2200])for(const angle of [0,-5,5,-10,10,90]){
+   if(!dialog.open||generation!==session)throw Error('CANCELLED');
+   const scale=Math.min(1,edge/Math.max(image.naturalWidth,image.naturalHeight));
+   const width=Math.round(image.naturalWidth*scale),height=Math.round(image.naturalHeight*scale);
+   const radians=angle*Math.PI/180,sin=Math.abs(Math.sin(radians)),cos=Math.abs(Math.cos(radians));
+   const canvas=document.createElement('canvas');canvas.width=Math.ceil(width*cos+height*sin);canvas.height=Math.ceil(height*cos+width*sin);
+   const context=canvas.getContext('2d',{willReadFrequently:true});if(!context)throw Error('PHOTO_CANVAS');
+   context.fillStyle='white';context.fillRect(0,0,canvas.width,canvas.height);
+   context.translate(canvas.width/2,canvas.height/2);context.rotate(radians);context.drawImage(image,-width/2,-height/2,width,height);
+   try{return reader.decodeFromCanvas(canvas);}catch{/* Another bounded attempt may read a tilted or distant barcode. */}
+   finally{canvas.width=canvas.height=1;}
+   await new Promise(resolve=>setTimeout(resolve,0));
+  }
+  throw Error('PHOTO_NOT_FOUND');
+ }
  function loadDecoder(){
   if(window.ZXingBrowser?.BrowserMultiFormatOneDReader)return Promise.resolve(window.ZXingBrowser);
   if(!decoderPromise)decoderPromise=new Promise((resolve,reject)=>{
@@ -35,7 +63,7 @@
    message.textContent='Preparing camera scanner…';
    const decoder=await loadDecoder();
    if(!dialog.open||generation!==session)return;
-   const reader=new decoder.BrowserMultiFormatOneDReader(undefined,{delayBetweenScanAttempts:200,delayBetweenScanSuccess:500});
+   const reader=new decoder.BrowserMultiFormatOneDReader(readerHints(),{delayBetweenScanAttempts:200,delayBetweenScanSuccess:500});
    const active=await reader.decodeFromStream(stream,video,(result,error,scanControls)=>{
     if(!dialog.open||generation!==session){scanControls?.stop();return;}
     if(result){scanControls?.stop();finish(result.getText());}
@@ -54,7 +82,7 @@
     if(formats.length)detector=new BarcodeDetector({formats});
    }catch{/* The bundled decoder handles browsers with incomplete native support. */}}
    if(!dialog.open||generation!==session)return;
-   const camera=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+   const camera=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
    if(!dialog.open||generation!==session){camera.getTracks().forEach(t=>t.stop());return;}
    stream=camera;video.srcObject=stream;video.hidden=false;await video.play();
    if(!dialog.open||generation!==session)return;
@@ -72,9 +100,9 @@
    message.textContent='Reading barcode photo…';const decoder=await loadDecoder();
    if(!dialog.open||generation!==session)return;
    url=URL.createObjectURL(file);
-   const result=await new decoder.BrowserMultiFormatOneDReader().decodeFromImageUrl(url);
+   const result=await readPhoto(decoder,url,session);
    if(dialog.open&&generation===session)finish(result.getText());
-  }catch{if(dialog.open&&generation===session)message.textContent='No barcode could be read. Use a clear, close-up photo with the full barcode visible, or enter it manually.';}
+  }catch(error){if(dialog.open&&generation===session)message.textContent=error.message==='PHOTO_LOAD'?'This image could not be opened. Choose a JPG or PNG photo, or enter the barcode.':error.message==='PHOTO_CANVAS'?'This browser could not process the photo. Try another browser or enter the barcode.':error.message==='PHOTO_NOT_FOUND'?'No barcode could be read after several attempts. Crop closer to the lined barcode, keeping all bars and white margins visible, or enter the printed numbers.':'The scanner could not load. Please try again or enter the barcode.';}
   finally{if(url)URL.revokeObjectURL(url);photo.value='';}
  });
  window.StockBridgeScan=async callback=>{
