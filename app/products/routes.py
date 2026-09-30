@@ -33,7 +33,7 @@ def index():
     if query:
         escaped = query.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')
         term = f"%{escaped}%"
-        rows = rows.filter(or_(Product.name.ilike(term, escape='\\'), Product.sku.ilike(term, escape='\\'), Product.barcode.ilike(term, escape='\\'), Product.category.ilike(term, escape='\\'), Product.supplier_name.ilike(term, escape='\\')))
+        rows = rows.filter(or_(Product.name.ilike(term, escape='\\'), Product.sku.ilike(term, escape='\\'), Product.category.ilike(term, escape='\\'), Product.supplier_name.ilike(term, escape='\\')))
     if category:
         rows = rows.filter(Product.category == category)
     if stock_filter == "out":
@@ -74,13 +74,11 @@ def create():
                 db.session.commit()
             except IntegrityError:
                 db.session.rollback()
-                errors.append("Another product already uses this SKU or barcode. Please check it.")
+                errors.append("Another product already uses this SKU. Please check it.")
             else:
                 flash(f"{product.name} was added to inventory.", "success")
                 if request.form.get("after_save") == "another":
                     return redirect(url_for("products.create"))
-                if request.form.get("after_save") == "scan":
-                    return redirect(url_for("products.scan"))
                 return redirect(url_for("products.detail", product_id=product.id))
         for error in errors: flash(error, "error")
     return render_template("products/form.html", business=b, product=None)
@@ -98,7 +96,7 @@ def edit(product_id):
                 db.session.commit()
             except IntegrityError:
                 db.session.rollback()
-                errors.append("Another product already uses this SKU or barcode. Please check it.")
+                errors.append("Another product already uses this SKU. Please check it.")
             else:
                 flash(f"{product.name} was updated.", "success")
                 return redirect(url_for("products.detail", product_id=product.id))
@@ -180,23 +178,15 @@ def restore(product_id):
 @login_required
 def lookup():
     b = current_business()
+    if set(request.args) - {'q'}:
+        abort(400)
     term = request.args.get('q', '').strip()[:100]
-    barcode = request.args.get('barcode', '').strip()[:80]
-    if barcode:
-        rows = Product.query.filter_by(business_id=b.id, barcode=barcode).filter(
-            db.true() if request.args.get('include_archived') == '1' else Product.active.is_(True)).limit(1).all()
-    else:
-        rows = search_products(b.id, term).order_by(Product.name, Product.id).limit(15).all()
-    response = jsonify(products=[{'id':p.id, 'name':p.name, 'sku':p.sku, 'barcode':p.barcode,
+    rows = search_products(b.id, term).order_by(Product.name, Product.id).limit(15).all()
+    response = jsonify(products=[{'id':p.id, 'name':p.name, 'sku':p.sku,
         'active':p.active, 'stock':p.stock_quantity, 'unit':p.unit, 'price':str(p.selling_price), 'cost':str(p.buying_price),
         'url':url_for('products.detail', product_id=p.id)} for p in rows])
     response.headers['Cache-Control'] = 'no-store, private'
     return response
-
-@products_bp.get('/scan')
-@login_required
-def scan():
-    return render_template('products/scan.html', business=current_business())
 
 @products_bp.route('/quick-add', methods=['GET','POST'])
 @login_required
@@ -218,7 +208,7 @@ def quick_add():
                     saved = save_batch(b.id, rows, current_user.id)
                 except (ValueError, IntegrityError):
                     db.session.rollback()
-                    flash('Products could not be saved. Check duplicate SKUs/barcodes and try again.', 'error')
+                    flash('Products could not be saved. Check duplicate SKUs and try again.', 'error')
                 else:
                     flash(f'{saved} products added with opening stock.', 'success')
                     return redirect(url_for('products.index'))
@@ -241,39 +231,104 @@ def import_signer():
 @products_bp.route('/import', methods=['GET','POST'])
 @login_required
 def import_products():
-    from app.products.catalogue import read_spreadsheet, validate_rows, save_batch
+    from app.products.catalogue import HEADERS, read_spreadsheet, validate_rows, save_batch
+    from app.models import AuditLog
+    from app.products.product_lists import parse_product_list, read_text_file, existing_matches
     from itsdangerous import BadSignature, SignatureExpired
     from uuid import uuid4
+    from time import time
     b = current_business()
     if request.method == 'GET':
         return render_template('products/import.html', business=b)
-    # Applies only here, leaving payment/auth upload/request behavior unchanged.
     if request.content_length and request.content_length > 4 * 1024 * 1024:
         abort(413)
     try:
         if request.form.get('confirm') == 'yes':
             token = request.form.get('preview', '')
             if len(token) > 450000:
-                raise ValueError('This preview is too large. Upload a smaller file.')
+                raise ValueError('This preview is too large. Use a smaller batch.')
             payload = import_signer().loads(token, max_age=1200)
+            if 'issued_at' in payload and time() - payload['issued_at'] > 1200:
+                raise SignatureExpired('Import review expired')
             if payload['business'] != b.id or payload['user'] != current_user.id:
                 abort(403)
-            saved = save_batch(b.id, payload['rows'], current_user.id, receipt='Import ' + payload['nonce'])
-            flash(f'{saved} products imported.' if saved else 'This import was already completed. No products were added again.', 'success')
+            if AuditLog.query.filter_by(business_id=b.id, action='PRODUCT_IMPORT', description='Import ' + payload['nonce']).first():
+                flash('This import was already completed. No products were added again.', 'success')
+                return redirect(url_for('products.index'))
+            rows = payload['rows']
+            skipped, existing = payload.get('skipped', 0), payload.get('existing', 0)
+            if request.form.get('edited') == 'yes':
+                reviewed = []
+                selected_ids = set()
+                for index in range(len(rows)):
+                    choice = request.form.get(f'rows.{index}.action', 'new')
+                    if choice.startswith('existing:'):
+                        try:
+                            selected_ids.add(int(choice.split(':', 1)[1]))
+                        except ValueError:
+                            abort(400)
+                owned_ids = {p[0] for p in db.session.query(Product.id).filter(
+                    Product.business_id == b.id, Product.id.in_(selected_ids))} if selected_ids else set()
+                if selected_ids != owned_ids:
+                    abort(403)
+                for index, original in enumerate(rows):
+                    prefix = f'rows.{index}.'
+                    action = request.form.get(prefix + 'action', 'new')
+                    if action == 'skip':
+                        skipped += 1
+                        continue
+                    if action.startswith('existing:'):
+                        try:
+                            product_id = int(action.split(':', 1)[1])
+                        except ValueError:
+                            abort(400)
+                        # Use Existing is a skip, never an overwrite or a stock update.
+                        if product_id not in owned_ids:
+                            abort(403)
+                        existing += 1
+                        continue
+                    if action != 'new':
+                        abort(400)
+                    reviewed.append({**{field:request.form.get(prefix + field, '') for field in HEADERS.values()},
+                                     '_row':original.get('_row', index + 1)})
+                rows = reviewed
+            # Preserve the original nonce when correcting validation errors or retrying.
+            _, issues = validate_rows(b.id, rows) if rows else ([], [])
+            if issues:
+                revised_token = import_signer().dumps({**payload, 'rows':rows, 'skipped':skipped, 'existing':existing})
+                if len(revised_token) > 450000:
+                    raise ValueError('This preview is too large. Use a smaller batch.')
+                return render_template('products/import_preview.html', business=b, rows=rows, issues=issues,
+                    ready=len(rows)-len(issues), preview=revised_token,
+                    fields=HEADERS, matches=existing_matches(b.id, rows)), 400
+            saved = save_batch(b.id, rows, current_user.id, receipt='Import ' + payload['nonce'])
+            flash(f'Products imported successfully: {saved} products created; {skipped} rows skipped; {existing} existing products selected.'
+                  if saved else f'No products added. This import is completed; {skipped} rows skipped; {existing} existing products selected.', 'success')
             return redirect(url_for('products.index'))
-        upload = request.files.get('spreadsheet')
-        if not upload:
-            raise ValueError('Choose a CSV or Excel spreadsheet.')
-        rows = read_spreadsheet(upload)
+        method = request.form.get('method', 'spreadsheet')
+        if method == 'paste':
+            rows = parse_product_list(request.form.get('product_list', ''))
+        elif method == 'text':
+            upload = request.files.get('text_file')
+            if not upload:
+                raise ValueError('Choose a .txt product list.')
+            rows = read_text_file(upload)
+        elif method == 'spreadsheet':
+            upload = request.files.get('spreadsheet')
+            if not upload:
+                raise ValueError('Choose a CSV or Excel spreadsheet.')
+            rows = read_spreadsheet(upload)
+        else:
+            abort(400)
         _, issues = validate_rows(b.id, rows)
-        token = import_signer().dumps({'business':b.id,'user':current_user.id,'rows':rows,'nonce':str(uuid4())}) if not issues else None
-        if token and len(token) > 450000:
-            raise ValueError('This preview is too large. Split the spreadsheet into smaller files.')
+        token = import_signer().dumps({'business':b.id,'user':current_user.id,'rows':rows,'nonce':str(uuid4()),'issued_at':int(time())})
+        if len(token) > 450000:
+            raise ValueError('This preview is too large. Split the list into smaller batches.')
         return render_template('products/import_preview.html', business=b, rows=rows, issues=issues,
-            ready=len(rows)-len(issues), preview=token)
+            ready=len(rows)-len(issues), preview=token, fields=HEADERS, matches=existing_matches(b.id, rows))
     except (BadSignature, SignatureExpired):
-        flash('This preview expired or was changed. Upload the spreadsheet again.', 'error')
+        flash('This preview expired or was changed. Import the product list again.', 'error')
     except (ValueError, IntegrityError) as error:
         db.session.rollback()
-        flash(str(error) if isinstance(error, ValueError) else 'A SKU or barcode was added since the preview. Upload and review the file again.', 'error')
+        flash(str(error) if isinstance(error, ValueError) else 'A SKU was added since the preview. Review the list again.', 'error')
     return render_template('products/import.html', business=b), 400

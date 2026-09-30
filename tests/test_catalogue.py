@@ -45,15 +45,77 @@ def token(response):
 def confirm(client,preview):return client.post('/products/import',data={'confirm':'yes','preview':preview})
 
 def test_save_another_and_opening_zero(client):
-    response=client.post('/products/new',data={'name':'Zero','barcode':'001122','after_save':'another'})
+    response=client.post('/products/new',data={'name':'Zero','sku':'ZERO','after_save':'another'})
     assert response.location.endswith('/products/new')
     assert db.session.query(Product).one().stock_quantity==0
     assert StockMovement.query.one().quantity_change==0
-    response=client.post('/products/new',data={'name':'Full','stock_quantity':'20','after_save':'scan'})
-    assert response.location.endswith('/products/scan')
+    response=client.post('/products/new',data={'name':'Full','stock_quantity':'20','after_save':'detail'})
+    assert response.location.endswith(f"/products/{Product.query.filter_by(name='Full').one().id}")
     assert Product.query.filter_by(name='Full').one().opening_quantity==20
-    assert b'value="001234"' in client.get('/products/new?barcode=001234').data
     assert b'Save &amp; Add Another' in client.get('/products/new').data
+
+def test_three_entry_methods_and_no_scanner_ui(client):
+    from html.parser import HTMLParser
+    class Choices(HTMLParser):
+        links=[]
+        def handle_starttag(self,tag,attrs):
+            attrs=dict(attrs)
+            if tag=='a' and attrs.get('class')=='entry-choice':
+                self.links.append(attrs['href'])
+    parser=Choices();parser.feed(client.get('/products/').data.decode())
+    assert parser.links==['/products/new','/products/quick-add','/products/import']
+    client.post('/products/new',data={'name':'Visible','sku':'VISIBLE'})
+    pid=Product.query.one().id
+    for url in ['/products/','/products/new',f'/products/{pid}',f'/products/{pid}/edit',
+                '/products/quick-add','/products/import','/sales/','/restocking/']:
+        html=client.get(url).data.lower()
+        assert b'barcode' not in html and b'scan' not in html
+        assert b'getusermedia' not in html
+    template=client.get('/products/import/template').data.decode('utf-8-sig')
+    assert 'SKU' in template and 'Barcode' not in template
+    assert client.get('/products/scan').status_code==404
+    assert client.get('/products/recognize').status_code==404
+    assert client.get('/static/js/barcode.js').status_code==404
+
+def test_retained_barcode_is_never_read_or_overwritten(client):
+    client.post('/products/new',data={'name':'Legacy','sku':'OLD','barcode':'ignored','stock_quantity':10})
+    product=Product.query.one();assert product.barcode is None
+    product.barcode='retained-private-identifier';db.session.commit()
+    client.post(f'/products/{product.id}/edit',data={'name':'Updated','sku':'OLD','barcode':'overwrite'})
+    db.session.refresh(product)
+    assert product.barcode=='retained-private-identifier' and product.stock_quantity==10
+    result=client.get('/products/lookup?q=OLD').json['products'][0]
+    assert result['name']=='Updated' and 'barcode' not in result
+    assert client.get('/products/lookup?q=retained-private-identifier').json['products']==[]
+    search=client.get('/products/?q=retained-private-identifier').data
+    assert b'No matching products' in search and b'<strong>Updated</strong>' not in search
+    assert client.get('/products/lookup?barcode=retained-private-identifier').status_code==400
+
+@pytest.mark.parametrize('extension',['csv','xlsx'])
+def test_legacy_spreadsheet_column_ignored(client,extension):
+    headers=list(HEADERS)+['Barcode']
+    rows=[['First','','unit',10,250,350,5,'FIRST','','same'],
+          ['Second','','unit',20,250,350,5,'SECOND','',12345]]
+    if extension=='csv':
+        buffer=io.StringIO();writer=csv.writer(buffer);writer.writerow(headers);writer.writerows(rows)
+        file=io.BytesIO(buffer.getvalue().encode())
+    else:
+        workbook=Workbook();sheet=workbook.active;sheet.append(headers)
+        for row in rows:sheet.append(row)
+        file=io.BytesIO();workbook.save(file);file.seek(0)
+    response=client.post('/products/import',data={'spreadsheet':(file,f'legacy.{extension}')})
+    assert response.status_code==200 and b'Barcode' not in response.data
+    assert confirm(client,token(response)).status_code==302
+    assert Product.query.count()==2 and all(p.barcode is None for p in Product.query.all())
+    assert [p.stock_quantity for p in Product.query.order_by(Product.id)]==[10,20]
+
+def test_legacy_signed_preview_does_not_write_identifier(client):
+    from app.products.routes import import_signer
+    preview=import_signer().dumps({'business':1,'user':1,'nonce':'legacy-preview',
+        'rows':[{'name':'From prior preview','stock_quantity':7,'barcode':'ignore-me','sku':'PREVIEW'}]})
+    assert confirm(client,preview).status_code==302
+    product=Product.query.one()
+    assert product.barcode is None and product.stock_quantity==7 and product.sku=='PREVIEW'
 
 def test_quick_add_atomic_and_validation(client):
     quick(client,[{'name':'Coke','stock_quantity':100},{'name':'Fanta','stock_quantity':80}])
@@ -63,12 +125,24 @@ def test_quick_add_atomic_and_validation(client):
     response=quick(client,[{'name':'Bread'},{'name':'Bad','stock_quantity':-1}])
     assert b'whole number' in response.data
     assert Product.query.count()==2
-    quick(client,[{'name':'A','barcode':'abc'},{'name':'B','barcode':'abc'}])
+    quick(client,[{'name':'A','sku':'abc'},{'name':'B','sku':'abc'}])
     assert Product.query.count()==2
     quick(client,[{'name':'Same'},{'name':'Same'}])
     assert Product.query.count()==2
 
-@pytest.mark.parametrize('field,value', [('sku','sku-1'),('barcode','001122')])
+def test_quick_add_capacity_and_legacy_fields(client):
+    data=MultiDict()
+    for number in range(100):
+        for field in HEADERS.values():
+            data.add(field,str({'name':f'Quick {number}','sku':f'Q{number}','stock_quantity':number}.get(field,'')))
+        data.add('barcode','ignored-duplicate')
+    assert client.post('/products/quick-add',data=data).status_code==302
+    assert Product.query.count()==100 and StockMovement.query.count()==100
+    assert all(p.barcode is None for p in Product.query.all())
+    response=quick(client,[{'name':f'Extra {i}'} for i in range(101)])
+    assert b'1 to 100' in response.data and Product.query.count()==100
+
+@pytest.mark.parametrize('field,value', [('sku','sku-1')])
 def test_import_duplicates_in_file_and_database(client,field,value):
     client.post('/products/new',data={'name':'Existing',field:value})
     response=upload(client,[{'name':'New',field:value}])
@@ -77,10 +151,9 @@ def test_import_duplicates_in_file_and_database(client,field,value):
     assert b'Duplicate' in response.data and Product.query.count()==1
 
 def test_csv_preview_confirm_and_replay(client):
-    response=upload(client,[{'name':'Coke','stock_quantity':20,'sku':'coke','barcode':'000111','buying_price':250,'selling_price':350}])
+    response=upload(client,[{'name':'Coke','stock_quantity':20,'sku':'coke','buying_price':250,'selling_price':350}])
     assert Product.query.count()==0
     preview=token(response);assert confirm(client,preview).status_code==302
-    assert Product.query.one().barcode=='000111'
     assert Product.query.one().sku=='COKE'
     assert StockMovement.query.one().quantity_change==20
     assert confirm(client,preview).status_code==302
@@ -109,7 +182,7 @@ def test_import_preview_expiry(client,monkeypatch):
 
 @pytest.mark.parametrize('row', [{'name':'','stock_quantity':1},{'name':'Bad','stock_quantity':'-1'}, {'name':'Bad','stock_quantity':'1.5'},
     {'name':'Bad','selling_price':'NaN'}, {'name':'Bad','buying_price':'-2'}, {'name':'Bad','selling_price':'2.999'},
-    {'name':'Bad','stock_quantity':'2147483648'}, {'name':'Bad','barcode':'x'*81}])
+    {'name':'Bad','stock_quantity':'2147483648'}, {'name':'Bad','sku':'x'*61}])
 def test_invalid_import_row(client,row):
     response=upload(client,[row])
     assert b'need attention' in response.data and b'Confirm Import' not in response.data
@@ -122,11 +195,11 @@ def xlsx(client, rows):
     return client.post('/products/import',data={'spreadsheet':(buffer,'products.xlsx')})
 
 def test_xlsx_import_and_formula_rejection(client):
-    response=xlsx(client,[{'name':'Excel','stock_quantity':10,'barcode':'001234','selling_price':350}])
+    response=xlsx(client,[{'name':'Excel','stock_quantity':10,'sku':'001234','selling_price':350}])
     assert confirm(client,token(response)).status_code==302
     assert Product.query.one().stock_quantity==10
     assert xlsx(client,[{'name':'=1+1'}]).status_code==400
-    assert xlsx(client,[{'name':'Number Code','barcode':12345}]).status_code==400
+    assert xlsx(client,[{'name':'Number Code','sku':12345}]).status_code==400
     assert Product.query.count()==1
 
 @pytest.mark.parametrize('filename,blob', [('products.xls',b'old format'),('products.xlsx',b'not zip'),
@@ -149,14 +222,12 @@ def test_import_row_limit_and_actual_row_numbers(client):
     response=client.post('/products/import',data={'spreadsheet':(io.BytesIO(b'Product Name,Opening Quantity\nGood,1\n,\nBad,no\n'),'rows.csv')})
     assert b'Row 4' in response.data
 
-def test_search_filters_and_barcode_isolation(client):
-    quick(client,[{'name':'Coca-Cola','category':'Drinks','sku':'COKE','barcode':'000999','stock_quantity':4,'minimum_stock_level':5},
+def test_search_filters_and_business_isolation(client):
+    quick(client,[{'name':'Coca-Cola','category':'Drinks','sku':'COKE','stock_quantity':4,'minimum_stock_level':5},
                   {'name':'Bread','category':'Food','stock_quantity':0}, {'name':'Milk','category':'Drinks','stock_quantity':30}])
-    for term in ('Coca','COKE','000999'):
+    for term in ('Coca','COKE'):
         results=client.get('/products/lookup',query_string={'q':term}).json['products']
         assert len(results)==1 and results[0]['name']=='Coca-Cola'
-    assert client.get('/products/lookup?barcode=000999').json['products'][0]['stock']==4
-    assert client.get('/products/lookup?barcode=unknown').json['products']==[]
     assert b'Bread' not in client.get('/products/?category=Drinks').data
     assert b'Coca-Cola' in client.get('/products/?stock=low').data
     assert b'Milk' not in client.get('/products/?stock=low').data
@@ -165,7 +236,7 @@ def test_search_filters_and_barcode_isolation(client):
     assert client.get('/products/lookup?q=%25').json['products']==[]
     pid=Product.query.filter_by(name='Coca-Cola').one().id
     client.post('/auth/logout');client.post('/auth/login',data={'email':'two@example.com','password':'password123'})
-    assert client.get('/products/lookup?barcode=000999').json['products']==[]
+    assert client.get('/products/lookup?q=COKE').json['products']==[]
     for suffix in ('','/edit'):
         assert client.get(f'/products/{pid}{suffix}').status_code==404
     assert client.post('/sales/',data={'product_id':pid,'quantity':1,'unit_price':350}).status_code==404
@@ -173,7 +244,7 @@ def test_search_filters_and_barcode_isolation(client):
     assert client.post(f'/products/{pid}/adjust',data={'quantity':1,'direction':'increase','reason':'Returned'}).status_code==404
 
 def test_large_catalogue_is_bounded(client):
-    db.session.bulk_save_objects([Product(business_id=1,name=f'Product {i:04d}',sku=f'S{i}',barcode=f'{i:013d}',stock_quantity=10) for i in range(5000)])
+    db.session.bulk_save_objects([Product(business_id=1,name=f'Product {i:04d}',sku=f'S{i}',stock_quantity=10) for i in range(5000)])
     db.session.commit()
     response=client.get('/products/?sort=name&page=2&q=Product')
     assert b'Product 0020' in response.data and b'Product 0040' not in response.data
@@ -182,17 +253,16 @@ def test_large_catalogue_is_bounded(client):
     assert len(client.get('/sales/').data)<25000
     restock=client.get('/restocking/');assert len(restock.data)<60000
     assert b'Next insights' in restock.data
-    assert len(client.get('/products/lookup?barcode=0000000004999').json['products'])==1
+    assert len(client.get('/products/lookup?q=S4999').json['products'])==1
 
 def test_supermarket_end_to_end(client):
-    rows=[{'name':n,'stock_quantity':q,'barcode':c,'buying_price':cost,'selling_price':price} for n,q,c,cost,price in
+    rows=[{'name':n,'stock_quantity':q,'sku':c,'buying_price':cost,'selling_price':price} for n,q,c,cost,price in
           [('Coca-Cola',100,'111',250,350),('Fanta',80,'222',250,350),('Bread',30,'333',900,1100),('Indomie',200,'444',300,400)]]
     quick(client,rows)
-    assert client.get('/products/lookup?barcode=555').json['products']==[]
-    client.post('/products/new',data={'name':'New Barcode Product','barcode':'555','stock_quantity':10})
+    client.post('/products/new',data={'name':'Additional Product','sku':'555','stock_quantity':10})
     ids={p.name:p.id for p in Product.query.all()}
-    # IDs are obtained via the same tenant-scoped lookup used by a scanned basket.
-    coke=client.get('/products/lookup?barcode=111').json['products'][0]['id']
+    # IDs are obtained via the same tenant-scoped SKU lookup used by a searchable basket.
+    coke=client.get('/products/lookup?q=111').json['products'][0]['id']
     client.post('/sales/',data={'product_id':[coke,ids['Bread'],ids['Indomie']],'quantity':[2,1,3],'unit_price':['','','']})
     assert Sale.query.count()==1 and SaleItem.query.count()==3
     assert Sale.query.one().total==Decimal('3000')
@@ -240,29 +310,28 @@ def test_mid_operation_failure_rolls_back(client,monkeypatch,operation):
     assert Sale.query.count()==0 and SaleItem.query.count()==0 and Restock.query.count()==0
     assert StockMovement.query.count()==2
 
-def test_oversell_and_archived_barcode_uniqueness(client):
-    quick(client,[{'name':'One','stock_quantity':1,'barcode':'123'},{'name':'Two','stock_quantity':10}])
+def test_oversell_and_archived_sku_uniqueness(client):
+    quick(client,[{'name':'One','stock_quantity':1,'sku':'123'},{'name':'Two','stock_quantity':10}])
     ids=[p.id for p in Product.query.order_by(Product.id)]
     client.post('/sales/',data={'product_id':ids,'quantity':[2,1],'unit_price':['','']})
     assert Sale.query.count()==0 and Product.query.first().stock_quantity==1
     client.post(f'/products/{ids[0]}/adjust',data={'quantity':1,'direction':'decrease','reason':'Damaged'})
     client.post(f'/products/{ids[0]}/delete')
-    assert client.get('/products/lookup?barcode=123').json['products']==[]
-    client.post('/products/new',data={'name':'Duplicate','barcode':'123'})
+    assert client.get('/products/lookup?q=123').json['products']==[]
+    client.post('/products/new',data={'name':'Duplicate','sku':'123'})
     assert Product.query.count()==2
     assert b'One' in client.get('/products/?stock=archived').data
 
 def test_archived_filter_and_lookup(client):
-    client.post('/products/new',data={'name':'ArchivedUnique','barcode':'000111'})
+    client.post('/products/new',data={'name':'ArchivedUnique'})
     pid=Product.query.one().id
     client.post(f'/products/{pid}/delete')
     assert b'ArchivedUnique' in client.get('/products/?stock=archived').data
     assert b'ArchivedUnique' not in client.get('/products/').data
-    assert client.get('/products/lookup?barcode=000111').json['products']==[]
-    result=client.get('/products/lookup?barcode=000111&include_archived=1').json['products'][0]
-    assert result['active'] is False
+    assert client.get('/products/lookup?q=ArchivedUnique').json['products']==[]
+    assert b'Archived' in client.get(f'/products/{pid}').data
 
-@pytest.mark.parametrize('url',['/products/quick-add','/products/import','/products/scan','/sales/','/restocking/'])
+@pytest.mark.parametrize('url',['/products/quick-add','/products/import','/sales/','/restocking/'])
 def test_new_pages_render(client,url):
     assert client.get(url).status_code==200
 
@@ -299,9 +368,10 @@ def test_product_catalogue_migration_preserves_existing_data(tmp_path):
         assert User.query.one().password_hash=='unchanged' and User.query.one().admin_auth_version==7
         assert db.session.execute(text('SELECT status FROM payment')).scalar()=='success'
         assert 'uq_product_business_barcode' in {c['name'] for c in inspect(db.engine).get_unique_constraints('product')}
+        assert {'ix_product_business_active_name','ix_product_business_active_category'} <= {i['name'] for i in inspect(db.engine).get_indexes('product')}
 
 def test_thousand_product_import(client):
-    preview=token(upload(client,[{'name':f'Import {i}','sku':f'S{i}','barcode':f'{i:013d}','stock_quantity':i} for i in range(1000)]))
+    preview=token(upload(client,[{'name':f'Import {i}','sku':f'S{i}','stock_quantity':i} for i in range(1000)]))
     assert confirm(client,preview).status_code==302
     assert Product.query.count()==1000 and StockMovement.query.count()==1000
     assert Product.query.filter_by(sku='S999').one().stock_quantity==999
