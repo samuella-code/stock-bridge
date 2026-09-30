@@ -65,6 +65,25 @@ function cleanup(env){env.dom.window.close();}
   pending.resolve({getTracks:()=>[{stop(){}}]});await startup;
   assert.equal(requests,dismiss?1:2);assert.equal(state.calls,dismiss?0:1);env.d.querySelector('.scanner-close').click();cleanup(env);
  }
+ // Local diagnostics, gesture-driven play and alternate canvas preview remain usable.
+ env=scanner();state=fallback(env);let draws=0,plays=0;
+ env.w.HTMLCanvasElement.prototype.getContext=()=>({drawImage(){draws++;}});
+ env.d.querySelector('video').play=async()=>{plays++;};
+ const later=env.w.setTimeout.bind(env.w);env.w.setTimeout=(cb,delay)=>later(cb,delay===200?5:delay);
+ await env.w.StockBridgeScan(()=>{});assert.match(env.d.querySelector('.scanner-check').textContent,/Camera check v2.*1280.*720.*playing/);
+ env.d.querySelector('.scanner-play').click();await tick();assert.equal(plays,2);
+ env.d.querySelector('.scanner-alternate').click();await new Promise(r=>setTimeout(r,15));
+ assert.equal(env.d.querySelector('.scanner-preview-canvas').hidden,false);assert.ok(draws>0);
+ env.d.querySelector('.scanner-close').click();const stoppedDraws=draws;await new Promise(r=>setTimeout(r,15));assert.equal(draws,stoppedDraws);assert.equal(env.d.querySelector('.scanner-preview-canvas').hidden,true);cleanup(env);
+ // A camera request that never resolves reports a timeout, and a late stream is released.
+ env=scanner();state=fallback(env);const lateCamera=deferred();env.w.navigator.mediaDevices.getUserMedia=()=>lateCamera.promise;
+ const bounded=env.w.setTimeout.bind(env.w);env.w.setTimeout=(cb,delay)=>bounded(cb,delay===15000?5:delay);
+ await env.w.StockBridgeScan(()=>assert.fail('late camera accepted'));assert.equal(state.calls,0);assert.match(env.d.querySelector('.scanner-check').textContent,/request timed out/);assert.equal(env.d.querySelector('.scanner-retry').hidden,false);
+ lateCamera.resolve(env.stream);await tick();assert.ok(env.track.stopped);cleanup(env);
+ // Native capability discovery cannot block camera playback or fallback indefinitely.
+ env=scanner();state=fallback(env);env.w.BarcodeDetector=class{static getSupportedFormats(){return new Promise(()=>{});}};
+ const discoveryTimer=env.w.setTimeout.bind(env.w);env.w.setTimeout=(cb,delay)=>discoveryTimer(cb,delay===1500?5:delay);
+ await env.w.StockBridgeScan(()=>{});assert.equal(state.calls,1);env.d.querySelector('.scanner-close').click();cleanup(env);
  // Native scanning remains available. Failed/empty native support uses fallback.
  for(const mode of ['native','detect-error','formats-error','empty']){
   env=scanner();state=fallback(env);env.w.BarcodeDetector=class{static async getSupportedFormats(){if(mode==='formats-error')throw Error();return mode==='empty'?[]:['ean_13'];}async detect(){if(mode==='detect-error')throw Error();return [{rawValue:'5901234123457'}];}};
