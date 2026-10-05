@@ -22,6 +22,10 @@ class Business(db.Model):
   return max(0,int((remaining+86399)//86400))
  @property
  def has_write_access(self):
+  from flask import current_app
+  if current_app.config.get("SUBSCRIPTIONS_ENABLED"):
+   from app.subscriptions.entitlements import effective_access
+   return effective_access(self.owner, business=self).can_write
   if self.subscription_status == "active":
    return not self.subscription_ends_at or self.subscription_ends_at > datetime.utcnow()
   return False
@@ -132,6 +136,10 @@ class AdminPasswordReset(db.Model):
  user=db.relationship("User")
 
 class Payment(db.Model):
+ user_id=db.Column(db.Integer,db.ForeignKey("user.id"),index=True)
+ subscription_id=db.Column(db.Integer,db.ForeignKey("recurring_subscription.id"),index=True)
+ plan_code=db.Column(db.String(20))
+ billing_interval=db.Column(db.String(10))
  id=db.Column(db.Integer,primary_key=True)
  business_id=db.Column(db.Integer,db.ForeignKey("business.id"),nullable=True,index=True)
  customer_email=db.Column(db.String(180),nullable=False,index=True)
@@ -146,5 +154,51 @@ class Payment(db.Model):
  receipt_email_claimed_at=db.Column(db.DateTime)
  receipt_email_sent_at=db.Column(db.DateTime)
  created_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False)
+class AccountBilling(db.Model):
+ user_id=db.Column(db.Integer,db.ForeignKey("user.id"),primary_key=True)
+ trial_eligible=db.Column(db.Boolean,nullable=False,default=False,server_default="false")
+ trial_started_at=db.Column(db.DateTime)
+ trial_ends_at=db.Column(db.DateTime)
+ legacy_payment_id=db.Column(db.Integer,db.ForeignKey("payment.id"),unique=True)
+ legacy_business_id=db.Column(db.Integer,db.ForeignKey("business.id"))
+ legacy_granted_at=db.Column(db.DateTime)
+ primary_business_id=db.Column(db.Integer,db.ForeignKey("business.id"))
+ created_at=db.Column(db.DateTime,nullable=False,default=datetime.utcnow)
+
+class RecurringSubscription(db.Model):
+ id=db.Column(db.Integer,primary_key=True)
+ user_id=db.Column(db.Integer,db.ForeignKey("user.id"),nullable=False,index=True)
+ business_id=db.Column(db.Integer,db.ForeignKey("business.id"),nullable=False)
+ plan_code=db.Column(db.String(20),nullable=False)
+ billing_interval=db.Column(db.String(10),nullable=False)
+ amount_kobo=db.Column(db.Integer,nullable=False)
+ provider_plan_code=db.Column(db.String(80),nullable=False)
+ provider_customer_code=db.Column(db.String(80))
+ provider_subscription_code=db.Column(db.String(80),unique=True)
+ status=db.Column(db.String(30),nullable=False,default="initializing",index=True)
+ checkout_reference=db.Column(db.String(100),unique=True)
+ checkout_url=db.Column(db.String(500))
+ subscription_started_at=db.Column(db.DateTime)
+ current_period_start=db.Column(db.DateTime)
+ current_period_end=db.Column(db.DateTime)
+ next_renewal_at=db.Column(db.DateTime)
+ cancel_at_period_end=db.Column(db.Boolean,nullable=False,default=False,server_default="false")
+ cancelled_at=db.Column(db.DateTime)
+ replacement_of_id=db.Column(db.Integer,db.ForeignKey("recurring_subscription.id"),unique=True)
+ starts_at=db.Column(db.DateTime)
+ last_event_at=db.Column(db.DateTime)
+ created_at=db.Column(db.DateTime,nullable=False,default=datetime.utcnow)
+
+class BillingEvent(db.Model):
+ id=db.Column(db.Integer,primary_key=True)
+ event_key=db.Column(db.String(180),nullable=False,unique=True)
+ user_id=db.Column(db.Integer,db.ForeignKey("user.id"),nullable=False,index=True)
+ subscription_id=db.Column(db.Integer,db.ForeignKey("recurring_subscription.id"))
+ kind=db.Column(db.String(40),nullable=False)
+ message=db.Column(db.String(500),nullable=False)
+ email_claimed_at=db.Column(db.DateTime)
+ email_sent_at=db.Column(db.DateTime)
+ created_at=db.Column(db.DateTime,nullable=False,default=datetime.utcnow)
+
 @login_manager.user_loader
 def load_user(i): return db.session.get(User,int(i))

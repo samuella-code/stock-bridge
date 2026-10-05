@@ -73,3 +73,17 @@
 .preview-unlock { display:flex; align-items:center; justify-content:space-between; gap:1.5rem; }
 @media(max-width:850px) { .public-hero { grid-template-columns:1fr; padding:3rem 1.25rem; } .public-nav { padding:1rem 1.25rem; } .public-features { grid-template-columns:1fr; padding:0 1.25rem; } .public-offer { margin:2rem 1.25rem; } .preview-page .public-features { padding:0; } }
 @media(max-width:560px) { .public-brand strong { font-size:1rem; } .public-nav { flex-wrap:wrap; } .public-nav nav { width:100%; justify-content:space-between; } .public-nav nav a { flex:1; text-align:center; } .public-actions a { flex:1; min-width:140px; } .public-hero h1 { font-size:2.3rem; } .public-offer,.preview-unlock { flex-direction:column; align-items:stretch; } .public-offer .primary-btn,.preview-unlock .primary-btn { min-height:48px; } }
+
+/* Subscription tools reuse the customer workspace design. */
+.billing-access-banner { margin:16px 24px; line-height:1.6; }
+.billing-page { max-width:1080px; }
+.billing-page .panel-card { margin:18px 0; min-width:0; overflow-wrap:anywhere; }
+.billing-plan-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
+.billing-page form { display:grid; gap:12px; margin-top:16px; }
+.billing-page label { display:block; line-height:1.6; }
+.billing-page select { display:block; width:100%; min-height:48px; padding:10px; font:inherit; border:1px solid var(--line); border-radius:10px; }
+.billing-page input[type=checkbox] { width:auto; min-width:20px; min-height:20px; vertical-align:middle; }
+.billing-page button,.billing-page a.primary-btn,.billing-page a.secondary-btn { min-height:48px; padding:12px 18px; display:inline-flex; align-items:center; justify-content:center; }
+.billing-page button:disabled { opacity:.55; cursor:not-allowed; }
+.billing-page summary { cursor:pointer; min-height:44px; padding:12px 0; font-weight:700; }
+@media(max-width:640px) { .billing-plan-grid { grid-template-columns:1fr; gap:0; } .billing-access-banner { margin:12px; } }

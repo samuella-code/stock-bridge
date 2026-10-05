@@ -2,7 +2,7 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 
-from flask import Flask, abort, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, has_request_context, abort, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import LoginManager, current_user, logout_user
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
@@ -81,23 +81,36 @@ def create_app(test_config=None):
                 if request.endpoint not in {"auth.logout", "static"} and not (request.endpoint in {"admin.login", "admin.forgot_password", "admin.reset_password"} and current_user.admin_enabled and not current_user.suspended_at):
                     return render_template("admin/suspended.html"), 403
         verified_areas = {"main", "products", "sales", "expenses", "restocking", "profile"}
+        if app.config.get("SUBSCRIPTIONS_ENABLED"):
+            verified_areas.add("subscriptions")
         paid_areas = {"products", "sales", "expenses", "restocking"}
         if current_user.is_authenticated and (request.blueprint in verified_areas or request.endpoint in {"payments.checkout", "payments.initialize"}):
             if not current_user.email_verified_at:
                 flash("Verify your email to access StockBridge.", "warning")
                 return redirect(url_for("auth.verification_pending"))
+        if app.config.get("SUBSCRIPTIONS_ENABLED") and current_user.is_authenticated and current_user.email_verified_at:
+            from app.subscriptions.entitlements import start_trial
+            if start_trial(current_user):
+                db.session.commit()
         if current_user.is_authenticated and request.blueprint in paid_areas:
-            business = current_user.businesses[0]
+            from app.subscriptions.entitlements import selected_business
+            business = selected_business(current_user)
             db.session.refresh(business)
-            if not business.has_write_access:
-                flash("Unlock Products, Sales, Expenses and Restocking with the one-time ₦3,000 payment.", "warning")
+            if not business.has_write_access and (not app.config.get("SUBSCRIPTIONS_ENABLED") or request.method not in {"GET", "HEAD", "OPTIONS"}):
+                flash("Your records remain available. Choose a plan to record new business activity." if app.config.get("SUBSCRIPTIONS_ENABLED") else "Unlock Products, Sales, Expenses and Restocking with the one-time ₦3,000 payment.", "warning")
                 return redirect(url_for("subscriptions.index"))
 
     @app.context_processor
     def subscription_context():
-        if not current_user.is_authenticated or not current_user.businesses:
+        if not has_request_context() or not current_user.is_authenticated or not current_user.businesses:
             return {}
-        return {"subscription_business": current_user.businesses[0]}
+        from app.subscriptions.entitlements import selected_business
+        business=selected_business(current_user)
+        context = {"subscription_business": business}
+        if app.config.get("SUBSCRIPTIONS_ENABLED"):
+            from app.subscriptions.entitlements import effective_access, access_label
+            context.update(billing_access=effective_access(current_user, business=business), billing_label=access_label(current_user))
+        return context
 
     @app.after_request
     def protect_admin_responses(response):
@@ -139,4 +152,9 @@ def create_app(test_config=None):
         # filesystem must not be used for persistent application logs.
         app.logger.setLevel(logging.INFO)
 
+    from app.subscriptions.notifications import register_commands
+    register_commands(app)
+    if app.config.get("SUBSCRIPTIONS_ENABLED"):
+        from app.subscriptions.entitlements import access_label
+        app.jinja_env.globals["billing_access_label"] = access_label
     return app

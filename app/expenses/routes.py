@@ -1,3 +1,4 @@
+from app.subscriptions.entitlements import selected_business
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
@@ -14,7 +15,7 @@ CATEGORIES = ("Transportation", "Electricity", "Rent", "Packaging", "Wages",
 @expenses_bp.route("/", methods=["GET", "POST"])
 @login_required
 def index():
-    b = current_user.businesses[0]
+    b = selected_business(current_user)
     if request.method == "POST":
         try:
             amount = Decimal(request.form["amount"])
@@ -44,7 +45,7 @@ def index():
 @expenses_bp.post("/<int:expense_id>/delete")
 @login_required
 def delete(expense_id):
-    b = current_user.businesses[0]
+    b = selected_business(current_user)
     row = db.session.get(Expense, expense_id)
     if not row or row.business_id != b.id: abort(404)
     reason = request.form.get("reason", "").strip()

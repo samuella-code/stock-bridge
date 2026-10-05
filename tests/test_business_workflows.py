@@ -155,7 +155,7 @@ def test_legacy_migration_preserves_sales_and_stock(tmp_path):
         db.session.execute(text("""INSERT INTO sale (id,business_id,product_id,quantity,unit_price,unit_cost,sold_at)
             VALUES (1,1,1,3,350,250,CURRENT_TIMESTAMP)"""))
         db.session.commit()
-        upgrade()
+        upgrade(revision="0012_product_catalogue")
         assert Sale.query.count()==1
         assert SaleItem.query.one().unit_cost==250
         assert Sale.query.one().total==1050

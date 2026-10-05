@@ -363,7 +363,7 @@ def test_product_catalogue_migration_preserves_existing_data(tmp_path):
         db.session.execute(text("INSERT INTO business (id,user_id,name,created_at,subscription_plan,subscription_status,trial_started_at,trial_ends_at) VALUES (1,1,'Original',CURRENT_TIMESTAMP,'lifetime','active',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"))
         db.session.execute(text("INSERT INTO product (id,business_id,name,sku,buying_price,selling_price,stock_quantity,minimum_stock_level,supplier_lead_time,safety_stock,created_at,updated_at,unit,active,opening_quantity) VALUES (1,1,'Existing','SKU',250,350,20,5,2,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'bottle',1,20)"))
         db.session.execute(text("INSERT INTO payment (id,business_id,customer_email,reference,provider,product,amount_kobo,currency,status,created_at) VALUES (1,1,'admin@example.com','old','paystack','lifetime',300000,'NGN','success',CURRENT_TIMESTAMP)"))
-        db.session.commit();upgrade()
+        db.session.commit();upgrade(revision="0012_product_catalogue")
         assert Product.query.one().stock_quantity==20 and Product.query.one().barcode is None
         assert User.query.one().password_hash=='unchanged' and User.query.one().admin_auth_version==7
         assert db.session.execute(text('SELECT status FROM payment')).scalar()=='success'

@@ -28,7 +28,7 @@
         <div class="auth-form-card">
             <p class="eyebrow">Get started</p>
             <h2>Create your StockBridge workspace</h2>
-            <p class="muted">Create an account, verify your email, then explore StockBridge. Unlock the business tools with ₦3,000 once when you're ready.</p>
+            <p class="muted">{{ 'Create an account and verify your email to start your 7-day trial. No card required. Then choose Basic or Plus.' if config.SUBSCRIPTIONS_ENABLED else "Create an account, verify your email, then explore StockBridge. Unlock the business tools with ₦3,000 once when you're ready." }}</p>
 
             <form method="POST" class="form-stack">
                 <label>
