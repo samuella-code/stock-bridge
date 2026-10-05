@@ -175,7 +175,11 @@ def test_lifetime_plus_cancel_expire_failure_falls_back_without_deleting(app,fak
     billing.cancel(u,s);assert effective_access(u).kind=='legacy_lifetime_plus'
     assert any(path=='/subscription/disable' for path,_,_ in fake.calls)
     s.status='past_due';s.current_period_start=datetime.utcnow()-timedelta(days=35);s.current_period_end=datetime.utcnow()-timedelta(seconds=1);db.session.commit()
-    assert effective_access(u,business=b).kind=='legacy_lifetime' and b.has_write_access
+    assert effective_access(u,business=b).kind=='legacy_lifetime' and not b.has_write_access
+    from app.businesses.service import choose_primary
+    assert choose_primary(u,b.id).id==b.id
+    db.session.commit()
+    assert b.has_write_access
     other=Business.query.filter(Business.id!=b.id).one();assert not effective_access(u,business=other).can_write
     assert Business.query.count()==2 and db.session.get(AccountBilling,u.id).legacy_payment_id==old.id
     with pytest.raises(ValueError):billing.begin_checkout(u,'basic','monthly')
@@ -497,7 +501,8 @@ def test_pending_subscription_alone_and_mode_mismatch_never_grant(client,fake):
 def test_primary_business_remains_owned_during_one_business_fallback(client):
     u,b=seed();legacy(u,b)
     second=Business(user_id=u.id,name='Chosen primary');db.session.add(second);db.session.flush()
-    a=db.session.get(AccountBilling,u.id);a.primary_business_id=second.id;db.session.commit();login(client,u)
+    from app.businesses.service import choose_primary
+    choose_primary(u,second.id);db.session.commit();login(client,u)
     client.post('/products/new',data={'name':'Right business','stock_quantity':1,'buying_price':10,'selling_price':20})
     assert Product.query.one().business_id==second.id
     assert not effective_access(u,business=b).can_write

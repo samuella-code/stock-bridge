@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block page_title %}My Businesses{% endblock %}
+{% block content %}
+<section class="dashboard-wrap">
+{% if choosing %}<div class="panel-card"><h2>Choose the business you want to keep active.</h2><p>Your current entitlement supports one business. Both businesses and all their records are safely stored. Choose one to continue; Plus restores access to the other.</p></div>{% endif %}
+<div class="business-grid">
+{% for b in businesses %}
+<article class="panel-card"><h2>{{ b.name }}</h2>
+<p>{% if b.suspended_at %}Suspended{% elif choosing %}Selection required{% elif b.id in allowed %}Available{% else %}Locked — data preserved{% endif %}{% if not choosing and active and active.id == b.id and b.id in allowed %} · Currently viewing{% endif %}</p>
+<p class="muted">Created {{ b.created_at.strftime('%d %b %Y') }}</p>
+{% if b.id in allowed %}<form method="POST" action="{{ url_for('businesses.switch', business_id=b.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="primary-btn">View business</button></form><p><a href="{{ url_for('businesses.edit', business_id=b.id) }}">Edit business</a></p>{% endif %}
+{% if can_choose and not b.suspended_at %}<form method="POST" action="{{ url_for('businesses.choose', business_id=b.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="secondary-btn">Keep this business active</button></form>{% endif %}
+</article>
+{% else %}<article class="panel-card"><h2>No businesses yet</h2><p>Add your business to start recording stock and sales.</p></article>{% endfor %}
+</div>
+{% if can_add %}<p><a class="primary-btn button-link" href="{{ url_for('businesses.create') }}">Add Business</a></p>{% endif %}
+<p><a href="{{ url_for('subscriptions.index') }}">Manage plan / Upgrade to Plus</a></p>
+</section>
+{% endblock %}

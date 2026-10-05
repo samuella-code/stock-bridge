@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block page_title %}{{ 'Edit Business' if editing else 'Add Business' }}{% endblock %}
+{% block content %}<section class="dashboard-wrap"><form class="panel-card form-stack" method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{% if not editing %}<input type="hidden" name="creation_token" value="{{ creation_token }}">{% endif %}
+<label><span>Business name</span><input name="name" maxlength="140" value="{{ editing.name if editing else '' }}" required></label>
+<p>Products, stock, sales, expenses and reports stay separate for each business.</p>
+<button class="primary-btn">{{ 'Save changes' if editing else 'Add Business' }}</button>
+<a href="{{ url_for('businesses.index') }}">Cancel</a></form></section>{% endblock %}

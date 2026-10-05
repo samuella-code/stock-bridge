@@ -33,7 +33,7 @@ def index():
         return render_template('subscriptions/index.html', business=business, lifetime_price=current_app.config['LIFETIME_PRICE_NAIRA'])
     access = effective_access(current_user, business=business) if current_user.is_authenticated else None
     history = RecurringSubscription.query.filter_by(user_id=current_user.id).order_by(RecurringSubscription.id.desc()).limit(20).all() if current_user.is_authenticated else []
-    events = BillingEvent.query.filter(BillingEvent.user_id==current_user.id, BillingEvent.kind!='provider_event').order_by(BillingEvent.id.desc()).limit(10).all() if current_user.is_authenticated else []
+    events = BillingEvent.query.filter(BillingEvent.user_id==current_user.id, BillingEvent.kind.notin_(('provider_event','business_created','business_selected'))).order_by(BillingEvent.id.desc()).limit(10).all() if current_user.is_authenticated else []
     return render_template('subscriptions/billing.html', access=access, history=history, events=events, account=account_for(current_user) if current_user.is_authenticated else None, provider_ready=provider.configured())
 
 

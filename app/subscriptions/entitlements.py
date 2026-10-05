@@ -1,7 +1,7 @@
 """Account-owned entitlements; no provider calls, deletions or browser dates."""
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from flask import current_app
+from flask import current_app, has_request_context, session
 from sqlalchemy import update
 from app import db
 from app.models import AccountBilling, Business, RecurringSubscription, BillingEvent
@@ -73,13 +73,16 @@ def effective_access(user, *, business=None, now=None):
         kind, limit = 'trial', 1
         days = max(0, int(((account.trial_ends_at-now).total_seconds()+86399)//86400))
     primary = account.primary_business_id if account else None
+    if primary and not Business.query.filter_by(id=primary, user_id=user.id).first():
+        primary = None
     allowed = True
     if business is not None:
         allowed = business.user_id == user.id and not business.suspended_at
         if limit == 1:
-            allowed = allowed and business.id == primary
+            from app.businesses.service import selection_required
+            allowed = allowed and not selection_required(user, Access(kind, True, limit)) and (business.id == primary or (primary is None and Business.query.filter_by(user_id=user.id).count() == 1))
         elif limit > 1:
-            # Future business switcher must use this same deterministic slot rule.
+            # The switcher and entitlement checks share the same owned slots.
             ids = [r[0] for r in db.session.query(Business.id).filter_by(user_id=user.id).order_by(Business.id).limit(limit)]
             allowed = allowed and business.id in ids
     return Access(kind, bool(limit and allowed and user.email_verified_at and not user.suspended_at
@@ -106,11 +109,22 @@ def access_label(user):
 
 
 def selected_business(user):
-    """Current one-business UI uses the persisted slot; no new switcher is introduced."""
-    if current_app.config.get('SUBSCRIPTIONS_ENABLED'):
-        account=account_for(user)
-        if account and account.primary_business_id:
-            business=db.session.get(Business,account.primary_business_id)
-            if business and business.user_id==user.id:
-                return business
-    return user.businesses[0] if user.businesses else None
+    """Resolve a session context only after ownership and entitlement checks."""
+    from app.businesses.service import owned_businesses, accessible_business
+    businesses = owned_businesses(user)
+    if not businesses:
+        return None
+    if not current_app.config.get('SUBSCRIPTIONS_ENABLED'):
+        return businesses[0]
+    active_id = session.get('active_business_id') if has_request_context() else None
+    active = next((b for b in businesses if b.id == active_id), None)
+    if accessible_business(user, active):
+        return active
+    account = account_for(user)
+    primary = next((b for b in businesses if account and b.id == account.primary_business_id), None)
+    fallback = next((b for b in [primary] + businesses if accessible_business(user, b)), None)
+    if fallback and has_request_context():
+        session['active_business_id'] = fallback.id
+    # Billing remains reachable while a downgrade choice is required. The
+    # request guard blocks ALL business screens until that choice is made.
+    return fallback or primary or businesses[0]
