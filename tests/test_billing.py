@@ -222,6 +222,36 @@ def test_charge_before_subscription_create_reconciles_safely(client,fake):
     assert effective_access(u).can_write and BillingEvent.query.filter_by(kind='subscription_paid').count()==1
 
 
+def test_subscription_embedded_plan_without_domain_reconciles_idempotently(client,fake):
+    u,b=seed(eligible=False)
+    billing.begin_checkout(u,'basic','monthly')
+    plan=fake.plan('basic','monthly');plan.pop('domain')
+    fake.overrides['SUB_new']={'plan':plan}
+    event={'event':'subscription.create','data':{'domain':'test','subscription_code':'SUB_new'}}
+    assert webhook(client,event).status_code==200
+    assert webhook(client,event).status_code==200
+    assert effective_access(u).kind=='basic'
+    assert Payment.query.filter_by(status='success').count()==1
+    assert BillingEvent.query.filter_by(kind='subscription_paid').count()==1
+    assert all(method=='GET' for path,method,_ in fake.calls if path.startswith('/plan/'))
+
+
+@pytest.mark.parametrize('field,value',[('domain','live'),('plan_code','PLN_other'),('amount',500000),('currency','USD'),('interval','annually')])
+def test_missing_embedded_domain_rejects_authoritative_plan_mismatch(app,fake,monkeypatch,field,value):
+    u,b=seed(eligible=False)
+    billing.begin_checkout(u,'basic','monthly')
+    plan=fake.plan('basic','monthly');plan.pop('domain')
+    fake.overrides['SUB_new']={'plan':plan}
+    original=fake.call
+    def mismatched(path,method='GET',payload=None):
+        result=original(path,method,payload)
+        if path=='/plan/PLN_basic_monthly':result={**result,field:value}
+        return result
+    monkeypatch.setattr(provider,'call',mismatched)
+    with pytest.raises(ValueError):provider.fetch_subscription('SUB_new')
+    assert Payment.query.filter_by(status='success').count()==0
+
+
 @pytest.mark.parametrize('old,old_interval,new,new_interval',[('basic','monthly','plus','monthly'),('plus','monthly','basic','monthly'),('basic','monthly','basic','yearly'),('plus','yearly','plus','monthly')])
 def test_safe_replacement_changes_and_no_duplicate_creation(app,fake,old,old_interval,new,new_interval):
     u,b=seed(eligible=False);s=purchase(u,old,old_interval);end=s.current_period_end

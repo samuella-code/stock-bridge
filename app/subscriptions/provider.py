@@ -48,7 +48,22 @@ def validate_plan(data,code,spec):
 
 
 def fetch_subscription(code):
-    return call('/subscription/'+identifier(code))
+    data=call('/subscription/'+identifier(code))
+    # Some subscription responses omit domain on their embedded plan.
+    # Resolve it from the authenticated Plan API, never from an assumed mode.
+    plan=data.get('plan') if isinstance(data,dict) else None
+    if isinstance(plan,dict) and 'domain' not in plan:
+        plan_code=identifier(plan.get('plan_code'))
+        if not plan_code.startswith('PLN_'):
+            raise ValueError('Provider subscription plan needs review.')
+        authoritative=call('/plan/'+plan_code)
+        if not isinstance(authoritative,dict) or any(
+            authoritative.get(field)!=plan.get(field)
+            for field in ('plan_code','amount','currency','interval')
+        ) or authoritative.get('domain')!=mode():
+            raise ValueError('Provider subscription plan differs from the verified plan.')
+        data={**data,'plan':{**plan,'domain':authoritative['domain']}}
+    return data
 
 
 def disable_subscription(code,token):
