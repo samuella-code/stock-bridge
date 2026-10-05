@@ -1,3 +1,4 @@
+from app.subscriptions.entitlements import selected_business
 from datetime import datetime
 from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
@@ -12,7 +13,7 @@ products_bp = Blueprint("products", __name__, url_prefix="/products")
 ADJUSTMENT_REASONS = ("Damaged", "Expired", "Lost", "Stock count correction", "Returned", "Other")
 
 def current_business():
-    return current_user.businesses[0] if current_user.businesses else None
+    return selected_business(current_user)
 
 def owned_product(product_id):
     business = current_business()

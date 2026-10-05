@@ -13,7 +13,7 @@ class PaystackError(RuntimeError):
         self.code = code if isinstance(code, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,60}", code) else None
 
 
-def _request(path, secret_key, method="GET", payload=None):
+def _request(path, secret_key, method="GET", payload=None, *, allow_empty=False):
     body = json.dumps(payload).encode() if payload is not None else None
     request = Request(
         f"https://api.paystack.co{path}",
@@ -48,6 +48,8 @@ def _request(path, secret_key, method="GET", payload=None):
         raise PaystackError("Paystack returned an invalid response.")
     if not result.get("status"):
         raise PaystackError("Paystack rejected the transaction.", code=result.get("code"))
+    if allow_empty and result.get("status") is True and result.get("data") is None:
+        return {}
     if not isinstance(result.get("data"), dict):
         raise PaystackError("Paystack returned an invalid response.")
     return result["data"]

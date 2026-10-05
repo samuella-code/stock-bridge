@@ -58,6 +58,18 @@ def _activate_account(payment, *, commit=True):
     business = existing_user.businesses[0]
     if payment.business_id is not None and payment.business_id != business.id:
         return False
+    if current_app.config.get("SUBSCRIPTIONS_ENABLED"):
+        if payment.product != "lifetime" or payment.provider != "paystack" or payment.amount_kobo != 300000 or payment.currency != "NGN" or not payment.paid_at:
+            return False
+        from app.subscriptions.entitlements import account_for
+        from app.subscriptions.billing import lock_account
+        lock_account(existing_user.id)
+        account = account_for(existing_user, create=True)
+        if not account.legacy_granted_at:
+            account.legacy_payment_id = payment.id
+            account.legacy_business_id = business.id
+            account.legacy_granted_at = datetime.utcnow()
+            account.primary_business_id = business.id
     business.subscription_plan = "lifetime"
     business.subscription_status = "active"
     business.subscription_ends_at = None
@@ -70,6 +82,8 @@ def _activate_account(payment, *, commit=True):
 @payments_bp.get("/checkout")
 @login_required
 def checkout():
+    if current_app.config.get("SUBSCRIPTIONS_ENABLED"):
+        return redirect(url_for("subscriptions.index"))
     if current_user.is_authenticated and current_user.businesses[0].has_write_access:
         return redirect(url_for("main.dashboard"))
     configured = _payments_configured()
@@ -79,6 +93,8 @@ def checkout():
 @payments_bp.post("/initialize")
 @login_required
 def initialize():
+    if current_app.config.get("SUBSCRIPTIONS_ENABLED"):
+        return redirect(url_for("subscriptions.index"))
     email = current_user.email
     if not email or "@" not in email:
         flash("Enter a valid email address.", "error")
@@ -174,10 +190,30 @@ def webhook():
         event = json.loads(request.get_data(as_text=True))
     except (json.JSONDecodeError, UnicodeDecodeError):
         return jsonify(status="invalid payload"), 400
+    if not isinstance(event, dict):
+        return jsonify(status="invalid payload"), 400
+    if not isinstance(event.get('data') or {}, dict):
+        return jsonify(status="invalid payload"), 400
+    old_lifetime = event.get('event') == 'charge.success' and Payment.query.filter_by(
+        reference=(event.get('data') or {}).get('reference'), product='lifetime').first() is not None
+    billing_names = {'charge.success', 'subscription.create', 'subscription.not_renew',
+        'subscription.disable', 'invoice.create', 'invoice.update', 'invoice.payment_failed'}
+    if current_app.config.get("SUBSCRIPTIONS_ENABLED") and not old_lifetime and event.get('event') in billing_names:
+        from app.subscriptions.billing import process_event
+        from app.subscriptions.provider import configured
+        if not configured():
+            return jsonify(status="billing disabled"), 503
+        try:
+            if process_event(event):
+                return jsonify(status="ok"), 200
+        except (ValueError, PaystackError):
+            db.session.rollback()
+            current_app.logger.warning("Subscription event needs reconciliation; no access extended.")
+            return jsonify(status="billing reconciliation required"), 503
     if event.get("event") == "charge.success":
         data = event.get("data") or {}
         payment = Payment.query.filter_by(reference=data.get("reference")).first()
-        if payment:
+        if payment and payment.product == "lifetime":
             if payment.status != "success":
                 _confirm(payment, data)
             if payment.status == "success":

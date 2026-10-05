@@ -52,6 +52,9 @@ def signup():
         business = Business(user_id=user.id, name=business_name, subscription_plan="starter", subscription_status="inactive", trial_started_at=now, trial_ends_at=now)
         db.session.add(business)
         db.session.flush()
+        if current_app.config.get("SUBSCRIPTIONS_ENABLED"):
+            from app.models import AccountBilling
+            db.session.add(AccountBilling(user_id=user.id, trial_eligible=True, primary_business_id=business.id))
         log("USER_REGISTERED", f"User {user.id} registered.", actor=user, business_id=business.id)
         log("BUSINESS_CREATED", f"Business {business.id} created.", actor=user, business_id=business.id)
         db.session.commit()
@@ -178,6 +181,9 @@ def verify_email(token):
         return redirect(url_for("auth.login"))
     first_verification = user.email_verified_at is None
     user.email_verified_at = user.email_verified_at or datetime.utcnow()
+    if current_app.config.get("SUBSCRIPTIONS_ENABLED"):
+        from app.subscriptions.entitlements import start_trial
+        start_trial(user)
     db.session.commit()
     if first_verification:
         safely_send(send_welcome_email, user)

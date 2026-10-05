@@ -45,3 +45,11 @@ class Config:
  SMTP_FROM_EMAIL=os.getenv("SMTP_FROM_EMAIL") or os.getenv("SMTP_USERNAME","")
  SMTP_FROM_NAME=os.getenv("SMTP_FROM_NAME","StockBridge")
  SMTP_USE_TLS=os.getenv("SMTP_USE_TLS","true").lower()=="true"
+
+ # Off until billing migration/configuration has been reviewed and approved.
+ SUBSCRIPTIONS_ENABLED=os.getenv("SUBSCRIPTIONS_ENABLED","false").lower()=="true"
+ BILLING_PROVIDER_ENABLED=os.getenv("BILLING_PROVIDER_ENABLED","false").lower()=="true"
+ PAYSTACK_BASIC_MONTHLY_PLAN=os.getenv("PAYSTACK_BASIC_MONTHLY_PLAN","")
+ PAYSTACK_BASIC_YEARLY_PLAN=os.getenv("PAYSTACK_BASIC_YEARLY_PLAN","")
+ PAYSTACK_PLUS_MONTHLY_PLAN=os.getenv("PAYSTACK_PLUS_MONTHLY_PLAN","")
+ PAYSTACK_PLUS_YEARLY_PLAN=os.getenv("PAYSTACK_PLUS_YEARLY_PLAN","")

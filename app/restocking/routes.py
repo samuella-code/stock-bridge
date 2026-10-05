@@ -1,3 +1,4 @@
+from app.subscriptions.entitlements import selected_business
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from uuid import uuid4
@@ -36,7 +37,7 @@ def recommendations(b, products):
 @restocking_bp.get("/")
 @login_required
 def index():
-    b = current_user.businesses[0]
+    b = selected_business(current_user)
     restocks = Restock.query.filter_by(business_id=b.id).order_by(Restock.received_at.desc(), Restock.id.desc()).paginate(
         page=request.args.get("page", 1, type=int), per_page=20, error_out=False)
     from app.products.catalogue import search_products
@@ -51,7 +52,7 @@ def index():
 @restocking_bp.post("/<int:product_id>/settings")
 @login_required
 def settings(product_id):
-    b = current_user.businesses[0]
+    b = selected_business(current_user)
     p = db.session.get(Product, product_id)
     if not p or p.business_id != b.id: abort(404)
     try:
@@ -70,7 +71,7 @@ def settings(product_id):
 @restocking_bp.post("/receive")
 @login_required
 def receive():
-    b = current_user.businesses[0]
+    b = selected_business(current_user)
     ids = request.form.getlist("product_id")
     quantities = request.form.getlist("quantity")
     costs = request.form.getlist("unit_cost")

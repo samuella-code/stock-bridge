@@ -1,3 +1,4 @@
+from app.subscriptions.entitlements import selected_business
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
@@ -12,7 +13,7 @@ sales_bp = Blueprint("sales", __name__, url_prefix="/sales")
 PAYMENT_METHODS = ("Cash", "Bank Transfer", "POS", "Other")
 
 def business():
-    return current_user.businesses[0]
+    return selected_business(current_user)
 
 @sales_bp.route("/", methods=["GET", "POST"])
 @login_required

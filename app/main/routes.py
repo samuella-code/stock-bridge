@@ -1,3 +1,4 @@
+from app.subscriptions.entitlements import selected_business
 from datetime import datetime, time, timedelta
 from decimal import Decimal
 from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
@@ -80,8 +81,8 @@ def index():
 @main_bp.get("/dashboard")
 @login_required
 def dashboard():
-    b = current_user.businesses[0]
-    if not b.has_write_access:
+    b = selected_business(current_user)
+    if not b.has_write_access and not current_app.config.get("SUBSCRIPTIONS_ENABLED"):
         return render_template("dashboard_preview.html", business=b,
             lifetime_price=current_app.config["LIFETIME_PRICE_NAIRA"])
     try:
@@ -113,8 +114,8 @@ def dashboard():
 @main_bp.get("/reports")
 @login_required
 def reports():
-    b = current_user.businesses[0]
-    if not b.has_write_access:
+    b = selected_business(current_user)
+    if not b.has_write_access and not current_app.config.get("SUBSCRIPTIONS_ENABLED"):
         return redirect(url_for("subscriptions.index"))
     try:
         period, start, end = period_dates(request.args)

@@ -416,10 +416,10 @@ def test_migration_keeps_customer_and_payment_without_promoting_email(tmp_path):
         db.session.execute(text("""INSERT INTO payment (id,business_id,customer_email,reference,provider,product,amount_kobo,currency,status,created_at)
             VALUES (1,1,'owner@example.com','SB-old','paystack','lifetime',300000,'NGN','success',CURRENT_TIMESTAMP)"""))
         db.session.commit()
-        upgrade()
+        upgrade(revision="0012_product_catalogue")
         assert User.query.one().role=="user"
         assert User.query.one().businesses[0].name=="Shop"
-        assert Payment.query.one().amount_kobo==300000
+        assert db.session.query(Payment.amount_kobo).scalar()==300000
         assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()=="0012_product_catalogue"
         assert User.query.one().admin_enabled is False
 
@@ -435,7 +435,7 @@ def test_security_migration_preserves_dual_role_and_audit_data(tmp_path):
         db.session.execute(text("""INSERT INTO audit_log (id,actor_id,action,description,created_at)
             VALUES (1,1,'ADMIN_ACCESS_GRANTED','Granted',CURRENT_TIMESTAMP)"""))
         db.session.commit()
-        upgrade()
+        upgrade(revision="0012_product_catalogue")
         owner=User.query.one()
         assert owner.admin_enabled and owner.admin_auth_version==0
         assert AuditLog.query.one().description=="Granted"

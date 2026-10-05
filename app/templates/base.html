@@ -41,7 +41,7 @@
                 <a class="nav-link {{ 'active' if request.blueprint == 'expenses' }}" href="{{ url_for('expenses.index') }}"><span class="nav-icon">₦</span><span>Expenses</span></a>
                 <a class="nav-link {{ 'active' if request.blueprint == 'restocking' }}" href="{{ url_for('restocking.index') }}"><span class="nav-icon">◎</span><span>Restocking</span></a>
                 <a class="nav-link {{ 'active' if request.endpoint == 'main.reports' }}" href="{{ url_for('main.reports') }}"><span class="nav-icon">▤</span><span>Reports</span></a>
-                <a class="nav-link {{ 'active' if request.blueprint == 'subscriptions' }}" href="{{ url_for('subscriptions.index') }}"><span class="nav-icon">◇</span><span>Lifetime access</span></a>
+                <a class="nav-link {{ 'active' if request.blueprint == 'subscriptions' }}" href="{{ url_for('subscriptions.index') }}"><span class="nav-icon">◇</span><span>{{ "Billing & plans" if config.SUBSCRIPTIONS_ENABLED else "Lifetime access" }}</span></a>
 
             </nav>
 
@@ -49,7 +49,7 @@
                 <div class="workspace-card">
                     <div class="workspace-dot"></div>
                     <div>
-                        <span class="workspace-label">{{ 'Lifetime access' if subscription_business.has_write_access else 'Explore StockBridge' }}</span>
+                        <span class="workspace-label">{{ billing_label if config.SUBSCRIPTIONS_ENABLED else ('Lifetime access' if subscription_business.has_write_access else 'Explore StockBridge') }}</span>
                         <strong>{{ business.name if business else 'My business' }}</strong>
                     </div>
                 </div>
@@ -74,7 +74,7 @@
                     <div class="profile-copy">
                         <strong>{{ current_user.full_name }}</strong>
                         <span>Owner</span>
-                    </div></button><div class="profile-dropdown" id="profileDropdown"><a href="{{ url_for('profile.index') }}">Edit profile</a><a href="{{ url_for('profile.index') }}">Business settings</a><a href="{{ url_for('subscriptions.index') }}">Lifetime access</a></div></div>
+                    </div></button><div class="profile-dropdown" id="profileDropdown"><a href="{{ url_for('profile.index') }}">Edit profile</a><a href="{{ url_for('profile.index') }}">Business settings</a><a href="{{ url_for('subscriptions.index') }}">{{ "Billing & plans" if config.SUBSCRIPTIONS_ENABLED else "Lifetime access" }}</a></div></div>
             </header>
             {% endif %}
 
@@ -88,7 +88,8 @@
                 {% endif %}
             {% endwith %}
 
-            {% block content %}{% endblock %}
+            {% if billing_access is defined %}<div class="flash flash-warning billing-access-banner" role="status"><strong>{{ billing_label }}</strong>{% if billing_access.kind == 'trial' %} · {{ billing_access.trial_days_remaining }} days left. No card required.{% elif not billing_access.can_write %} · Your records are safe and available to view. Choose a plan to add or change business records.{% endif %} <a href="{{ url_for('subscriptions.index') }}">Manage billing</a></div>{% endif %}
+{% block content %}{% endblock %}
         </main>
     </div>
 

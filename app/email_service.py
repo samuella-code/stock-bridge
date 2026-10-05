@@ -81,6 +81,9 @@ def send_password_reset_email(user):
 
 def send_welcome_email(user):
     link = customer_url("main.dashboard")
+    if current_app.config.get("SUBSCRIPTIONS_ENABLED"):
+        body = f"Hi {user.full_name.split()[0]},\n\nWelcome to StockBridge. Your verified account can start its 7-day trial without a card. Record business activity once and keep your numbers up to date. Choose Basic or Plus when ready.\n{link}"
+        return _transactional("billing", "Welcome to StockBridge", user.email, user.full_name, body, link=link, message=body)
     body = (f"Hi {user.full_name.split()[0]},\n\nWelcome to StockBridge. Track stock, sales, expenses and profit, and know when to restock.\n\n"
             "Create Account → Verify Email → Explore StockBridge → Pay ₦3,000 once → Lifetime Access.\n"
             f"Explore StockBridge: {link}\n\nBusiness tools unlock after the one-time payment.")
