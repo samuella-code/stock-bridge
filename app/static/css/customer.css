@@ -125,8 +125,8 @@
 .customer-app .entry-choice small{display:none}
 
 .customer-app .table-wrap{margin:14px 0;max-width:100%;border:1px solid var(--line);border-radius:10px;overscroll-behavior-inline:contain}
-.customer-app table{min-width:600px}
-.customer-app th{background:#f5f8f7;font-size:11px;padding:13px 14px;letter-spacing:.055em;color:#536870}
+.customer-app table{min-width:600px;overflow-wrap:normal}
+.customer-app th{background:#f5f8f7;font-size:11px;padding:13px 14px;letter-spacing:.055em;color:#536870;white-space:nowrap}
 .customer-app td{padding:14px;font-size:14px;vertical-align:top}
 .customer-app td.numeric,.customer-app th.numeric{text-align:right;font-variant-numeric:tabular-nums}
 .customer-app .status{display:inline-flex;align-items:center;padding:5px 9px;font-size:12px;white-space:normal;border-radius:7px}
