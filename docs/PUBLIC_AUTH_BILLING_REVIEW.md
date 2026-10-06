@@ -193,3 +193,33 @@ fix. Existing signed JWT validation tests remain part of the full suite.
 
 No provider credentials or platform settings are changed by this fix. Staging
 retesting must use the existing isolated project/database; no payment is needed.
+
+## Homepage workflow showcase
+
+The existing hero copy and CTAs now sit beside a lightweight HTML/CSS showcase.
+It illustrates existing StockBridge Dashboard, Products/Inventory, Record Sale,
+stock movements, Expenses and Reports views using the app's metric-card,
+panel-card and status styling, with scoped showcase sizing. No customer records,
+API requests, payments, actual forms, external imagery or video are involved.
+
+The explicitly labelled Mini Mart example connects 100 Coke units, a 10-unit sale
+at ₦500 with recorded cost ₦300 per unit, stock remaining 90, a ₦500 transport
+expense and ₦1,500 estimated net profit. Sidebar context and metric cards follow
+the selected step. Existing pricing/FAQ/CTAs and all authentication, billing and
+business logic are preserved.
+
+Desktop advances once, then stops. Pause/replay and six keyboard-operable step
+buttons are available. Hidden tabs, offscreen content and mouse hover suspend the
+timer; keyboard step exploration stops autoplay. Reduced motion and widths up to
+768px use manual steps with no automatic panel motion. Mobile removes the sidebar
+and floating composition rather than compressing it. Layout rules cover 375, 390,
+430, 768px and desktop; fixed stage space avoids transition layout shifts.
+
+Major sections reveal once with progressive IntersectionObserver enhancement.
+No JavaScript/observer means sections remain visible. Reduced motion and keyboard
+focus expose section content immediately. No animation library is added.
+
+Validation: `tests/showcase.cjs` adds 44 lifecycle/control assertions; the existing
+34 presentation assertions remain unchanged. Responsive CSS and unit checks are
+not a claim of real mobile browser acceptance. Staging is provided for visual
+review; production remains untouched.
