@@ -81,6 +81,19 @@ def public_plan_prices():
                    for interval in ('monthly', 'yearly')} for plan in ('basic', 'plus')}
 
 
+def sales_chart(per_day, week_start):
+    # PostgreSQL returns date objects; SQLite returns ISO date strings.
+    daily = {str(day): float(total) for day, total in per_day}
+    chart = []
+    for offset in range(7):
+        day = (week_start + timedelta(days=offset)).date()
+        chart.append({"label": day.strftime("%a"), "total": daily.get(day.isoformat(), 0)})
+    maximum = max([row["total"] for row in chart] + [1])
+    for row in chart:
+        row["height"] = max(3, round(row["total"] / maximum * 100))
+    return chart
+
+
 @main_bp.get("/")
 def index():
     return redirect(url_for("main.dashboard")) if current_user.is_authenticated else render_template("home.html", plan_prices=public_plan_prices())
@@ -106,14 +119,7 @@ def dashboard():
         func.sum(SaleItem.quantity * SaleItem.unit_price)).join(SaleItem).filter(
         Sale.business_id == b.id, Sale.voided_at.is_(None), Sale.sold_at >= week_start
     ).group_by(func.date(Sale.sold_at)).all()
-    daily = {day: float(total) for day, total in per_day}
-    chart = []
-    for offset in range(7):
-        day = (week_start + timedelta(days=offset)).date()
-        chart.append({"label": day.strftime("%a"), "total": daily.get(day.isoformat(), 0)})
-    maximum = max([row["total"] for row in chart] + [1])
-    for row in chart:
-        row["height"] = max(3, round(row["total"] / maximum * 100))
+    chart = sales_chart(per_day, week_start)
     return render_template("dashboard.html", business=b, metrics=metrics,
         setup=setup_progress(b),
         low_stock_products=low, chart=chart, period=period,
