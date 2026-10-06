@@ -52,3 +52,21 @@ def test_business_ownership_blocks_cross_account_edit(client, app):
         db.session.commit()
         product_id = product.id
     assert client.get(f"/products/{product_id}/edit").status_code == 404
+
+def test_edit_blank_optional_fields_do_not_render_none(client, app):
+    import re
+    login(client)
+    client.post('/products/new', data={'name': 'Blank optional fields',
+        'buying_price': '0', 'selling_price': '0', 'stock_quantity': '0',
+        'minimum_stock_level': '0'})
+    with app.app_context():
+        product_id = Product.query.one().id
+    response = client.get(f'/products/{product_id}/edit')
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    for field in ('sku', 'category', 'supplier_name', 'description'):
+        tag = re.search(r'<input\b[^>]*name="' + field + r'"[^>]*>', html).group()
+        assert 'value=""' in tag
+    for field in ('buying_price', 'selling_price', 'minimum_stock_level'):
+        tag = re.search(r'<input\b[^>]*name="' + field + r'"[^>]*>', html).group()
+        assert re.search(r'value="0(?:\.00)?"', tag)
