@@ -16,7 +16,7 @@
 <link rel="stylesheet" href="{{url_for('static',filename='css/catalogue.css',v='catalogue-20260930')}}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/businesses.css') }}">
 {% if current_user.is_authenticated %}<link rel="stylesheet" href="{{ url_for('static', filename='css/customer.css', v='ui-6.1') }}">{% endif %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/entry.css', v='entry-7.2') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/entry.css', v='entry-7.3') }}">
 </head>
 <body{% if current_user.is_authenticated %} class="customer-app"{% endif %}>
     {% if current_user.is_authenticated %}<a class="skip-link" href="#main-content">Skip to content</a>{% endif %}

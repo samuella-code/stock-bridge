@@ -33,14 +33,18 @@
     panels.forEach((panel, i) => { panel.hidden = i !== index; });
     steps.forEach((step, i) => step.setAttribute('aria-pressed', String(i === index)));
     root.querySelectorAll('[data-showcase-side]').forEach((item, i) => {
-      item.setAttribute('data-active', String(i === [0, 1, 3, 2, 5, 6][index]));
+      item.setAttribute('data-active', String(i === [0, 1, 3, 2, 4, 5, 6][index]));
     });
     const panel = panels[index];
     ['sales', 'profit', 'stock'].forEach(metric => {
       root.querySelector(`[data-showcase-${metric}]`).textContent = panel.dataset[metric];
     });
-    caption.textContent = `${String(index + 1).padStart(2, '0')} / 06 · ${panel.querySelector('h3').textContent}`;
-    if (manual) announcement.textContent = `Step ${index + 1} of 6: ${panel.querySelector('h3').textContent}`;
+    const profitLabel = root.querySelector('[data-showcase-profit-label]');
+    if (profitLabel) profitLabel.textContent = panel.dataset.metricLabel || 'Net profit';
+    const expenses = root.querySelector('[data-showcase-expenses]');
+    if (expenses) expenses.textContent = index >= 5 ? '₦500' : '₦0';
+    caption.textContent = `${String(index + 1).padStart(2, '0')} / ${String(panels.length).padStart(2, '0')} · ${panel.querySelector('h3').textContent}`;
+    if (manual) announcement.textContent = `Step ${index + 1} of ${panels.length}: ${panel.querySelector('h3').textContent}`;
   }
   steps.forEach((step, i) => step.addEventListener('click', () => {
     nextDelay = manualDelay; show(i, true); sync();

@@ -1,0 +1,15 @@
+{% macro preview(view, variant='journey') %}
+<div class="marketing-preview"><div class="demo-toolbar"><span class="brand-mark">SB</span><strong>StockBridge</strong><span>Representative demo</span></div><div class="demo-content"><p class="demo-breadcrumb">Example Mini Mart <span>/ {{ view }}</span></p><h3>{{ view }}</h3>
+{% if view in ['Dashboard','Reports'] %}
+<div class="demo-summary"><div><span>Sales revenue</span><strong>₦150,000</strong></div><div class="demo-highlight"><span>Net profit</span><strong>₦45,000</strong></div></div>
+{% if view == 'Reports' %}<dl class="demo-ledger"><div><dt>Cost of goods sold</dt><dd>₦80,000</dd></div><div><dt>Gross profit</dt><dd>₦70,000</dd></div><div><dt>Recorded expenses</dt><dd>₦25,000</dd></div></dl>{% else %}<div class="demo-bars" aria-label="Illustrative sales activity">{% for height in [25,42,34,63,50,76,90] %}<span style="--bar:{{ height }}%"></span>{% endfor %}</div><p class="demo-footnote">Your recorded activity, in one view.</p>{% endif %}
+{% elif view in ['Products','Inventory'] %}
+<div class="demo-table"><div class="demo-table-head"><span>Product</span><span>Current stock</span><span>Status</span></div>{% for name,quantity,status in [('Coke','90 units','In stock'),('Bottled Water','48 units','In stock'),('Fruit Juice','8 units','Low stock')] %}<div><strong>{{ name }}</strong><span>{{ quantity }}</span><span class="demo-status {{ 'demo-low' if loop.last }}">{{ status }}</span></div>{% endfor %}</div><p class="demo-footnote">{{ 'Names, unit costs and selling prices stay together.' if view == 'Products' else 'See what is available before your next sale.' }}</p>
+{% elif view == 'Record Sale' %}
+<div class="demo-sale"><span>Coke · 10 units × ₦500</span><strong>₦5,000</strong></div><dl class="demo-ledger"><div><dt>Recorded cost of goods sold</dt><dd>₦3,000</dd></div><div><dt>Gross profit</dt><dd>₦2,000</dd></div></dl><div class="demo-action">Sale recorded <span aria-hidden="true">✓</span></div><p class="demo-footnote">Illustration only. No transaction is submitted.</p>
+{% elif view == 'Restocking' %}
+<div class="demo-movement"><div><span>Before restock</span><strong>90</strong></div><span aria-hidden="true">→</span><div><span>After +50 units</span><strong>140</strong></div></div><dl class="demo-ledger"><div><dt>Product</dt><dd>Coke</dd></div><div><dt>Purchase cost</dt><dd>₦15,000</dd></div></dl><p class="demo-footnote">Inventory increases. The restock history stays recorded.</p>
+{% else %}
+<p class="demo-footnote">Record the costs of running your shop.</p><div class="demo-sale"><span>Transportation</span><strong>₦500</strong></div><div class="demo-sale"><span>Electricity</span><strong>₦2,500</strong></div><div class="demo-action">Included in net profit <span aria-hidden="true">✓</span></div>
+{% endif %}</div></div>
+{% endmacro %}

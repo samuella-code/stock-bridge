@@ -2,3 +2,5 @@
 {% block title %}Sign In · StockBridge{% endblock %}
 {% block content %}<section class="entry-auth">{{ auth_visual() }}<div class="entry-form"><div class="auth-form-card">{{ brand() }}<p class="eyebrow">Welcome back</p><h1>Sign in to StockBridge</h1><p class="muted">Continue managing your business.</p>{{ social_buttons() }}
 <form method="POST" class="form-stack"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Email address<input type="email" name="email" autocomplete="email" value="{{ request.form.get('email', '') }}" required></label><label>Password<input type="password" name="password" autocomplete="current-password" required></label><a class="auth-recovery" href="{{ url_for('auth.forgot_password') }}">Forgot your password?</a><button class="primary-btn full-width" type="submit">Sign In</button></form><p class="auth-switch">New to StockBridge? <a href="{{ url_for('auth.signup') }}">Create an account</a></p></div></div></section>{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='js/marketing.js', v='marketing-7.3') }}" defer></script>{% endblock %}

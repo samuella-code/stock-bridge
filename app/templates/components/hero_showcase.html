@@ -1,7 +1,7 @@
 <section class="hero-showcase" data-showcase aria-label="Illustrative StockBridge product walkthrough">
   <div class="showcase-halo" aria-hidden="true"></div>
   <div class="showcase-window">
-    <div class="showcase-chrome"><span class="brand-mark">SB</span><strong>StockBridge</strong><span class="showcase-example">Example Mini Mart</span></div>
+    <div class="showcase-chrome"><span class="brand-mark">SB</span><strong>StockBridge</strong><span class="workspace-live" aria-hidden="true">●</span><span class="showcase-example">Example Mini Mart</span></div>
     <div class="showcase-workspace">
       <div class="showcase-sidebar" aria-hidden="true"><span class="showcase-side-brand">YOUR BUSINESS</span>{% for item in ['Dashboard','Products','Inventory','Sales','Restocking','Expenses','Reports'] %}<span data-showcase-side>{{ item }}</span>{% endfor %}<small>One connected workspace</small></div>
       <div class="showcase-stage">
@@ -20,28 +20,33 @@
           <div class="panel-card showcase-basket"><div class="showcase-table-row showcase-table-head"><span>Product</span><span>Qty</span><span>Total</span></div><div class="showcase-table-row"><strong>Coke<small>₦500 per unit</small></strong><span>10</span><strong>₦5,000</strong></div><div class="showcase-sale-total"><span>Sale total</span><strong>₦5,000</strong></div></div>
           <div class="showcase-demo-action" aria-hidden="true">Complete sale <span>→</span></div><small class="showcase-demo-note">Product preview · no transaction is submitted</small>
         </article>
-        <article data-showcase-panel data-sales="₦5,000" data-profit="₦2,000" data-stock="90" aria-labelledby="showcase-stock" hidden>
+        <article data-showcase-panel data-sales="₦5,000" data-profit="₦2,000" data-stock="90" data-metric-label="Gross profit" aria-labelledby="showcase-stock" hidden>
           <p class="eyebrow">Inventory stays connected</p><h3 id="showcase-stock">Stock updates automatically</h3><p class="showcase-description">10 units sold. 90 ready for the next customer.</p>
           <div class="showcase-stock-change"><div><small>Before sale</small><strong>100</strong></div><span aria-hidden="true">→</span><div><small>Current stock</small><strong>90</strong></div></div>
           <div class="panel-card showcase-activity"><span class="showcase-dot"></span><div><strong>Coke · −10 units</strong><small>Stock movement · Sale completed</small></div></div><p class="showcase-explanation">Sales history and inventory movement stay linked.</p>
         </article>
-        <article data-showcase-panel data-sales="₦5,000" data-profit="₦1,500" data-stock="90" aria-labelledby="showcase-expenses" hidden>
+        <article data-showcase-panel data-sales="₦5,000" data-profit="₦2,000" data-stock="140" data-metric-label="Gross profit" aria-labelledby="showcase-restock" hidden>
+          <p class="eyebrow">Ready for the next sale</p><h3 id="showcase-restock">Restocking</h3><p class="showcase-description">50 units received. Stock and history stay in step.</p>
+          <div class="showcase-stock-change"><div><small>Before restock</small><strong>90</strong></div><span aria-hidden="true">→</span><div><small>After restock</small><strong>140</strong></div></div>
+          <dl class="showcase-details"><div><dt>Purchase cost · 50 × ₦300</dt><dd>₦15,000</dd></div></dl><div class="showcase-result"><span aria-hidden="true">✓</span> Restock recorded · no demo transaction submitted</div>
+        </article>
+        <article data-showcase-panel data-sales="₦5,000" data-profit="₦1,500" data-stock="140" aria-labelledby="showcase-expenses" hidden>
           <p class="eyebrow">Operating costs</p><h3 id="showcase-expenses">Expenses</h3><p class="showcase-description">Sales are only part of your profit.</p>
           <div class="panel-card showcase-expense"><span class="showcase-expense-icon" aria-hidden="true">↗</span><div><small>Transportation</small><strong>Delivery to the shop</strong></div><strong>₦500</strong></div>
           <dl class="showcase-details"><div><dt>Gross profit</dt><dd>₦2,000</dd></div><div><dt>Recorded expenses</dt><dd>−₦500</dd></div><div class="showcase-total"><dt>Estimated net profit</dt><dd>₦1,500</dd></div></dl>
         </article>
-        <article data-showcase-panel data-sales="₦5,000" data-profit="₦1,500" data-stock="90" aria-labelledby="showcase-reports" hidden>
+        <article data-showcase-panel data-sales="₦5,000" data-profit="₦1,500" data-stock="140" aria-labelledby="showcase-reports" hidden>
           <p class="eyebrow">The full picture</p><h3 id="showcase-reports">Reports & Profit</h3><p class="showcase-description">From one sale to the numbers that matter.</p>
-          <dl class="showcase-report"><div><dt>Revenue</dt><dd>₦5,000</dd></div><div><dt>Cost of goods sold</dt><dd>−₦3,000</dd></div><div><dt>Operating expenses</dt><dd>−₦500</dd></div><div class="showcase-total"><dt>Estimated net profit</dt><dd>₦1,500</dd></div></dl><div class="showcase-result"><span aria-hidden="true">✓</span> 10 units sold · 90 units in stock</div>
+          <dl class="showcase-report"><div><dt>Revenue</dt><dd>₦5,000</dd></div><div><dt>Cost of goods sold</dt><dd>−₦3,000</dd></div><div><dt>Operating expenses</dt><dd>−₦500</dd></div><div class="showcase-total"><dt>Estimated net profit</dt><dd>₦1,500</dd></div></dl><div class="showcase-result"><span aria-hidden="true">✓</span> 10 sold · 50 restocked · 140 in stock</div>
         </article>
       </div>
     </div>
   </div>
-  <div class="showcase-floating" aria-hidden="true"><div><span>Sales</span><strong data-showcase-sales>₦0</strong></div><div><span>Net profit</span><strong data-showcase-profit>₦0</strong></div><div><span>Current stock</span><strong data-showcase-stock>100</strong></div></div>
-  <p class="showcase-disclaimer">Example figures · real StockBridge workflows, illustrated.</p>
+  <div class="showcase-floating" aria-hidden="true"><div><span>Today’s Sales</span><strong data-showcase-sales>₦0</strong></div><div><span data-showcase-profit-label>Net profit</span><strong data-showcase-profit>₦0</strong></div><div><span>Current stock</span><strong data-showcase-stock>100</strong></div></div>
+  <div class="showcase-context"><span>Low Stock <strong>0 products</strong></span><span>Expenses <strong data-showcase-expenses>₦0</strong></span></div><p class="showcase-disclaimer">Example figures · real StockBridge workflows, illustrated.</p>
   <div class="showcase-controls" data-showcase-controls hidden>
-    <div class="showcase-steps" role="group" aria-label="Choose a workflow step">{% for label in ['Dashboard','Products','Record Sale','Stock updates','Expenses','Reports'] %}<button type="button" data-showcase-step="{{ loop.index0 }}" aria-pressed="{{ 'true' if loop.first else 'false' }}" aria-label="Step {{ loop.index }}: {{ label }}"><span aria-hidden="true">0{{ loop.index }}</span>{{ label }}</button>{% endfor %}</div>
-    <div class="showcase-playback"><span data-showcase-caption>01 / 06 · Dashboard</span><button type="button" data-showcase-play>Pause showcase</button></div>
+    <div class="showcase-steps" role="group" aria-label="Choose a workflow step">{% for label in ['Dashboard','Products','Record Sale','Inventory Update','Restocking','Expenses','Reports'] %}<button type="button" data-showcase-step="{{ loop.index0 }}" aria-pressed="{{ 'true' if loop.first else 'false' }}" aria-label="Step {{ loop.index }}: {{ label }}"><span aria-hidden="true">0{{ loop.index }}</span>{{ label }}</button>{% endfor %}</div>
+    <div class="showcase-playback"><span data-showcase-caption>01 / 07 · Dashboard</span><button type="button" data-showcase-play>Pause showcase</button></div>
   </div>
   <span class="sr-only" data-showcase-announcement role="status" aria-live="polite"></span>
 </section>

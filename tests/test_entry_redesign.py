@@ -120,3 +120,19 @@ def test_review_available_only_when_subscription_feature_enabled(app):
     user,_=seed();client=app.test_client();login(client,user)
     app.config['SUBSCRIPTIONS_ENABLED']=False
     assert client.get('/plans/review?plan=plus&interval=yearly').status_code==404
+
+
+@pytest.mark.parametrize('path', ['/', '/auth/login', '/auth/signup'])
+def test_public_visuals_render_without_database_queries(app, path):
+    """Public demo figures must never turn anonymous rendering into DB work."""
+    from sqlalchemy import event
+    queries=[]
+    def record_query(*args): queries.append(True)
+    event.listen(db.engine, 'before_cursor_execute', record_query)
+    try:
+        response=app.test_client().get(path)
+        assert response.status_code==200
+        assert b'Representative demo' in response.data
+        assert not queries
+    finally:
+        event.remove(db.engine, 'before_cursor_execute', record_query)
