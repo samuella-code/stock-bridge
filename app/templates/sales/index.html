@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% block page_title %}Sales{% endblock %}
-{% block content %}
+{% block content %}{% from 'components/ui.html' import help_panel, empty_state %}
 <section class="dashboard-wrap">
   <div class="welcome-row"><div><p class="eyebrow">Money in</p><h2>Record Sale</h2><p class="muted">Add every item the customer bought. Stock and profit update when you complete the sale.</p></div><div><strong class="page-total">₦{{'{:,.2f}'.format(total)}}</strong><small class="block-muted">Estimated gross profit ₦{{'{:,.2f}'.format(profit)}}</small></div></div>
-  <div class="data-layout">
+  {% call help_panel('Sales') %}<p>Search for a product to add it to the sale. Set quantities and prices, add more products, then review the basket before completing the sale.</p><p>Sold quantities reduce stock automatically. StockBridge prevents selling more than is available and saves each sale’s price and cost for historical reports.</p>{% endcall %}<div class="data-layout">
     <form class="panel-card form-stack" method="POST" id="sale-form">
       {% set mode='sale' %}{% include 'products/basket.html' %}
       <label>How customer paid<select name="payment_method">{% for method in payment_methods %}<option>{{method}}</option>{% endfor %}</select></label>
@@ -15,7 +15,7 @@
       <div class="table-wrap"><table class="responsive-table"><tr class="table-head-row"><th>Items</th><th>Total</th><th>Payment</th><th>Date</th><th>Action</th></tr>
       {% for s in sales.items %}<tr><td>{% for item in s.items %}<div>{{item.product.name}} × {{item.quantity}} @ ₦{{'{:,.2f}'.format(item.unit_price)}}</div>{% endfor %}{% if s.voided_at %}<small>Voided: {{s.void_reason}}</small>{% endif %}</td><td class="numeric">₦{{'{:,.2f}'.format(s.total)}}</td><td>{{s.payment_method}}</td><td>{{s.sold_at.strftime('%d %b %Y')}}</td><td>{% if not s.voided_at %}<form method="POST" action="{{url_for('sales.delete',sale_id=s.id)}}"><input aria-label="Reason to void" name="reason" required maxlength="300" placeholder="Reason to void"><button class="danger-link">Void sale</button><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>{% endif %}</td></tr>{% endfor %}</table></div>
       <nav class="pager">{% if sales.has_prev %}<a href="{{url_for('sales.index',page=sales.prev_num)}}">Previous</a>{% endif %} Page {{sales.page}} of {{sales.pages}} {% if sales.has_next %}<a href="{{url_for('sales.index',page=sales.next_num)}}">Next</a>{% endif %}</nav>
-      {% else %}<div class="empty-state">No sales recorded yet. Record your first sale and StockBridge will automatically update inventory.</div>{% endif %}
+      {% else %}{{ empty_state('No sales recorded yet', 'Record your first sale and StockBridge will automatically reduce the inventory of the products sold.', '#sale-form' if has_products else url_for('products.create'), 'Record Sale' if has_products else 'Add Product') }}{% endif %}
     </div>
   </div>
 </section>

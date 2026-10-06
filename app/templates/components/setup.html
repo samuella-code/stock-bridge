@@ -1,0 +1,19 @@
+{% if setup.show_welcome and business.has_write_access %}
+<section class="panel-card setup-welcome" aria-labelledby="setup-welcome-title" data-welcome-key="stockbridge:welcome:v1:{{ current_user.id }}:{{ business.id }}">
+  <h3 id="setup-welcome-title">Welcome to StockBridge</h3>
+  <p>Track your products, inventory, sales, expenses and profit in one place.</p>
+  <ol><li>Add your first product with opening stock.</li><li>Record sales as customers buy.</li><li>Track your expenses.</li><li>View your business performance.</li></ol>
+  <div class="guidance-actions"><a class="primary-btn button-link" href="{{ url_for('products.create') }}" data-welcome-complete>Get Started</a><button class="secondary-btn" type="button" data-welcome-dismiss hidden>Explore StockBridge</button></div>
+</section>
+{% endif %}
+{% if setup.completed < 3 %}
+<details class="panel-card setup-checklist" id="business-setup" {% if setup.expanded %}open{% endif %}>
+  <summary>Get started with StockBridge <span>{{ setup.completed }} of 3 setup actions completed</span></summary>
+  <p class="muted">Setup for {{ business.name }}. Progress comes from this business’s records, across all dates.</p>
+  <ul class="setup-steps">{% for step in setup.steps %}
+    <li data-setup-step="{{ step.key }}" data-complete="{{ 'true' if step.complete else 'false' }}"><span class="setup-mark" aria-hidden="true">{{ '✓' if step.complete else '○' }}</span><div><strong>{{ step.title }}</strong><small>{{ 'Completed' if step.complete else 'Not yet completed' }} · {{ step.description }}</small>{% if not step.complete and business.has_write_access %}<a href="{{ url_for(step.endpoint) }}">{{ step.title }}</a>{% endif %}</div></li>
+  {% endfor %}</ul>
+  <p class="setup-report"><a href="{{ url_for('main.reports') }}">Explore your reports</a> — see how sales, product costs and expenses connect.</p>
+  {% if not business.has_write_access %}<p>Your records are available to view. <a href="{{ url_for('subscriptions.index') }}">View plans</a> to record new activity.</p>{% endif %}
+</details>
+{% endif %}

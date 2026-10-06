@@ -6,6 +6,7 @@ from flask_login import current_user, login_required
 from sqlalchemy import func, case, distinct
 from app import db
 from app.models import Expense, Product, Restock, Sale, SaleItem
+from app.main.onboarding import setup_progress
 
 main_bp = Blueprint("main", __name__)
 
@@ -108,6 +109,7 @@ def dashboard():
     for row in chart:
         row["height"] = max(3, round(row["total"] / maximum * 100))
     return render_template("dashboard.html", business=b, metrics=metrics,
+        setup=setup_progress(b),
         low_stock_products=low, chart=chart, period=period,
         recent_transactions=recent_activity(b), top=top_products(b, start, end))
 

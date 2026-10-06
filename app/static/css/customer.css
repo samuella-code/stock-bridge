@@ -138,6 +138,31 @@
 .customer-app .pager a{display:inline-flex;align-items:center;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:#fff}
 .customer-app .empty-state{padding:36px 20px;text-align:center}
 .customer-app .empty-state strong{font-size:18px}
+.customer-app .context-help{margin:0 0 18px;border:1px solid var(--line);border-radius:10px;background:#fff;min-width:0}
+.customer-app .context-help summary{padding:12px 16px;min-height:44px;cursor:pointer;font-weight:600;color:var(--green-dark,#154d43)}
+.customer-app .help-content{padding:0 16px 12px;max-width:75ch}
+.customer-app .help-content p{margin:8px 0;font-size:14px;line-height:1.6}
+.customer-app .guidance-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
+.customer-app .guidance-actions>a,.customer-app .guidance-actions>button{min-height:44px;max-width:100%;white-space:normal}
+.customer-app .setup-welcome{margin-bottom:16px}
+.customer-app .setup-welcome[hidden]{display:none}
+.customer-app .setup-welcome ol{padding-left:24px;line-height:1.8}
+.customer-app .setup-checklist{margin-bottom:20px}
+.customer-app .setup-checklist summary{cursor:pointer;min-height:44px;font-weight:700}
+.customer-app .setup-checklist summary span{display:block;margin-top:6px;font-size:13px;color:#586970;font-weight:400}
+.customer-app .setup-steps{list-style:none;padding:0;margin:16px 0;display:grid;gap:14px}
+.customer-app .setup-steps li{display:flex;gap:12px;min-width:0}
+.customer-app .setup-steps small{display:block;line-height:1.6;color:#586970}
+.customer-app .setup-steps a{display:inline-flex;align-items:center;min-height:44px;text-decoration:underline}
+.customer-app .setup-mark{flex:0 0 24px;color:#154d43;font-size:20px}
+.customer-app .setup-report{font-size:14px;line-height:1.6}
+.customer-app .field-help{font-size:12px;line-height:1.5;font-weight:400;color:#586970;margin-top:6px}
+.customer-app .trial-status{display:flex;gap:14px;align-items:center;justify-content:space-between;background:#edf6f2;border:1px solid #d7e8df;border-radius:10px;padding:12px 16px;margin:16px 28px;flex-wrap:wrap;font-size:13px}
+.customer-app .trial-status>div{flex:1 1 230px;min-width:0}
+.customer-app .trial-status span{margin-left:8px}
+.customer-app .trial-status small{display:block;line-height:1.6;margin-top:4px}
+.customer-app .trial-status>a{display:inline-flex;align-items:center;min-height:44px;text-decoration:underline}
+@media(max-width:767px){.customer-app .trial-status{margin:12px 16px}.customer-app .trial-status span{display:block;margin-left:0}.customer-app .guidance-actions>*{flex:1 1 140px}}
 .customer-app .empty-state p{margin-bottom:18px;font-size:14px}
 .customer-app .empty-state a{margin-top:14px}
 .customer-app .flash-stack{padding:18px 28px 0;display:grid;gap:10px}

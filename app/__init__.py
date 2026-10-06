@@ -122,6 +122,9 @@ def create_app(test_config=None):
         if app.config.get("SUBSCRIPTIONS_ENABLED"):
             from app.subscriptions.entitlements import effective_access, access_label
             context.update(billing_access=effective_access(current_user, business=business), billing_label=access_label(current_user))
+            if context['billing_access'].kind == 'trial':
+                from app.subscriptions.entitlements import account_for
+                context['billing_trial_end'] = account_for(current_user).trial_ends_at
             context["business_can_add"] = bool(effective_access(current_user).can_write and len(choices) < effective_access(current_user).business_limit)
         return context
 
