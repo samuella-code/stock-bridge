@@ -15,8 +15,10 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/billing.css') }}">
 <link rel="stylesheet" href="{{url_for('static',filename='css/catalogue.css',v='catalogue-20260930')}}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/businesses.css') }}">
+{% if current_user.is_authenticated %}<link rel="stylesheet" href="{{ url_for('static', filename='css/customer.css', v='ui-6') }}">{% endif %}
 </head>
-<body>
+<body{% if current_user.is_authenticated %} class="customer-app"{% endif %}>
+    {% if current_user.is_authenticated %}<a class="skip-link" href="#main-content">Skip to content</a>{% endif %}
     <div class="app-shell">
         {% if current_user.is_authenticated %}
         <aside class="sidebar" id="sidebar">
@@ -29,58 +31,68 @@
                 </div>
             </div>
 
-            {% if config.SUBSCRIPTIONS_ENABLED %}
-            <details class="business-switcher"><summary>{{ subscription_business.name if subscription_business and not business_selection_required else 'Choose business' }}</summary>
-            {% for choice in business_choices %}{% if choice.id in business_switch_ids %}<form method="POST" action="{{ url_for('businesses.switch', business_id=choice.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">{{ '✓ ' if subscription_business and subscription_business.id == choice.id }}{{ choice.name }}</button></form>{% endif %}{% endfor %}
-            <a href="{{ url_for('businesses.index') }}">My Businesses</a>{% if business_can_add %}<a href="{{ url_for('businesses.create') }}">+ Add another business</a>{% endif %}</details>
-            {% endif %}
+            {% from 'components/ui.html' import nav_link %}
             <nav class="sidebar-nav" aria-label="Main navigation">
-                <a class="nav-link {{ 'active' if request.blueprint == 'main' }}" href="{{ url_for('main.dashboard') }}">
-                    <span class="nav-icon">⌂</span>
-                    <span>Dashboard</span>
-                </a>
-                <a class="nav-link {{ 'active' if request.blueprint == 'products' }}" href="{{ url_for('products.index') }}">
-                    <span class="nav-icon">▦</span>
-                    <span>Products</span>
-                </a>
-                <a class="nav-link {{ 'active' if request.blueprint == 'sales' }}" href="{{ url_for('sales.index') }}"><span class="nav-icon">↗</span><span>Sales</span></a>
-                <a class="nav-link {{ 'active' if request.blueprint == 'expenses' }}" href="{{ url_for('expenses.index') }}"><span class="nav-icon">₦</span><span>Expenses</span></a>
-                <a class="nav-link {{ 'active' if request.blueprint == 'restocking' }}" href="{{ url_for('restocking.index') }}"><span class="nav-icon">◎</span><span>Restocking</span></a>
-                <a class="nav-link {{ 'active' if request.endpoint == 'main.reports' }}" href="{{ url_for('main.reports') }}"><span class="nav-icon">▤</span><span>Reports</span></a>
-                <a class="nav-link {{ 'active' if request.blueprint == 'subscriptions' }}" href="{{ url_for('subscriptions.index') }}"><span class="nav-icon">◇</span><span>{{ "Billing & plans" if config.SUBSCRIPTIONS_ENABLED else "Lifetime access" }}</span></a>
-
+                {{ nav_link('Dashboard', url_for('main.dashboard'), request.endpoint == 'main.dashboard', '⌂') }}
+                <span class="nav-section">Business</span>
+                {{ nav_link('Products', url_for('products.index'), request.blueprint == 'products' and request.args.get('view') != 'inventory', '▦') }}
+                {{ nav_link('Inventory', url_for('products.index', view='inventory', sort='priority'), request.blueprint == 'products' and request.args.get('view') == 'inventory', '▤') }}
+                {{ nav_link('Sales', url_for('sales.index'), request.blueprint == 'sales', '↗') }}
+                {{ nav_link('Restocking', url_for('restocking.index'), request.blueprint == 'restocking', '↻') }}
+                {{ nav_link('Expenses', url_for('expenses.index'), request.blueprint == 'expenses', '₦') }}
+                <span class="nav-section">Insights</span>
+                {{ nav_link('Reports', url_for('main.reports'), request.endpoint == 'main.reports', '▥') }}
+                <span class="nav-section">Account</span>
+                {{ nav_link('My Businesses', url_for('businesses.index'), request.blueprint == 'businesses', '◫') }}
+                {{ nav_link('Billing & Plan' if config.SUBSCRIPTIONS_ENABLED else 'Lifetime access', url_for('subscriptions.index'), request.blueprint == 'subscriptions' or request.blueprint == 'payments', '◇') }}
+                {{ nav_link('Profile & settings', url_for('profile.index'), request.blueprint == 'profile', '○') }}
             </nav>
 
             <div class="sidebar-footer">
                 <div class="workspace-card">
                     <div class="workspace-dot"></div>
                     <div>
-                        <span class="workspace-label">{{ billing_label if config.SUBSCRIPTIONS_ENABLED else ('Lifetime access' if subscription_business.has_write_access else 'Explore StockBridge') }}</span>
-                        <strong>{{ subscription_business.name if subscription_business else 'My business' }}</strong>
+                        <span class="workspace-label">{{ billing_label if config.SUBSCRIPTIONS_ENABLED else ('Lifetime access' if subscription_business and subscription_business.has_write_access else 'Explore StockBridge') }}</span>
+                        <strong>{{ 'Choose your active business' if business_selection_required|default(false) else subscription_business.name if subscription_business else 'My business' }}</strong>
                     </div>
                 </div>
                 <form method="POST" action="{{ url_for('auth.logout') }}">
                     <button class="logout-btn" type="submit">Log out</button>
-                </form>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
             </div>
         </aside>
         <button class="sidebar-backdrop" id="sidebarBackdrop" type="button" aria-label="Close navigation" tabindex="-1" hidden></button>
         {% endif %}
 
-        <main class="main-panel {% if not current_user.is_authenticated %}auth-panel{% endif %}">
+        <main id="main-content" tabindex="-1" class="main-panel {% if not current_user.is_authenticated %}auth-panel{% endif %}">
             {% if current_user.is_authenticated %}
             <header class="topbar">
                 <button class="menu-btn" id="menuButton" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">☰</button>
                 <div class="topbar-copy">
-                    <p class="eyebrow">Retail control center</p>
                     <h1>{% block page_title %}Dashboard{% endblock %}</h1>
                 </div>
-                <div class="profile-menu"><button class="profile-pill" id="profileButton" type="button" aria-expanded="false">
+                <div class="topbar-business">
+                    {% if business_selection_required|default(false) %}
+                    <a class="active-business-label needs-choice" href="{{ url_for('businesses.index') }}">Choose your active business</a>
+                    {% elif config.SUBSCRIPTIONS_ENABLED and business_switch_ids|default([])|length > 1 %}
+                    <details class="business-switcher"><summary aria-label="Active business: {{ subscription_business.name }}. Switch business"><span class="business-caption">Working in</span><strong>{{ subscription_business.name }}</strong><span aria-hidden="true">⌄</span></summary>
+                        <div class="business-dropdown">
+                            <p class="dropdown-caption">Switch business</p>
+                            {% for choice in business_choices %}{% if choice.id in business_switch_ids %}
+                            <form method="POST" action="{{ url_for('businesses.switch', business_id=choice.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" {% if subscription_business.id == choice.id %}aria-current="true"{% endif %}><span aria-hidden="true">{{ '✓' if subscription_business.id == choice.id else '◦' }}</span> {{ choice.name }}</button></form>
+                            {% endif %}{% endfor %}
+                            <a href="{{ url_for('businesses.index') }}">Manage Businesses</a>
+                            {% if business_can_add %}<a href="{{ url_for('businesses.create') }}">Add Business</a>{% endif %}
+                        </div>
+                    </details>
+                    {% else %}<div class="active-business-label"><span class="business-caption">Working in</span><strong>{{ subscription_business.name if subscription_business else 'My business' }}</strong></div>{% endif %}
+                </div>
+                <div class="profile-menu"><button class="profile-pill" id="profileButton" type="button" aria-label="Account menu" aria-controls="profileDropdown" aria-expanded="false">
                     <div class="avatar">{{ current_user.full_name[:1] | upper }}</div>
                     <div class="profile-copy">
                         <strong>{{ current_user.full_name }}</strong>
                         <span>Owner</span>
-                    </div></button><div class="profile-dropdown" id="profileDropdown"><a href="{{ url_for('profile.index') }}">Edit profile</a><a href="{{ url_for('profile.index') }}">Business settings</a><a href="{{ url_for('subscriptions.index') }}">{{ "Billing & plans" if config.SUBSCRIPTIONS_ENABLED else "Lifetime access" }}</a></div></div>
+                    </div></button><div class="profile-dropdown" id="profileDropdown"><a href="{{ url_for('profile.index') }}">Profile & settings</a><a href="{{ url_for('businesses.index') }}">My Businesses</a><a href="{{ url_for('subscriptions.index') }}">{{ "Billing & plans" if config.SUBSCRIPTIONS_ENABLED else "Lifetime access" }}</a></div></div>
             </header>
             {% endif %}
 
@@ -88,18 +100,23 @@
                 {% if messages %}
                     <div class="flash-stack">
                         {% for category, message in messages %}
-                            <div class="flash flash-{{ category }}">{{ message }}</div>
+                            <div class="flash flash-{{ category }}" role="{{ 'alert' if category == 'error' else 'status' }}"><strong class="flash-kind">{{ category|title }}</strong> {{ message }}</div>
                         {% endfor %}
                     </div>
                 {% endif %}
             {% endwith %}
 
-            {% if billing_access is defined %}<div class="flash flash-warning billing-access-banner" role="status"><strong>{{ billing_label }}</strong>{% if billing_access.kind == 'trial' %} · {{ billing_access.trial_days_remaining }} days left. No card required.{% elif not billing_access.can_write %} · Your records are safe and available to view. Choose a plan to add or change business records.{% endif %} <a href="{{ url_for('subscriptions.index') }}">Manage billing</a></div>{% endif %}
+            {% if billing_access is defined and request.blueprint != 'subscriptions' %}
+            {% if business_selection_required %}<div class="billing-access-banner flash flash-warning" role="status"><strong>Choose a business to continue.</strong> Your records are preserved. <a href="{{ url_for('businesses.index') }}">My Businesses</a></div>
+            {% elif billing_access.kind == 'trial' %}<div class="billing-access-banner flash flash-info" role="status"><strong>7-Day Free Trial</strong> · {{ billing_access.trial_days_remaining }} days left. No automatic charge. <a href="{{ url_for('subscriptions.index') }}">Choose a Plan</a></div>
+            {% elif not billing_access.can_write %}<div class="billing-access-banner flash flash-warning" role="status"><strong>{{ billing_label }}</strong> · Your records are safe. Choose a plan to add or change records. <a href="{{ url_for('subscriptions.index') }}">View plans</a></div>{% endif %}
+            {% endif %}
 {% block content %}{% endblock %}
         </main>
     </div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% if current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/customer.js', v='ui-6') }}" defer></script>{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

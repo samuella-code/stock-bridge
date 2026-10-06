@@ -1,13 +1,13 @@
 {% extends 'base.html' %}
 {% block page_title %}My Businesses{% endblock %}
 {% block content %}
-<section class="dashboard-wrap">
+<section class="dashboard-wrap"><h2>My Businesses</h2><p class="muted">Manage access to each business. Products and transactions stay separate.</p>
 {% if choosing %}<div class="panel-card"><h2>Choose the business you want to keep active.</h2><p>Your current entitlement supports one business. Both businesses and all their records are safely stored. Choose one to continue; Plus restores access to the other.</p></div>{% endif %}
 <div class="business-grid">
 {% for b in businesses %}
-<article class="panel-card"><h2>{{ b.name }}</h2>
-<p>{% if b.suspended_at %}Suspended{% elif choosing %}Selection required{% elif b.id in allowed %}Available{% else %}Locked — data preserved{% endif %}{% if not choosing and active and active.id == b.id and b.id in allowed %} · Currently viewing{% endif %}</p>
-<p class="muted">Created {{ b.created_at.strftime('%d %b %Y') }}</p>
+<article class="panel-card business-card {{ 'current' if not choosing and active and active.id == b.id and b.id in allowed }}"><h3>{{ b.name }}</h3>
+<p class="business-status"><span class="status">{% if b.suspended_at %}Suspended{% elif choosing %}Selection required{% elif b.id in allowed %}Available{% else %}Locked — data preserved{% endif %}{% if not choosing and active and active.id == b.id and b.id in allowed %} · Currently viewing{% endif %}</span></p>
+{% if b.id not in allowed and not choosing and not b.suspended_at %}<p>Your products, stock and history are safe. This business is locked by your current plan limit. Plus restores access without recreating it.</p>{% endif %}<p class="muted">Created {{ b.created_at.strftime('%d %b %Y') }}</p>
 {% if b.id in allowed %}<form method="POST" action="{{ url_for('businesses.switch', business_id=b.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="primary-btn">View business</button></form><p><a href="{{ url_for('businesses.edit', business_id=b.id) }}">Edit business</a></p>{% endif %}
 {% if can_choose and not b.suspended_at %}<form method="POST" action="{{ url_for('businesses.choose', business_id=b.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="secondary-btn">Keep this business active</button></form>{% endif %}
 </article>

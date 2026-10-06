@@ -1,7 +1,7 @@
 <div class="basket" data-mode="{{mode}}" data-lookup="{{url_for('products.lookup')}}">
 <label>Search products by name, SKU or category<input type="search" class="basket-search" autocomplete="off" placeholder="Start typing a product" aria-controls="{{mode}}-results"></label>
 <div class="basket-results" id="{{mode}}-results" aria-live="polite"></div>
-<p class="basket-message" aria-live="polite">Search to add a product. Review the basket before saving.</p>
+<p class="basket-message" aria-live="polite">Search to add a product. Search again to add another product, then review quantities and prices before saving.</p>
 <div class="basket-lines"></div><strong class="basket-total">Total: ₦0.00</strong>
 {% if selected is defined and selected %}<script type="application/json" class="basket-initial">{{ {'id':selected.id,'name':selected.name,'stock':selected.stock_quantity,'unit':selected.unit,'price':selected.selling_price|string,'cost':selected.buying_price|string}|tojson }}</script>{% endif %}
 </div>

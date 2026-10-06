@@ -1,0 +1,9 @@
+{% macro nav_link(label, href, active, icon) -%}
+<a class="nav-link {{ 'active' if active }}" href="{{ href }}" {% if active %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">{{ icon }}</span><span>{{ label }}</span></a>
+{%- endmacro %}
+{% macro page_header(title, description='') -%}
+<div class="page-header"><div><h2>{{ title }}</h2>{% if description %}<p class="muted">{{ description }}</p>{% endif %}</div>{% if caller is defined %}<div class="page-actions">{{ caller() }}</div>{% endif %}</div>
+{%- endmacro %}
+{% macro empty_state(title, description='', href='', action='') -%}
+<div class="empty-state"><strong>{{ title }}</strong>{% if description %}<p>{{ description }}</p>{% endif %}{% if href %}<a class="primary-btn button-link" href="{{ href }}">{{ action }}</a>{% endif %}</div>
+{%- endmacro %}

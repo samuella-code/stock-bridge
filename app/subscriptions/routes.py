@@ -4,7 +4,7 @@ from flask_login import current_user, login_required
 from app import db
 from app.models import RecurringSubscription, BillingEvent
 from app.payments.service import PaystackError
-from app.subscriptions.entitlements import effective_access, account_for
+from app.subscriptions.entitlements import effective_access, account_for, PLANS
 from app.subscriptions import billing, provider
 
 subscriptions_bp = Blueprint('subscriptions', __name__, url_prefix='/plans')
@@ -34,7 +34,16 @@ def index():
     access = effective_access(current_user, business=business) if current_user.is_authenticated else None
     history = RecurringSubscription.query.filter_by(user_id=current_user.id).order_by(RecurringSubscription.id.desc()).limit(20).all() if current_user.is_authenticated else []
     events = BillingEvent.query.filter(BillingEvent.user_id==current_user.id, BillingEvent.kind.notin_(('provider_event','business_created','business_selected'))).order_by(BillingEvent.id.desc()).limit(10).all() if current_user.is_authenticated else []
-    return render_template('subscriptions/billing.html', access=access, history=history, events=events, account=account_for(current_user) if current_user.is_authenticated else None, provider_ready=provider.configured())
+    # Presentation prices come from the same authoritative configuration as checkout.
+    plan_prices = {
+        plan: {interval: PLANS[(plan, interval)]["amount"] / 100
+               for interval in ("monthly", "yearly")}
+        for plan in ("basic", "plus")
+    }
+    return render_template('subscriptions/billing.html', access=access,
+        history=history, events=events,
+        account=account_for(current_user) if current_user.is_authenticated else None,
+        provider_ready=provider.configured(), plan_prices=plan_prices)
 
 
 @subscriptions_bp.post('/checkout')
