@@ -114,6 +114,105 @@ def add_product(client,name,qty,cost,price):
     return Product.query.filter_by(name=name).one()
 
 
+@pytest.mark.parametrize('state,kind,limit', [
+    ('trial','trial',1), ('basic','basic',1), ('plus','plus',2),
+    ('expired','restricted',0), ('cancelled','basic',1),
+    ('lifetime','legacy_lifetime',1), ('lifetime_plus','legacy_lifetime_plus',2),
+    ('lifetime_fallback','legacy_lifetime',1),
+])
+def test_acceptance_entitlement_server_matrix(app, state, kind, limit):
+    initial = 'basic' if state in ('expired','cancelled') else 'lifetime_plus' if state=='lifetime_fallback' else state
+    count = 2 if initial in ('plus','lifetime_plus') else 1
+    user, shops = seed(initial, count)
+    client = app.test_client(); login(client,user)
+    # Create history through real Flask routes before changing the entitlement.
+    product = add_product(client,'Retained history',20,2,5)
+    assert client.post('/sales/',data={'product_id':product.id,'quantity':'2','unit_price':'5'}).status_code==302
+    assert client.post('/restocking/receive',data={'product_id':product.id,'quantity':'3','unit_cost':'2'}).status_code==302
+    assert client.post('/expenses/',data={'description':'Retained expense','category':'Transportation','amount':'1'}).status_code==302
+    models = (Business,Product,Sale,SaleItem,Restock,StockMovement,Expense)
+    before = tuple(model.query.count() for model in models)
+    if state in ('expired','cancelled','lifetime_fallback'):
+        sub = RecurringSubscription.query.filter_by(user_id=user.id).one()
+        if state=='cancelled': sub.status='cancelled'
+        else: sub.current_period_end=datetime.utcnow()-timedelta(seconds=1)
+        db.session.commit()
+    assert effective_access(user).kind==kind
+    if state=='lifetime_fallback':
+        assert selection_required(user)
+        assert client.get('/dashboard').location.endswith('/businesses/')
+        assert client.post(f'/businesses/{shops[0].id}/choose').status_code==302
+        client.post(f'/businesses/{shops[1].id}/switch')
+        with client.session_transaction() as session:
+            assert session['active_business_id']==shops[0].id
+        assert client.get(f'/businesses/{shops[1].id}/edit').status_code==302
+        assert not effective_access(user,business=shops[1]).can_write
+    for path in ('/dashboard','/products/','/sales/','/expenses/','/restocking/','/reports'):
+        assert client.get(path).status_code==200
+    assert add_business(client,user,'Bypass limit').status_code==302
+    assert Business.query.filter_by(user_id=user.id).count()==count
+    response = client.post('/products/new',data={'name':'Mutation probe','stock_quantity':'1','buying_price':'2','selling_price':'5','business_limit':'999','trial_ends_at':'2099-01-01'})
+    assert response.status_code==302
+    if state=='expired':
+        assert response.location.endswith('/plans/')
+        for path, data in (
+            ('/sales/',{'product_id':product.id,'quantity':'1','unit_price':'5'}),
+            ('/restocking/receive',{'product_id':product.id,'quantity':'1','unit_cost':'2'}),
+            ('/expenses/',{'description':'Bypass','amount':'1'}),
+            (f'/products/{product.id}/adjust',{'quantity':'1','direction':'increase','reason':'Other'}),
+        ):
+            assert client.post(path,data=data).location.endswith('/plans/')
+        assert tuple(model.query.count() for model in models)==before
+    else:
+        assert Product.query.filter_by(name='Mutation probe').count()==1
+        for model, original in zip(models,before):
+            if model not in (Product,StockMovement):
+                assert model.query.count()==original
+    db.session.expire_all()
+    assert db.session.get(Product,product.id).stock_quantity==21
+    assert Sale.query.count()==1 and SaleItem.query.count()==1
+    assert Restock.query.count()==1 and Expense.query.count()==1
+    assert effective_access(user).business_limit==limit
+
+
+@pytest.mark.parametrize('scope',['other_user','other_business'])
+def test_acceptance_manual_resource_id_authorization(app, scope):
+    owner, own = seed('plus',2)
+    if scope=='other_user': target, targets=seed('plus',email='foreign-matrix@example.invalid')
+    else: target, targets=owner,[own[1]]
+    client=app.test_client(); login(client,target)
+    client.post(f'/businesses/{targets[0].id}/switch')
+    product=add_product(client,'Private matrix product',10,2,5)
+    client.post('/sales/',data={'product_id':product.id,'quantity':'1','unit_price':'5'})
+    client.post('/expenses/',data={'description':'Private matrix expense','category':'Transportation','amount':'2'})
+    client.post('/restocking/receive',data={'product_id':product.id,'quantity':'1','unit_cost':'2'})
+    sale=Sale.query.filter_by(business_id=targets[0].id).one()
+    expense=Expense.query.filter_by(business_id=targets[0].id).one()
+    client.get('/dashboard')  # consume target's flash messages before changing account
+    login(client,owner); client.post(f'/businesses/{own[0].id}/switch')
+    before=(product.stock_quantity,Sale.query.count(),Expense.query.count(),Restock.query.count(),StockMovement.query.count())
+    for path in (f'/products/{product.id}',f'/products/{product.id}/edit'):
+        assert client.get(path).status_code==404
+    for path,data in (
+        (f'/products/{product.id}/edit',{'name':'Stolen'}),
+        (f'/sales/{sale.id}/delete',{'reason':'Forged'}),
+        (f'/expenses/{expense.id}/delete',{}),
+        (f'/restocking/{product.id}/settings',{'supplier_lead_time':'1','safety_stock':'0','minimum_stock_level':'1'}),
+        ('/restocking/receive',{'product_id':product.id,'quantity':'1','unit_cost':'2'}),
+        ('/sales/',{'product_id':product.id,'quantity':'1','unit_price':'5'}),
+    ):
+        assert client.post(path,data=data).status_code==404
+    for path in ('/products/','/sales/','/expenses/','/restocking/','/reports','/dashboard'):
+        response=client.get(path+'?business_id='+str(targets[0].id))
+        assert response.status_code==200
+        assert b'Private matrix product' not in response.data and b'Private matrix expense' not in response.data
+    if scope=='other_user':
+        assert client.get(f'/businesses/{targets[0].id}/edit').status_code==404
+        assert client.post(f'/businesses/{targets[0].id}/switch').status_code==404
+    db.session.expire_all()
+    assert (db.session.get(Product,product.id).stock_quantity,Sale.query.count(),Expense.query.count(),Restock.query.count(),StockMovement.query.count())==before
+
+
 def test_two_business_end_to_end_and_all_route_isolation(app):
     user,shops=seed('plus'); shops[0].name='Tosin Mini Mart'; db.session.commit()
     client=app.test_client(); login(client,user)

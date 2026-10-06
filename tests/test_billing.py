@@ -467,6 +467,51 @@ def test_price_is_server_owned_and_lifetime_checkout_disabled(client,fake):
     assert client.get('/payments/checkout').location.endswith('/plans/')
 
 
+@pytest.mark.parametrize('plan,interval,amount,limit',[
+    ('basic','monthly',300000,1),('basic','yearly',3000000,1),
+    ('plus','monthly',500000,2),('plus','yearly',5000000,2),
+])
+def test_acceptance_checkout_rejects_browser_owned_billing_fields(client,fake,plan,interval,amount,limit):
+    user,business=seed(eligible=False); login(client,user)
+    response=client.post('/plans/checkout',data={
+        'plan':plan,'interval':interval,'amount':'1','amount_kobo':'1',
+        'currency':'USD','provider_plan_code':'PLN_attacker','paystack_plan':'PLN_attacker',
+        'business_limit':'999','billing_interval':'weekly','user_id':'999',
+    })
+    assert response.status_code==303
+    payment=Payment.query.one(); sub=RecurringSubscription.query.one()
+    assert payment.user_id==user.id and payment.amount_kobo==amount
+    assert sub.amount_kobo==amount and sub.billing_interval==interval
+    assert sub.provider_plan_code==f'PLN_{plan}_{interval}'
+    payload=next(payload for path,method,payload in fake.calls if path=='/transaction/initialize')
+    assert payload['amount']==amount and payload['currency']=='NGN'
+    assert payload['plan']==f'PLN_{plan}_{interval}'
+    billing.verify_checkout(user,payment.reference)
+    assert effective_access(user).business_limit==limit
+
+
+@pytest.mark.parametrize('interval',['weekly','lifetime','2099'])
+def test_acceptance_checkout_invalid_interval_never_contacts_provider(client,fake,interval):
+    user,_=seed(eligible=False); login(client,user)
+    response=client.post('/plans/checkout',data={'plan':'plus','interval':interval,'amount':'1','business_limit':'999'})
+    assert response.status_code==302 and response.location.endswith('/plans/')
+    assert fake.calls==[] and Payment.query.count()==0 and RecurringSubscription.query.count()==0
+
+
+def test_acceptance_duplicate_callback_does_not_extend_paid_period(client,fake):
+    user,_=seed(eligible=False); login(client,user)
+    billing.begin_checkout(user,'plus','monthly')
+    sub=RecurringSubscription.query.one()
+    callback='/plans/callback?reference='+sub.checkout_reference
+    assert client.get(callback).status_code==302
+    period=(sub.current_period_start,sub.current_period_end)
+    assert client.get(callback).status_code==302
+    db.session.refresh(sub)
+    assert (sub.current_period_start,sub.current_period_end)==period
+    assert Payment.query.count()==1
+    assert BillingEvent.query.filter_by(kind='subscription_paid').count()==1
+
+
 def test_card_link_is_owned_and_host_checked(client,fake,monkeypatch):
     u,b=seed(eligible=False);s=purchase(u);login(client,u)
     original=fake.call
