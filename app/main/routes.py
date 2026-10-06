@@ -75,9 +75,15 @@ def recent_activity(b):
               "amount": f"-₦{e.amount:,.2f}"} for e in expenses])
     return sorted(rows, key=lambda row: row["date"], reverse=True)[:8]
 
+def public_plan_prices():
+    from app.subscriptions.entitlements import PLANS
+    return {plan: {interval: PLANS[(plan, interval)]['amount'] // 100
+                   for interval in ('monthly', 'yearly')} for plan in ('basic', 'plus')}
+
+
 @main_bp.get("/")
 def index():
-    return redirect(url_for("main.dashboard")) if current_user.is_authenticated else render_template("home.html")
+    return redirect(url_for("main.dashboard")) if current_user.is_authenticated else render_template("home.html", plan_prices=public_plan_prices())
 
 @main_bp.get("/dashboard")
 @login_required

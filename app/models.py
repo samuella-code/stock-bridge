@@ -202,3 +202,18 @@ class BillingEvent(db.Model):
 
 @login_manager.user_loader
 def load_user(i): return db.session.get(User,int(i))
+
+
+class SocialIdentity(db.Model):
+    """Stable provider subject; no OAuth tokens are retained."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    provider = db.Column(db.String(16), nullable=False)
+    provider_subject = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    user = db.relationship("User", backref=db.backref("social_identities", cascade="all, delete-orphan"))
+    __table_args__ = (
+        db.UniqueConstraint("provider", "provider_subject", name="uq_social_provider_subject"),
+        db.UniqueConstraint("user_id", "provider", name="uq_social_user_provider"),
+        db.CheckConstraint("provider IN ('google', 'apple')", name="ck_social_provider"),
+    )

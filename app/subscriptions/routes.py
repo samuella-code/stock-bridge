@@ -4,7 +4,7 @@ from flask_login import current_user, login_required
 from app import db
 from app.models import RecurringSubscription, BillingEvent
 from app.payments.service import PaystackError
-from app.subscriptions.entitlements import effective_access, account_for, PLANS
+from app.subscriptions.entitlements import effective_access, account_for, PLANS, plan_spec
 from app.subscriptions import billing, provider
 
 subscriptions_bp = Blueprint('subscriptions', __name__, url_prefix='/plans')
@@ -44,6 +44,37 @@ def index():
         history=history, events=events,
         account=account_for(current_user) if current_user.is_authenticated else None,
         provider_ready=provider.configured(), plan_prices=plan_prices)
+
+
+@subscriptions_bp.get('/<int:subscription_id>/change')
+@login_required
+def review_change(subscription_id):
+    enabled()
+    sub = owned(subscription_id)
+    current = effective_access(current_user).subscription
+    if not current or current.id != sub.id:
+        return failed(ValueError('Only your currently paid subscription can be changed.'))
+    return review()
+
+
+@subscriptions_bp.get('/review')
+@login_required
+def review():
+    enabled()
+    plan, interval = request.args.get('plan', ''), request.args.get('interval', '')
+    try:
+        spec = plan_spec(plan, interval)
+        access = effective_access(current_user)
+        if access.legacy and plan != 'plus':
+            raise ValueError('Your Lifetime Access already includes Basic tools. Plus is optional.')
+        sub = access.subscription
+        if sub and (sub.plan_code, sub.billing_interval) == (plan, interval):
+            raise ValueError('That plan and interval are already selected.')
+        immediate = not sub or (sub.plan_code == 'basic' and plan == 'plus' and sub.billing_interval == interval)
+        return render_template('subscriptions/review.html', plan=plan, interval=interval,
+            spec=spec, sub=sub, immediate=immediate, provider_ready=provider.configured(), access=access)
+    except ValueError as error:
+        return failed(error)
 
 
 @subscriptions_bp.post('/checkout')

@@ -35,6 +35,8 @@ def create_app(test_config=None):
     app.jinja_env.globals["csrf_token"] = generate_csrf
 
     from app.auth.routes import auth_bp
+    from app.auth.social import init_social
+    init_social(app)
     from app.main.routes import main_bp
     from app.products.routes import products_bp
     from app.sales.routes import sales_bp

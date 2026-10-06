@@ -1,0 +1,21 @@
+{% macro brand() %}<a class="entry-brand" href="{{ url_for('main.index') }}" aria-label="StockBridge home"><span class="brand-mark">SB</span><strong>StockBridge</strong></a>{% endmacro %}
+{% macro trial_note() %}Create an account and verify your email to start your 7-day free trial. No card required.{% endmacro %}
+{% macro social_buttons() %}
+<div class="social-options" aria-label="Social sign in">
+{% for provider in ['google', 'apple'] %}<form method="POST" action="{{ url_for('auth.social_start', provider=provider) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="social-button {{ provider }}" type="submit" {% if not social_ready[provider] %}disabled aria-describedby="social-availability"{% endif %}><span aria-hidden="true">{{ 'G' if provider == 'google' else '●' }}</span>Continue with {{ provider|title }}</button></form>{% endfor %}
+</div>{% if not social_ready.google or not social_ready.apple %}<p class="field-hint" id="social-availability">{{ 'Google and Apple sign-in are' if not social_ready.google and not social_ready.apple else 'Google sign-in is' if not social_ready.google else 'Apple sign-in is' }} not available yet. You can continue with email.</p>{% endif %}<div class="auth-divider"><span>or continue with email</span></div>
+{% endmacro %}
+{% macro auth_visual() %}<aside class="entry-visual">{{ brand() }}<div><p class="eyebrow">Your business, in view</p><h2>Less guesswork.<br>More clarity.</h2><p>Keep your products, inventory, sales and expenses together. See what happened and understand your profit.</p><ol class="entry-steps"><li>Add your products</li><li>Record daily activity</li><li>See your business numbers</li></ol></div><p>Built for the everyday work of running a small business.</p></aside>{% endmacro %}
+{% macro price_toggle() %}<div class="interval-toggle" role="group" aria-label="Displayed billing interval"><button type="button" data-price-interval="monthly" aria-pressed="true">Monthly</button><button type="button" data-price-interval="yearly" aria-pressed="false">Yearly</button></div>{% endmacro %}
+{% macro pricing_cards(plan_prices, access=None, provider_ready=False) %}
+<div class="billing-plan-grid entry-pricing">
+{% for plan, prices in plan_prices.items() %}<article class="panel-card plan-card {{ 'featured' if plan == 'plus' }}">
+<p class="eyebrow">{{ 'Room for a second business' if plan == 'plus' else 'For one business' }}</p><h3>StockBridge {{ plan|title }}</h3>
+{% if access and access.subscription and access.subscription.plan_code == plan %}<span class="current-plan-tag">Current Plan · {{ access.subscription.billing_interval|title }}</span>{% endif %}
+<p class="plan-price" data-price-monthly="₦{{ '{:,.0f}'.format(prices.monthly) }}/month" data-price-yearly="₦{{ '{:,.0f}'.format(prices.yearly) }}/year">₦{{ '{:,.0f}'.format(prices.monthly) }}/month</p>
+<p class="annual-saving">Yearly: ₦{{ '{:,.0f}'.format(prices.yearly) }} · Save ₦{{ '{:,.0f}'.format(prices.monthly*12-prices.yearly) }}/year</p>
+<ul class="plan-features"><li>{{ 'Up to 2 businesses' if plan == 'plus' else '1 business' }}</li><li>Products & inventory</li><li>Sales tracking and restocking</li><li>Expenses, Dashboard and Reports</li>{% if plan == 'plus' %}<li>Business switching with separate records</li>{% endif %}</ul>
+{% if access and (not access.legacy or plan == 'plus') %}<form method="GET" action="{{ url_for('subscriptions.review_change', subscription_id=access.subscription.id) if access.subscription else url_for('subscriptions.review') }}"><input type="hidden" name="plan" value="{{ plan }}"><label>Billing interval<select name="interval"><option value="monthly">Monthly · ₦{{ '{:,.0f}'.format(prices.monthly) }}</option><option value="yearly">Yearly · ₦{{ '{:,.0f}'.format(prices.yearly) }}</option></select></label><button class="primary-btn full-width" type="submit">{{ 'Upgrade to Plus' if access.subscription and access.subscription.plan_code == 'basic' and plan == 'plus' else 'Review plan & interval' if access.subscription else 'Choose '+plan|title }}</button></form>
+{% elif access and access.legacy %}<p>Your Lifetime access includes the tools for one business. You do not need Basic.</p>
+{% else %}<a class="primary-btn full-width" href="{{ url_for('auth.signup') }}">Start Free Trial</a>{% endif %}</article>{% endfor %}
+</div>{% endmacro %}

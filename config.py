@@ -53,3 +53,13 @@ class Config:
  PAYSTACK_BASIC_YEARLY_PLAN=os.getenv("PAYSTACK_BASIC_YEARLY_PLAN","")
  PAYSTACK_PLUS_MONTHLY_PLAN=os.getenv("PAYSTACK_PLUS_MONTHLY_PLAN","")
  PAYSTACK_PLUS_YEARLY_PLAN=os.getenv("PAYSTACK_PLUS_YEARLY_PLAN","")
+
+ # Separate credentials and exact HTTPS redirects per environment; disabled when missing.
+ GOOGLE_CLIENT_ID=os.getenv("GOOGLE_CLIENT_ID", "")
+ GOOGLE_CLIENT_SECRET=os.getenv("GOOGLE_CLIENT_SECRET", "")
+ GOOGLE_REDIRECT_URI=os.getenv("GOOGLE_REDIRECT_URI", "")
+ APPLE_CLIENT_ID=os.getenv("APPLE_CLIENT_ID", "")
+ APPLE_TEAM_ID=os.getenv("APPLE_TEAM_ID", "")
+ APPLE_KEY_ID=os.getenv("APPLE_KEY_ID", "")
+ APPLE_PRIVATE_KEY=os.getenv("APPLE_PRIVATE_KEY", "")
+ APPLE_REDIRECT_URI=os.getenv("APPLE_REDIRECT_URI", "")
