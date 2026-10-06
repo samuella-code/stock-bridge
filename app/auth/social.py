@@ -9,6 +9,8 @@ from joserfc import jwt
 from joserfc.jwk import ECKey
 from flask import abort, current_app, flash, make_response, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_user
+from flask_wtf.csrf import CSRFError, validate_csrf
+from wtforms.validators import ValidationError
 from sqlalchemy.exc import IntegrityError
 from app import csrf, db
 from app.auth.routes import auth_bp
@@ -186,7 +188,17 @@ def complete_callback(provider):
 
 
 @auth_bp.route('/social/finish', methods=['GET', 'POST'])
+@csrf.exempt
 def social_finish():
+    # Replace only the automatic HTTPS Referer check on this completion form.
+    # Its no-referrer policy (and privacy clients) can omit that header. The
+    # signed, expiring CSRF token must still match this browser's session before
+    # any pending identity is consumed; OAuth state/nonce validation is unchanged.
+    if request.method == 'POST' and current_app.config.get('WTF_CSRF_ENABLED', True):
+        try:
+            validate_csrf(request.form.get(current_app.config['WTF_CSRF_FIELD_NAME']))
+        except ValidationError as error:
+            raise CSRFError(str(error)) from error
     pending = session.get('social_pending') or {}
     if pending.get('expires', 0) < time.time() or pending.get('provider') not in ISSUERS or current_user.is_authenticated:
         session.pop('social_pending', None)

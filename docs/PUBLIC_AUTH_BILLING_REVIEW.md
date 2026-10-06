@@ -165,3 +165,31 @@ STOP after local review. Do not independently deploy to staging, merge or deploy
 - `tests/test_entry_redesign.py`
 - `tests/test_social_auth.py`
 - `tests/test_social_migration.py`
+
+## Staging OAuth completion regression
+
+The HTTPS completion POST failed with Flask-WTF's `The referrer header is missing.`
+The completion page deliberately sends `Referrer-Policy: no-referrer`, while the
+global HTTPS CSRF middleware also requires a same-origin Referer. Local HTTP
+tests with CSRF disabled did not exercise that conflict.
+
+`social_finish` now replaces that route's automatic Referer check with explicit
+Flask-WTF `validate_csrf` validation of the signed, expiring form token against
+the current session. Invalid tokens still raise the normal CSRFError. Global
+CSRF settings, email/password authentication, OAuth start protection and callback
+state/nonce/signature/issuer/audience validation are unchanged. Provider identity
+and email still come only from the validated, session-bound pending proof. The
+proof's expiry, password-confirmed linking, session rotation, identity uniqueness
+and fixed post-login destinations remain unchanged. Apple uses the same protected
+completion form, while its state-protected return bridge is unchanged.
+
+Fourteen additional HTTPS regressions run with CSRF and strict SSL checks enabled:
+Google/Apple signup, password-confirmed linking and returning login without
+Referer; forged identity fields; missing/invalid/expired/other-session CSRF;
+missing/expired/other-session pending proof; completion and callback replay;
+invalid OAuth state; and unchanged email-login/OAuth-start CSRF policy. The
+signup regressions fail against the original implementation and pass with the
+fix. Existing signed JWT validation tests remain part of the full suite.
+
+No provider credentials or platform settings are changed by this fix. Staging
+retesting must use the existing isolated project/database; no payment is needed.

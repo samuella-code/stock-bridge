@@ -1,5 +1,6 @@
 """Real Authlib state/JWKS/JWT validation with local keys and fake HTTP exchange."""
 import time
+import re
 from urllib.parse import parse_qs, urlsplit
 import pytest
 from joserfc import jwt
@@ -9,6 +10,146 @@ from test_multi_business import app, seed
 from app import db
 from app.models import User, Business, SocialIdentity, AccountBilling, BillingEvent
 from app.auth.social import ISSUERS
+
+
+@pytest.fixture
+def secure_app(app):
+    # Reproduce hosted HTTPS behavior, with the real CSRF defaults enabled.
+    app.config.update(WTF_CSRF_ENABLED=True, WTF_CSRF_SSL_STRICT=True,
+                      PREFERRED_URL_SCHEME='https')
+    return app
+
+
+def csrf_form(client, path):
+    # The shared fixture holds an app context across requests; production has a
+    # fresh request context. Clear request-local caches before rendering tokens.
+    from flask import g
+    g.pop('csrf_token', None)
+    g.pop('_login_user', None)
+    page = client.get(path)
+    assert page.status_code == 200
+    return re.search(r'name="csrf_token" value="([^"]+)"', page.get_data(as_text=True))[1]
+
+
+def secure_pending(client, oidc, monkeypatch, provider='google'):
+    token = csrf_form(client, '/auth/signup')
+    response = client.post(f'/auth/{provider}/start', data={'csrf_token': token},
+                           headers={'Referer': 'https://localhost/auth/signup'})
+    assert response.status_code == 302
+    params = parse_qs(urlsplit(response.location).query)
+    exchange(oidc, monkeypatch, provider, params)
+    response = callback(client, provider, params)
+    assert response.location.endswith('/auth/social/finish')
+    return params
+
+
+@pytest.mark.parametrize('provider', ['google', 'apple'])
+def test_https_signup_without_referer_preserves_csrf_and_verified_identity(secure_app, oidc, monkeypatch, provider):
+    client = secure_app.test_client()
+    secure_pending(client, oidc, monkeypatch, provider)
+    token = csrf_form(client, '/auth/social/finish')
+    response = client.post('/auth/social/finish', data={
+        'csrf_token': token, 'full_name': 'Owner', 'business_name': 'Shop',
+        'provider': 'attacker', 'sub': 'forged', 'email': 'forged@example.invalid'})
+    assert response.location.endswith('/dashboard')
+    assert User.query.one().email == 'social@example.invalid'
+    assert SocialIdentity.query.one().provider == provider
+    assert SocialIdentity.query.one().provider_subject == 'stable-subject'
+    with client.session_transaction() as state:
+        assert 'social_pending' not in state and 'social_flow' not in state
+    # Session rotation invalidates the completion token; replay makes no writes.
+    replay = client.post('/auth/social/finish', data={
+        'csrf_token': token, 'full_name': 'Duplicate', 'business_name': 'Duplicate'})
+    assert replay.status_code == 400
+    assert User.query.count() == Business.query.count() == SocialIdentity.query.count() == 1
+
+
+@pytest.mark.parametrize('provider', ['google', 'apple'])
+def test_https_link_and_returning_login_without_referer(secure_app, oidc, monkeypatch, provider):
+    user, _ = seed(email='social@example.invalid')
+    user.set_password('existing-password'); db.session.commit()
+    old_hash = user.password_hash
+    client = secure_app.test_client()
+    secure_pending(client, oidc, monkeypatch, provider)
+    token = csrf_form(client, '/auth/social/finish')
+    response = client.post('/auth/social/finish', data={'csrf_token': token, 'password': 'existing-password'})
+    assert response.location.endswith('/dashboard')
+    assert user.password_hash == old_hash
+    client.post('/auth/logout', data={'csrf_token': csrf_form(client, '/dashboard')},
+                headers={'Referer': 'https://localhost/dashboard'})
+    # Returning identity logs in directly from the validated callback, no Referer.
+    token = csrf_form(client, '/auth/login')
+    response = client.post(f'/auth/{provider}/start', data={'csrf_token': token},
+                           headers={'Referer': 'https://localhost/auth/login'})
+    params = parse_qs(urlsplit(response.location).query)
+    exchange(oidc, monkeypatch, provider, params)
+    assert callback(client, provider, params).location.endswith('/dashboard')
+    assert User.query.count() == Business.query.count() == SocialIdentity.query.count() == 1
+
+
+@pytest.mark.parametrize('bad', ['missing', 'invalid', 'other_session', 'expired'])
+def test_https_finish_rejects_bad_csrf_without_referer(secure_app, oidc, monkeypatch, bad):
+    client = secure_app.test_client()
+    secure_pending(client, oidc, monkeypatch)
+    token = csrf_form(client, '/auth/social/finish')
+    if bad == 'missing': token = ''
+    elif bad == 'invalid': token = 'forged'
+    elif bad == 'other_session': token = csrf_form(secure_app.test_client(), '/auth/signup')
+    else:
+        from itsdangerous import TimestampSigner, URLSafeTimedSerializer
+        with client.session_transaction() as state: raw_token = state['csrf_token']
+        with monkeypatch.context() as clock:
+            clock.setattr(TimestampSigner, 'get_timestamp', lambda self: int(time.time()) - 7200)
+            token = URLSafeTimedSerializer(secure_app.secret_key, salt='wtf-csrf-token').dumps(raw_token)
+    response = client.post('/auth/social/finish', data={
+        'csrf_token': token, 'full_name': 'Forged', 'business_name': 'No Shop'})
+    assert response.status_code == 400
+    assert User.query.count() == Business.query.count() == SocialIdentity.query.count() == 0
+    with client.session_transaction() as state: assert 'social_pending' in state
+
+
+@pytest.mark.parametrize('bad', ['missing', 'expired', 'different_session'])
+def test_https_finish_rejects_missing_pending_proof_even_with_csrf(secure_app, oidc, monkeypatch, bad):
+    client = secure_app.test_client()
+    if bad != 'missing': secure_pending(client, oidc, monkeypatch)
+    if bad == 'expired':
+        with client.session_transaction() as state:
+            pending = state['social_pending']; pending['expires'] = 0; state['social_pending'] = pending
+    if bad == 'different_session': client = secure_app.test_client()
+    token = csrf_form(client, '/auth/signup')
+    response = client.post('/auth/social/finish', data={
+        'csrf_token': token, 'full_name': 'Forged', 'business_name': 'No Shop',
+        'provider': 'google', 'sub': 'stable-subject', 'email': 'social@example.invalid'})
+    assert response.location.endswith('/auth/login')
+    assert User.query.count() == Business.query.count() == SocialIdentity.query.count() == 0
+
+
+def test_https_email_login_and_oauth_start_keep_existing_csrf_policy(secure_app, oidc):
+    user, _ = seed(); user.set_password('unchanged-password'); db.session.commit()
+    client = secure_app.test_client()
+    token = csrf_form(client, '/auth/login')
+    data = {'csrf_token': token, 'email': user.email, 'password': 'unchanged-password'}
+    assert client.post('/auth/login', data=data).status_code == 400
+    assert client.post('/auth/google/start', data={'csrf_token': token}).status_code == 400
+    assert client.post('/auth/google/start', data={'csrf_token': token},
+                       headers={'Referer': 'https://evil.invalid/'}).status_code == 400
+    assert client.post('/auth/login', data=data,
+                       headers={'Referer': 'https://localhost/auth/login'}).location.endswith('/dashboard')
+
+
+@pytest.mark.parametrize('provider', ['google', 'apple'])
+def test_https_invalid_state_and_callback_replay_remain_rejected(secure_app, oidc, monkeypatch, provider):
+    client = secure_app.test_client()
+    params = secure_pending(client, oidc, monkeypatch, provider)
+    assert callback(client, provider, params).location.endswith('/auth/login')
+    with client.session_transaction() as state: assert 'social_pending' not in state
+    token = csrf_form(client, '/auth/signup')
+    response = client.post(f'/auth/{provider}/start', data={'csrf_token': token},
+                           headers={'Referer': 'https://localhost/auth/signup'})
+    params = parse_qs(urlsplit(response.location).query)
+    exchange(oidc, monkeypatch, provider, params)
+    assert callback(client, provider, params, {'state': 'forged'}).location.endswith('/auth/login')
+    assert User.query.count() == Business.query.count() == SocialIdentity.query.count() == 0
 
 @pytest.fixture
 def oidc(app, monkeypatch):
