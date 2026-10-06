@@ -1,6 +1,7 @@
 """Vercel/WSGI entry point for StockBridge."""
 
-from app import create_app
+from runtime_diagnostics import startup_watch
 
-
-app = create_app()
+with startup_watch():
+    from app import create_app
+    app = create_app()

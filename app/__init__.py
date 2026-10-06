@@ -54,6 +54,9 @@ def create_app(test_config=None):
     ):
         app.register_blueprint(blueprint)
 
+    from runtime_diagnostics import register_request_diagnostics
+    register_request_diagnostics(app)
+
     @app.before_request
     def require_lifetime_access():
         host = request.host.split(":", 1)[0].lower()
