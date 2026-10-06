@@ -1,5 +1,5 @@
 {% macro brand() %}<a class="entry-brand" href="{{ url_for('main.index') }}" aria-label="StockBridge home"><span class="brand-mark">SB</span><strong>StockBridge</strong></a>{% endmacro %}
-{% macro trial_note() %}Create an account and verify your email to start your 7-day free trial. No card required.{% endmacro %}
+{% macro trial_note() %}{% if config.SUBSCRIPTIONS_ENABLED %}Create an account and verify your email to start your 7-day free trial. No card required.{% else %}Create an account, verify your email, then explore StockBridge.{% endif %}{% endmacro %}
 {% macro social_buttons() %}
 <div class="social-options" aria-label="Social sign in">
 {# Apple enrollment is postponed; retain the provider implementation for later activation. #}
@@ -20,5 +20,5 @@
 <ul class="plan-features"><li>{{ 'Up to 2 businesses' if plan == 'plus' else '1 business' }}</li><li>Products & inventory</li><li>Sales tracking and restocking</li><li>Expenses, Dashboard and Reports</li>{% if plan == 'plus' %}<li>Business switching with separate records</li>{% endif %}</ul>
 {% if access and (not access.legacy or plan == 'plus') %}<form method="GET" action="{{ url_for('subscriptions.review_change', subscription_id=access.subscription.id) if access.subscription else url_for('subscriptions.review') }}"><input type="hidden" name="plan" value="{{ plan }}"><label>Billing interval<select name="interval"><option value="monthly">Monthly · ₦{{ '{:,.0f}'.format(prices.monthly) }}</option><option value="yearly">Yearly · ₦{{ '{:,.0f}'.format(prices.yearly) }}</option></select></label><button class="primary-btn full-width" type="submit">{{ 'Upgrade to Plus' if access.subscription and access.subscription.plan_code == 'basic' and plan == 'plus' else 'Review plan & interval' if access.subscription else 'Choose '+plan|title }}</button></form>
 {% elif access and access.legacy %}<p>Your Lifetime access includes the tools for one business. You do not need Basic.</p>
-{% else %}<a class="primary-btn full-width" href="{{ url_for('auth.signup') }}">Start Free Trial</a>{% endif %}</article>{% endfor %}
+{% else %}<a class="primary-btn full-width" href="{{ url_for('auth.signup') }}">{{ "Start Free Trial" if config.SUBSCRIPTIONS_ENABLED else "Create Account" }}</a>{% endif %}</article>{% endfor %}
 </div>{% endmacro %}

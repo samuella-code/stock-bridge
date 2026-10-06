@@ -6,6 +6,66 @@ from app.models import RecurringSubscription, User, Business
 from app.subscriptions.entitlements import PLANS
 
 
+@pytest.mark.parametrize('enabled',[False,True])
+@pytest.mark.parametrize('path',['/','/auth/signup','/auth/login','/plans/'])
+def test_rollout_flag_controls_public_trial_promises(app,enabled,path):
+    app.config.update(SUBSCRIPTIONS_ENABLED=enabled,BILLING_PROVIDER_ENABLED=False)
+    html=app.test_client().get(path).get_data(as_text=True).lower()
+    if not enabled:
+        for promise in ('free trial','7-day trial','seven-day trial','7 days free','start your 7-day'):
+            assert promise not in html
+        assert 'lifetime' in html or path.startswith('/auth/')
+    elif path!='/auth/login':
+        assert 'trial' in html
+
+
+@pytest.mark.parametrize('enabled',[False,True])
+def test_rollout_flag_controls_social_completion_copy(app,enabled):
+    import time
+    app.config['SUBSCRIPTIONS_ENABLED']=enabled
+    client=app.test_client()
+    with client.session_transaction() as session:
+        session['social_pending']={'provider':'google','email':'copy@example.invalid','sub':'copy-sub','expires':time.time()+600}
+    html=client.get('/auth/social/finish').get_data(as_text=True)
+    assert ('existing trial rules' in html)==enabled
+    assert ('Business tools unlock with Lifetime Access' in html)==(not enabled)
+
+
+@pytest.mark.parametrize('enabled',[False,True])
+def test_rollout_flag_controls_email_signup_trial_and_customer_copy(app,enabled,monkeypatch):
+    from datetime import timedelta
+    from app.models import AccountBilling,BillingEvent
+    from app.email_service import verification_token
+    app.config.update(SUBSCRIPTIONS_ENABLED=enabled,BILLING_PROVIDER_ENABLED=False)
+    messages=[]
+    monkeypatch.setattr('app.email_service._send_email',lambda subject,recipient,body,html=None: messages.append(body) or True)
+    client=app.test_client()
+    client.post('/auth/signup',data={'full_name':'Flag Owner','business_name':'Flag shop','email':'flag@example.invalid','password':'test-password-only'})
+    user=User.query.one()
+    client.get('/auth/verify/'+verification_token(user.email))
+    account=db.session.get(AccountBilling,user.id)
+    if enabled:
+        assert account.trial_ends_at-account.trial_started_at==timedelta(days=7)
+        initial=(account.trial_started_at,account.trial_ends_at)
+    else:
+        assert account is None and not user.businesses[0].has_write_access
+    for path in ('/dashboard','/plans/','/businesses/'):
+        html=client.get(path).get_data(as_text=True).lower()
+        if not enabled:
+            assert 'free trial' not in html and 'seven-day trial' not in html and '7-day trial' not in html
+    client.post('/auth/logout')
+    client.post('/auth/login',data={'email':user.email,'password':'test-password-only'})
+    client.get('/dashboard')
+    if enabled:
+        db.session.refresh(account)
+        assert (account.trial_started_at,account.trial_ends_at)==initial
+        assert BillingEvent.query.filter_by(kind='trial_started').count()==1
+    else:
+        assert db.session.get(AccountBilling,user.id) is None
+        assert BillingEvent.query.filter_by(kind='trial_started').count()==0
+        assert all('trial' not in message.lower() for message in messages)
+
+
 def test_homepage_workflow_prices_navigation_faq_and_ctas(app):
     html=app.test_client().get('/').get_data(as_text=True)
     for anchor in ('features','how-it-works','pricing','faq'):
