@@ -9,22 +9,25 @@
   const play = root.querySelector('[data-showcase-play]');
   const caption = root.querySelector('[data-showcase-caption]');
   const announcement = root.querySelector('[data-showcase-announcement]');
-  let index = 0, timer = null, inView = true, hovered = false;
-  let playing = !reduced.matches && !compact.matches;
+  const interval = 4500, manualDelay = 7000;
+  let index = 0, timer = null, inView = true, hovered = false, focused = false;
+  let nextDelay = interval;
+  let playing = !reduced.matches;
   const stopTimer = () => { if (timer !== null) window.clearTimeout(timer); timer = null; };
   function sync() {
     stopTimer();
-    play.disabled = reduced.matches || compact.matches;
-    play.textContent = reduced.matches ? 'Motion off · choose a step' : compact.matches ? 'Explore at your pace' :
-      playing ? 'Pause showcase' : index === panels.length - 1 ? 'Replay showcase' : 'Play showcase';
-    if (!playing || reduced.matches || compact.matches || document.hidden || !inView || hovered) return;
+    play.disabled = reduced.matches;
+    play.textContent = reduced.matches ? 'Motion off · choose a step' :
+      playing ? 'Pause showcase' : 'Play showcase';
+    if (!playing || reduced.matches || document.hidden || !inView || hovered || focused) return;
     timer = window.setTimeout(() => {
       timer = null;
-      if (index < panels.length - 1) show(index + 1);
-      else playing = false; // One pass only; never loop or restart on scroll.
+      nextDelay = interval;
+      show((index + 1) % panels.length);
       sync();
-    }, 3600);
+    }, nextDelay);
   }
+
   function show(next, manual = false) {
     index = next;
     panels.forEach((panel, i) => { panel.hidden = i !== index; });
@@ -40,23 +43,29 @@
     if (manual) announcement.textContent = `Step ${index + 1} of 6: ${panel.querySelector('h3').textContent}`;
   }
   steps.forEach((step, i) => step.addEventListener('click', () => {
-    playing = false; show(i, true); sync();
+    nextDelay = manualDelay; show(i, true); sync();
   }));
   play.addEventListener('click', () => {
-    if (reduced.matches || compact.matches) return;
+    if (reduced.matches) return;
     playing = !playing;
-    if (playing && index === panels.length - 1) show(0, true);
     sync();
   });
+  // Keyboard interaction pauses without moving focus. Touch selection keeps cycling.
   root.addEventListener('focusin', event => {
-    if (event.target !== play) { playing = false; sync(); }
+    focused = event.target.matches(':focus-visible'); sync();
   });
-  root.addEventListener('pointerenter', event => { if (event.pointerType === 'mouse') { hovered = true; sync(); } });
-  root.addEventListener('pointerleave', event => { if (event.pointerType === 'mouse') { hovered = false; sync(); } });
+  root.addEventListener('focusout', event => {
+    if (!root.contains(event.relatedTarget)) { focused = false; sync(); }
+  });
+  root.addEventListener('pointerenter', event => {
+    if (event.pointerType === 'mouse' && !compact.matches) { hovered = true; sync(); }
+  });
+  root.addEventListener('pointerleave', event => {
+    if (event.pointerType === 'mouse') { hovered = false; sync(); }
+  });
   document.addEventListener('visibilitychange', sync);
-  const preferenceChanged = () => { if (reduced.matches || compact.matches) playing = false; sync(); };
-  reduced.addEventListener?.('change', preferenceChanged);
-  compact.addEventListener?.('change', preferenceChanged);
+  reduced.addEventListener?.('change', () => { playing = !reduced.matches; sync(); });
+  compact.addEventListener?.('change', () => { hovered = false; sync(); });
   if ('IntersectionObserver' in window) {
     const viewObserver = new window.IntersectionObserver(entries => {
       inView = entries[0].isIntersecting; sync();
