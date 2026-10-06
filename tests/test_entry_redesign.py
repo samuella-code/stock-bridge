@@ -26,7 +26,7 @@ def test_homepage_workflow_prices_navigation_faq_and_ctas(app):
 def test_auth_labels_preserved_fields_and_social_actions(app,path):
     html=app.test_client().get(path).get_data(as_text=True)
     assert 'entry-auth' in html and '<label>Email address' in html and '<label>Password' in html
-    assert 'action="/auth/google/start"' in html and 'action="/auth/apple/start"' in html
+    assert 'action="/auth/google/start"' in html and 'action="/auth/apple/start"' not in html
     assert 'name="csrf_token"' in html and 'autocomplete="email"' in html
     if path.endswith('signup'):
         assert 'name="business_name"' in html and 'name="full_name"' in html

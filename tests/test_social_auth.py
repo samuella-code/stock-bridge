@@ -338,10 +338,28 @@ def test_identity_constraints_and_conflicting_second_link_rollback(app,oidc,monk
 
 def test_unconfigured_oauth_is_disabled_not_decorative(app):
     client=app.test_client(); html=client.get('/auth/signup').get_data(as_text=True)
-    assert 'Continue with Google' in html and 'Continue with Apple' in html and 'not available yet' in html
+    assert 'Continue with Google' in html and 'Continue with Apple' not in html and 'not available yet' in html
     assert client.post('/auth/google/start').location.endswith('/auth/login')
+    assert client.post('/auth/apple/start').location.endswith('/auth/login')
     assert client.post('/auth/arbitrary/start').status_code==404
     assert client.get('/auth/google/start').status_code==405
+
+
+@pytest.mark.parametrize('path', ['/auth/login', '/auth/signup'])
+@pytest.mark.parametrize('google_ready', [False, True])
+def test_postponed_apple_hidden_with_configured_providers(app, oidc, path, google_ready):
+    """Hiding Apple must not hide Google or email, even when Apple is configured."""
+    if not google_ready:
+        app.config['GOOGLE_CLIENT_SECRET'] = ''
+    from app.auth.social import configured
+    assert configured('apple')
+    html = app.test_client().get(path).get_data(as_text=True)
+    assert 'Continue with Apple' not in html
+    assert '/auth/apple/start' not in html
+    assert 'Apple sign-in is not available' not in html
+    assert 'Continue with Google' in html and 'action="/auth/google/start"' in html
+    assert 'name="email"' in html and 'name="password"' in html
+    assert ('Google sign-in is not available yet' in html) is (not google_ready)
 
 
 @pytest.mark.parametrize('uri',['http://staging.example.invalid/auth/google/callback','https://bad.invalid/auth/google/callback?next=evil','https://name:secret@bad.invalid/auth/google/callback','https://bad.invalid/wrong'])
