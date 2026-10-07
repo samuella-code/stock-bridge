@@ -15,9 +15,10 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/billing.css') }}">
 <link rel="stylesheet" href="{{url_for('static',filename='css/catalogue.css',v='catalogue-20260930')}}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/businesses.css') }}">
-{% if current_user.is_authenticated %}<link rel="stylesheet" href="{{ url_for('static', filename='css/customer.css', v='ui-6.1') }}">{% endif %}
+{% if current_user.is_authenticated %}<link rel="stylesheet" href="{{ url_for('static', filename='css/customer.css', v='ui-6.1') }}"><link rel="stylesheet" href="{{ url_for('static', filename='css/activity.css', v='activity-10') }}">{% endif %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/entry.css', v='entry-7.3') }}">
 </head>
+{% from 'components/business_avatar.html' import business_avatar %}
 <body{% if current_user.is_authenticated %} class="customer-app"{% endif %}>
     {% if current_user.is_authenticated %}<a class="skip-link" href="#main-content">Skip to content</a>{% endif %}
     <div class="app-shell">
@@ -42,6 +43,7 @@
                 {{ nav_link('Restocking', url_for('restocking.index'), request.blueprint == 'restocking', '↻') }}
                 {{ nav_link('Expenses', url_for('expenses.index'), request.blueprint == 'expenses', '₦') }}
                 <span class="nav-section">Insights</span>
+                {{ nav_link('Notifications', url_for('notifications.index'), request.blueprint == 'notifications', '♧') }}
                 {{ nav_link('Reports', url_for('main.reports'), request.endpoint == 'main.reports', '▥') }}
                 <span class="nav-section">Account</span>
                 {{ nav_link('My Businesses', url_for('businesses.index'), request.blueprint == 'businesses', '◫') }}
@@ -76,7 +78,7 @@
                     {% if business_selection_required|default(false) %}
                     <a class="active-business-label needs-choice" href="{{ url_for('businesses.index') }}">Choose your active business</a>
                     {% elif config.SUBSCRIPTIONS_ENABLED and business_switch_ids|default([])|length > 1 %}
-                    <details class="business-switcher"><summary aria-label="Active business: {{ subscription_business.name }}. Switch business"><span class="business-caption">Working in</span><strong>{{ subscription_business.name }}</strong><span aria-hidden="true">⌄</span></summary>
+                    <details class="business-switcher"><summary aria-label="Active business: {{ subscription_business.name }}. Switch business"><span class="business-caption">Working in</span><strong>{{ business_avatar(subscription_business) }} {{ subscription_business.name }}</strong><span aria-hidden="true">⌄</span></summary>
                         <div class="business-dropdown">
                             <p class="dropdown-caption">Switch business</p>
                             {% for choice in business_choices %}{% if choice.id in business_switch_ids %}
@@ -86,8 +88,9 @@
                             {% if business_can_add %}<a href="{{ url_for('businesses.create') }}">Add Business</a>{% endif %}
                         </div>
                     </details>
-                    {% else %}<div class="active-business-label"><span class="business-caption">Working in</span><strong>{{ subscription_business.name if subscription_business else 'My business' }}</strong></div>{% endif %}
+                    {% else %}<div class="active-business-label"><span class="business-caption">Working in</span><strong>{% if subscription_business %}{{ business_avatar(subscription_business) }}{% endif %} {{ subscription_business.name if subscription_business else 'My business' }}</strong></div>{% endif %}
                 </div>
+                {% if notification_unread is defined %}<a class="notification-bell" href="{{ url_for('notifications.index') }}" aria-label="Notifications, {{ notification_unread }} unread"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>{% if notification_unread %}<span class="notification-badge">{{ '99+' if notification_unread > 99 else notification_unread }}</span>{% endif %}</a>{% endif %}
                 <div class="profile-menu"><button class="profile-pill" id="profileButton" type="button" aria-label="Account menu" aria-controls="profileDropdown" aria-expanded="false">
                     <div class="avatar">{{ current_user.full_name[:1] | upper }}</div>
                     <div class="profile-copy">

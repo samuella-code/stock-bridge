@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block page_title %}Notifications{% endblock %}
+{% block content %}
+<section class="dashboard-wrap notifications-page">
+<div class="page-header"><div><p class="eyebrow">{{ business.name }}</p><h2>Notifications</h2><p class="muted">Activity and stock alerts for this business.</p></div>
+<form method="POST" action="{{ url_for('notifications.read_all') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="secondary-btn" type="submit">Mark all as read</button></form></div>
+<div class="notification-list">
+{% for notification in notifications.items %}
+<article class="panel-card notification-row {{ 'notification-unread' if not notification.read_at else '' }}">
+<div><span class="notification-state">{{ 'Unread' if not notification.read_at else 'Read' }}</span><h3>{{ notification.title }}</h3><p>{{ notification.body }}</p><time datetime="{{ notification.created_at.isoformat() }}Z">{{ notification.created_at.strftime('%d %b %Y · %H:%M') }} UTC</time><p><a href="{{ notification_destination(notification) }}">View {{ 'product' if notification.kind in ['product_created', 'low_stock', 'out_of_stock'] else 'sales' if notification.kind == 'sale_recorded' else 'restocking' }}</a></p></div>
+{% if not notification.read_at %}<form method="POST" action="{{ url_for('notifications.read', notification_id=notification.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="secondary-btn" type="submit" aria-label="Mark {{ notification.title }} as read">Mark as read</button></form>{% endif %}
+</article>
+{% else %}<div class="panel-card"><h3>You're all caught up</h3><p>Add products, record sales and restock. Important activity and stock alerts will appear here.</p></div>{% endfor %}
+</div>
+{% if notifications.pages > 1 %}<nav class="page-actions notification-pagination" aria-label="Notification pages">{% if notifications.has_prev %}<a class="secondary-btn" href="{{ url_for('notifications.index', page=notifications.prev_num) }}">Newer</a>{% endif %}<span>Page {{ notifications.page }} of {{ notifications.pages }}</span>{% if notifications.has_next %}<a class="secondary-btn" href="{{ url_for('notifications.index', page=notifications.next_num) }}">Older</a>{% endif %}</nav>{% endif %}
+<details class="panel-card notification-preferences"><summary>Email alert preferences</summary><p class="muted">Email alerts are not enabled yet. You can save your preferences for future support. In-app notifications remain available.</p><form class="form-stack" method="POST" action="{{ url_for('notifications.preferences') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label><input type="checkbox" name="low_stock_email" {% if preferences and preferences.low_stock_email %}checked{% endif %}> Low stock email</label><label><input type="checkbox" name="out_of_stock_email" {% if preferences and preferences.out_of_stock_email %}checked{% endif %}> Out-of-stock email</label><button class="secondary-btn" type="submit">Save preferences</button></form></details>
+</section>
+{% endblock %}

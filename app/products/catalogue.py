@@ -92,6 +92,8 @@ def add_product(bid, data):
     db.session.flush()
     db.session.add(StockMovement(business_id=bid, product_id=product.id, kind='opening',
                                 quantity_change=qty, occurred_at=product.created_at))
+    from app.notifications.service import product_created
+    product_created(product)
     return product
 
 def save_batch(bid, rows, actor_id, receipt=None):
@@ -118,6 +120,9 @@ def save_batch(bid, rows, actor_id, receipt=None):
         db.session.flush()
         db.session.add_all([StockMovement(business_id=bid, product_id=p.id, kind='opening',
             quantity_change=p.opening_quantity, occurred_at=p.created_at) for p in products])
+        from app.notifications.service import product_created
+        for product in products:
+            product_created(product)
         db.session.add(AuditLog(actor_id=actor_id, business_id=bid, action='PRODUCT_IMPORT',
                                description=receipt or f'Quick Add: {len(rows)} products'))
         db.session.commit()

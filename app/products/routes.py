@@ -123,6 +123,8 @@ def detail(product_id):
 @login_required
 def adjust(product_id):
     b, product = current_business(), owned_product(product_id)
+    # Lock/read the actual pre-adjustment stock before generating transition alerts.
+    product = Product.query.filter_by(id=product.id, business_id=b.id).with_for_update().populate_existing().one()
     try:
         magnitude = int(request.form.get("quantity", ""))
         direction = request.form.get("direction")
@@ -147,9 +149,13 @@ def adjust(product_id):
         db.session.rollback()
         flash("Stock changed while recording the adjustment. Please try again.", "error")
         return redirect(url_for("products.detail", product_id=product.id))
-    db.session.add(StockMovement(business_id=b.id, product_id=product.id,
+    movement = StockMovement(business_id=b.id, product_id=product.id,
         kind="adjustment", quantity_change=delta, reason=reason,
-        note=request.form.get("note", "").strip()[:500], occurred_at=when))
+        note=request.form.get("note", "").strip()[:500], occurred_at=when)
+    db.session.add(movement)
+    db.session.flush()
+    from app.notifications.service import stock_transition
+    stock_transition(product, product.stock_quantity, product.stock_quantity + delta, f'adjustment:{movement.id}')
     db.session.commit()
     flash("Stock adjustment recorded.", "success")
     return redirect(url_for("products.detail", product_id=product.id))

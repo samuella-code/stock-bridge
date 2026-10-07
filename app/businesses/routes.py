@@ -1,4 +1,4 @@
-from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for, send_file
 from flask_login import current_user, login_required
 from app import db
 from app.models import Business
@@ -7,6 +7,14 @@ from app.businesses.service import (owned_businesses, accessible_business, selec
     creation_token, create_business, choose_primary)
 
 businesses_bp = Blueprint('businesses', __name__, url_prefix='/businesses')
+
+
+@businesses_bp.errorhandler(413)
+def oversized_upload(error):
+    if request.endpoint == 'businesses.logo_upload':
+        flash('Choose an image no larger than 1 MB.', 'error')
+        return redirect(url_for('businesses.profile', business_id=request.view_args['business_id']))
+    return error
 
 
 @businesses_bp.get('/')
@@ -98,3 +106,95 @@ def edit(business_id):
             flash('Business updated.', 'success')
             return redirect(url_for('businesses.index'))
     return render_template('businesses/form.html', editing=business)
+
+
+def profile_business(business_id, writing=False):
+    business = Business.query.filter_by(id=business_id, user_id=current_user.id).first_or_404()
+    if not current_user.email_verified_at:
+        abort(403)
+    if not accessible_business(current_user, business):
+        abort(403)
+    if writing and not business.has_write_access:
+        abort(403)
+    return business
+
+
+@businesses_bp.get('/<int:business_id>/profile')
+@login_required
+def profile(business_id):
+    business = profile_business(business_id)
+    from app.businesses.images import storage_configured
+    return render_template('businesses/profile.html', business=business,
+        storage_available=storage_configured())
+
+
+@businesses_bp.post('/<int:business_id>/logo')
+@login_required
+def logo_upload(business_id):
+    business = profile_business(business_id, writing=True)
+    from app.businesses.images import image_storage, validate_image, new_key, cleanup
+    upload = request.files.get('logo')
+    if not upload:
+        flash('Choose a JPEG, PNG or WebP image.', 'error')
+        return redirect(url_for('businesses.profile', business_id=business.id))
+    try:
+        data = validate_image(upload)
+    except ValueError as error:
+        flash(str(error), 'error')
+        return redirect(url_for('businesses.profile', business_id=business.id))
+    key, old_key, storage = new_key(business.id), None, None
+    try:
+        storage = image_storage()
+        storage.put(key, data)
+        # Serialize replacements so each one retires the key it actually replaced.
+        business = Business.query.filter_by(id=business.id, user_id=current_user.id).with_for_update().populate_existing().one()
+        if not accessible_business(current_user, business) or not business.has_write_access:
+            abort(403)
+        old_key = business.logo_key
+        business.logo_key = key
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        if storage:
+            cleanup(storage, key)
+        flash('The image could not be saved. Your previous image is unchanged. Please try again later.', 'error')
+        return redirect(url_for('businesses.profile', business_id=business_id))
+    cleanup(storage, old_key)
+    flash('Business image updated.', 'success')
+    return redirect(url_for('businesses.profile', business_id=business.id))
+
+
+@businesses_bp.post('/<int:business_id>/logo/remove')
+@login_required
+def logo_remove(business_id):
+    business = profile_business(business_id, writing=True)
+    business = Business.query.filter_by(id=business.id, user_id=current_user.id).with_for_update().populate_existing().one()
+    old_key = business.logo_key
+    business.logo_key = None
+    db.session.commit()
+    if old_key:
+        from app.businesses.images import image_storage, cleanup
+        try:
+            cleanup(image_storage(), old_key)
+        except Exception:
+            current_app.logger.warning('Business image cleanup deferred; review storage lifecycle.')
+    flash('Business image removed.', 'success')
+    return redirect(url_for('businesses.profile', business_id=business.id))
+
+
+@businesses_bp.get('/<int:business_id>/logo')
+@login_required
+def logo(business_id):
+    business = profile_business(business_id)
+    if not business.logo_key or not business.logo_key.startswith(f'businesses/{business.id}/'):
+        abort(404)
+    from app.businesses.images import image_storage
+    import io
+    try:
+        data = image_storage().get(business.logo_key)
+    except Exception:
+        abort(404)
+    response = send_file(io.BytesIO(data), mimetype='image/webp', max_age=0)
+    response.headers['Cache-Control'] = 'no-store, private'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response

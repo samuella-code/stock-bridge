@@ -418,7 +418,9 @@ def test_migration_keeps_customer_and_payment_without_promoting_email(tmp_path):
         db.session.commit()
         upgrade(revision="0012_product_catalogue")
         assert User.query.one().role=="user"
-        assert User.query.one().businesses[0].name=="Shop"
+        # This fixture deliberately stops at 0012; query its historical schema,
+        # rather than selecting nullable columns introduced by later models.
+        assert db.session.execute(text("SELECT name FROM business WHERE user_id=1")).scalar()=="Shop"
         assert db.session.query(Payment.amount_kobo).scalar()==300000
         assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()=="0012_product_catalogue"
         assert User.query.one().admin_enabled is False

@@ -118,6 +118,10 @@ def receive():
             db.session.add(StockMovement(business_id=b.id, product_id=pid, kind="restock",
                 quantity_change=qty, restock_id=receipt.id, occurred_at=receipt.received_at))
         log("RESTOCK_CREATED", f"Stock receipt {batch} recorded for {len(parsed)} products.", actor=current_user, business_id=b.id)
+        from app.notifications.service import notify
+        message = (f'{products[parsed[0][0]].name} was restocked with {parsed[0][1]} {products[parsed[0][0]].unit}.'
+            if len(parsed) == 1 else f'Stock replenished for {len(parsed)} products ({sum(qty for _, qty, _ in parsed)} units received).')
+        notify(b.id, 'restock_recorded', 'Stock replenished', message, f'restock:{batch}:created')
         db.session.commit()
     except Exception:
         db.session.rollback()

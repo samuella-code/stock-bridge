@@ -1,0 +1,5 @@
+{% macro business_avatar(business, large=false) %}
+<span class="business-avatar {{ 'business-avatar-large' if large else '' }}">
+{% if business.logo_key %}<img src="{{ url_for('businesses.logo', business_id=business.id, v=business.logo_key.rsplit('/', 1)[-1]) }}" alt="{{ business.name }} business image" width="{{ 96 if large else 32 }}" height="{{ 96 if large else 32 }}">{% else %}<span aria-label="{{ business.name }} default business avatar">{{ business.name[:1]|upper }}</span>{% endif %}
+</span>
+{% endmacro %}

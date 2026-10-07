@@ -8,6 +8,8 @@ class User(UserMixin,db.Model):
  def set_password(self,p): self.password_hash=generate_password_hash(p)
  def check_password(self,p): return check_password_hash(self.password_hash,p)
 class Business(db.Model):
+ logo_key=db.Column(db.String(200))
+ notifications=db.relationship("Notification",cascade="all, delete-orphan",passive_deletes=True)
  id=db.Column(db.Integer,primary_key=True); user_id=db.Column(db.Integer,db.ForeignKey("user.id"),nullable=False,index=True); name=db.Column(db.String(140),nullable=False); created_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False)
  subscription_plan=db.Column(db.String(20),nullable=False,default="starter")
  subscription_status=db.Column(db.String(20),nullable=False,default="inactive")
@@ -217,3 +219,28 @@ class SocialIdentity(db.Model):
         db.UniqueConstraint("user_id", "provider", name="uq_social_user_provider"),
         db.CheckConstraint("provider IN ('google', 'apple')", name="ck_social_provider"),
     )
+
+
+class Notification(db.Model):
+    """Business activity history, committed alongside the originating operation."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
+    business_id = db.Column(db.Integer, db.ForeignKey('business.id', ondelete='CASCADE'), nullable=False)
+    kind = db.Column(db.String(40), nullable=False)
+    title = db.Column(db.String(140), nullable=False)
+    body = db.Column(db.String(700), nullable=False)
+    resource_id = db.Column(db.Integer)
+    event_key = db.Column(db.String(180), nullable=False, unique=True)
+    read_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    __table_args__ = (
+        db.Index('ix_notification_owner_business_read', 'user_id', 'business_id', 'read_at'),
+        db.Index('ix_notification_business_created', 'business_id', 'created_at', 'id'),
+    )
+
+
+class NotificationPreference(db.Model):
+    """Future transactional email opt-ins; in-app activity remains available."""
+    business_id = db.Column(db.Integer, db.ForeignKey('business.id', ondelete='CASCADE'), primary_key=True)
+    low_stock_email = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    out_of_stock_email = db.Column(db.Boolean, nullable=False, default=False, server_default='false')

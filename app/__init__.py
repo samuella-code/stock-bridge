@@ -44,13 +44,14 @@ def create_app(test_config=None):
     from app.restocking.routes import restocking_bp
     from app.profile.routes import profile_bp
     from app.businesses.routes import businesses_bp
+    from app.notifications.routes import notifications_bp
     from app.subscriptions.routes import subscriptions_bp
     from app.payments.routes import payments_bp
     from app.admin.routes import admin_bp, admin_api_bp
 
     for blueprint in (
         auth_bp, main_bp, products_bp, sales_bp,
-        expenses_bp, restocking_bp, profile_bp, businesses_bp, subscriptions_bp, payments_bp, admin_bp, admin_api_bp,
+        expenses_bp, restocking_bp, profile_bp, businesses_bp, notifications_bp, subscriptions_bp, payments_bp, admin_bp, admin_api_bp,
     ):
         app.register_blueprint(blueprint)
 
@@ -86,7 +87,7 @@ def create_app(test_config=None):
             elif current_user.suspended_at or any(b.suspended_at for b in current_user.businesses):
                 if request.endpoint not in {"auth.logout", "static"} and not (request.endpoint in {"admin.login", "admin.forgot_password", "admin.reset_password"} and current_user.admin_enabled and not current_user.suspended_at):
                     return render_template("admin/suspended.html"), 403
-        verified_areas = {"main", "products", "sales", "expenses", "restocking", "profile", "businesses"}
+        verified_areas = {"main", "products", "sales", "expenses", "restocking", "profile", "businesses", "notifications"}
         if app.config.get("SUBSCRIPTIONS_ENABLED"):
             verified_areas.add("subscriptions")
         paid_areas = {"products", "sales", "expenses", "restocking"}
@@ -98,7 +99,7 @@ def create_app(test_config=None):
             from app.subscriptions.entitlements import start_trial
             if start_trial(current_user):
                 db.session.commit()
-        business_areas = {'products', 'sales', 'expenses', 'restocking', 'profile'}
+        business_areas = {'products', 'sales', 'expenses', 'restocking', 'profile', 'notifications'}
         if current_user.is_authenticated and (request.blueprint in business_areas or request.endpoint in {'main.dashboard', 'main.reports'}):
             from app.subscriptions.entitlements import selected_business
             from app.businesses.service import selection_required, accessible_business
@@ -124,6 +125,10 @@ def create_app(test_config=None):
         context = {"subscription_business": business, "business_choices": choices,
             "business_switch_ids": {b.id for b in choices if accessible_business(current_user, b)},
             "business_selection_required": selection_required(current_user)}
+        if business and accessible_business(current_user, business) and current_user.email_verified_at:
+            from app.models import Notification
+            context['notification_unread'] = Notification.query.filter_by(user_id=current_user.id,
+                business_id=business.id, read_at=None).count()
         if app.config.get("SUBSCRIPTIONS_ENABLED"):
             from app.subscriptions.entitlements import effective_access, access_label
             context.update(billing_access=effective_access(current_user, business=business), billing_label=access_label(current_user))

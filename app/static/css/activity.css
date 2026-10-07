@@ -1,0 +1,23 @@
+.customer-app .notification-bell{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-width:44px;min-height:44px;flex-shrink:0;border:1px solid var(--line);border-radius:10px;color:#154d43;text-decoration:none;padding:8px;background:#fff}
+.customer-app .notification-bell svg{width:21px;height:21px;flex-shrink:0}
+.customer-app .notification-badge{background:#154d43;color:white;border-radius:12px;min-width:20px;text-align:center;font-size:11px;line-height:20px;padding:0 4px}
+.customer-app .notification-list{display:grid;gap:12px}
+.customer-app .notification-row{display:flex;gap:16px;justify-content:space-between;align-items:flex-start;border-left:3px solid transparent}
+.customer-app .notification-row>div{min-width:0;flex:1}
+.customer-app .notification-row form{flex-shrink:0}
+.customer-app .notification-row h3{margin:6px 0}
+.customer-app .notification-row p{margin:8px 0;overflow-wrap:anywhere}
+.customer-app .notification-row time,.customer-app .notification-state{font-size:12px;color:var(--muted)}
+.customer-app .notification-unread{border-left-color:#167460;background:#f6fbf8}
+.customer-app .notification-unread .notification-state{font-weight:700;color:#154d43}
+.customer-app .notification-preferences,.customer-app .notification-pagination{margin-top:22px}
+.customer-app .notification-preferences summary{min-height:44px;cursor:pointer;display:flex;align-items:center;font-weight:600}
+.customer-app .notification-preferences label{display:flex;gap:10px;align-items:center;min-height:44px}
+.customer-app .business-avatar{display:inline-flex;position:relative;vertical-align:middle;width:32px;height:32px;flex-shrink:0;border-radius:9px;background:#e5f3ee;align-items:center;justify-content:center;color:#154d43;font-weight:700;overflow:hidden}
+.customer-app .business-avatar img{object-fit:cover;width:100%;height:100%;display:block}
+.customer-app .business-avatar-large{width:96px;height:96px;border-radius:18px;font-size:36px}
+.customer-app .active-business-label strong,.customer-app .business-switcher summary strong{display:flex;gap:8px;align-items:center}
+.customer-app .business-image-preview{min-width:0;overflow-wrap:anywhere}
+.customer-app .business-image-preview p{font-weight:700}
+.customer-app .dashboard-business-heading{display:flex;gap:12px;align-items:flex-start;min-width:0}
+@media(max-width:600px){.customer-app .notification-row{flex-direction:column}.customer-app .notification-row form,.customer-app .notification-row button{width:100%}.customer-app .notification-bell{margin-left:auto}.customer-app .business-avatar{width:28px;height:28px}.customer-app .business-avatar-large{width:96px;height:96px}}
