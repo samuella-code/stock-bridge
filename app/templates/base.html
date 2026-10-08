@@ -90,7 +90,7 @@
                     </details>
                     {% else %}<div class="active-business-label"><span class="business-caption">Working in</span><strong>{% if subscription_business %}{{ business_avatar(subscription_business) }}{% endif %} {{ subscription_business.name if subscription_business else 'My business' }}</strong></div>{% endif %}
                 </div>
-                {% if notification_unread is defined %}<a class="notification-bell" href="{{ url_for('notifications.index') }}" aria-label="Notifications, {{ notification_unread }} unread"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>{% if notification_unread %}<span class="notification-badge">{{ '99+' if notification_unread > 99 else notification_unread }}</span>{% endif %}</a>{% endif %}
+                {% if notification_unread is defined %}<a data-notification-bell class="notification-bell" href="{{ url_for('notifications.index') }}" aria-label="Notifications, {{ notification_unread }} unread"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>{% if notification_unread %}<span class="notification-badge">{{ '99+' if notification_unread > 99 else notification_unread }}</span>{% endif %}</a>{% endif %}
                 <div class="profile-menu"><button class="profile-pill" id="profileButton" type="button" aria-label="Account menu" aria-controls="profileDropdown" aria-expanded="false">
                     <div class="avatar">{{ current_user.full_name[:1] | upper }}</div>
                     <div class="profile-copy">
@@ -120,6 +120,7 @@
     </div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% if current_user.is_authenticated %}<form hidden data-email-dispatch action="{{ url_for('notifications.email_dispatch') }}"><input name="csrf_token" value="{{ csrf_token() }}"></form><script src="{{ url_for('static', filename='js/activity.js') }}" defer></script><script src="{{ url_for('static', filename='js/business-image.js') }}" defer></script>{% endif %}
 {% if current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/customer.js', v='ui-6.1') }}" defer></script>{% endif %}
 {% if current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/onboarding.js', v='guidance-6.1') }}" defer></script>{% endif %}
 {% if not current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/public.js', v='entry-7') }}" defer></script>{% endif %}

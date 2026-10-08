@@ -1,0 +1,8 @@
+<section id="notificationPreferences" class="panel-card notification-preferences">
+<h3>Notification preferences</h3><p class="muted">For {{ business.name }}. Other businesses keep their own settings. Stock warnings stay visible in the Notification Center. Your choices apply to future activity.</p>{% if not config.INVENTORY_EMAILS_ENABLED %}<p class="muted">Email delivery is not available yet. You can save your preferences now.</p>{% endif %}
+<form class="form-stack" method="POST" action="{{ url_for('notifications.preferences') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{% for field, label in [('low_stock_email','Low-stock email alerts'), ('out_of_stock_email','Out-of-stock email alerts'), ('product_added','Product-added in-app notifications'), ('sales','Sales in-app notifications'), ('restocking','Restocking in-app notifications')] %}
+<label><input type="checkbox" name="{{ field }}" {% if preferences is none or preferences|attr(field) %}checked{% endif %}> {{ label }}</label>
+{% endfor %}<button class="secondary-btn" type="submit">Save notification preferences</button></form>
+</section>

@@ -208,7 +208,7 @@ def test_preferences_scoped_without_email(app):
     pref = db.session.get(NotificationPreference,shops[0].id)
     assert pref.low_stock_email and not pref.out_of_stock_email
     assert db.session.get(NotificationPreference,shops[1].id) is None
-    assert 'Email alerts are not enabled yet' in client.get('/notifications/').get_data(as_text=True)
+    assert 'Notification preferences' in client.get('/notifications/').get_data(as_text=True)
 
 
 @pytest.mark.parametrize('fmt',['JPEG','PNG','WEBP'])
@@ -388,9 +388,9 @@ def test_import_replay_does_not_duplicate_product_notifications(app):
 def test_request_limit_returns_friendly_error(app,tmp_path):
     local(app,tmp_path)
     client,_,shops=setup(app)
-    response=upload(client,shops[0],data=b'x'*(2*1024*1024+1))
+    response=upload(client,shops[0],data=b'x'*(6*1024*1024+1))
     assert response.status_code==302
-    assert 'Choose an image no larger than 1 MB.' in client.get(response.location).get_data(as_text=True)
+    assert 'Choose an image no larger than 5 MB (5 MiB).' in client.get(response.location).get_data(as_text=True)
     assert shops[0].logo_key is None
 
 

@@ -31,6 +31,12 @@ def create_app(test_config=None):
     db.init_app(app)
     login_manager.init_app(app)
     migrate.init_app(app, db)
+    @app.before_request
+    def logo_request_limit():
+        # Only image uploads need the larger limit; imports keep their existing cap.
+        if request.endpoint == 'businesses.logo_upload':
+            request.max_content_length = app.config['BUSINESS_LOGO_REQUEST_MAX_BYTES']
+
     csrf.init_app(app)
     app.jinja_env.globals["csrf_token"] = generate_csrf
 
@@ -45,13 +51,15 @@ def create_app(test_config=None):
     from app.profile.routes import profile_bp
     from app.businesses.routes import businesses_bp
     from app.notifications.routes import notifications_bp
+    from app.notifications.email_outbox import worker_bp, publish_committed_alert
+    app.after_request(publish_committed_alert)
     from app.subscriptions.routes import subscriptions_bp
     from app.payments.routes import payments_bp
     from app.admin.routes import admin_bp, admin_api_bp
 
     for blueprint in (
         auth_bp, main_bp, products_bp, sales_bp,
-        expenses_bp, restocking_bp, profile_bp, businesses_bp, notifications_bp, subscriptions_bp, payments_bp, admin_bp, admin_api_bp,
+        expenses_bp, restocking_bp, profile_bp, businesses_bp, notifications_bp, worker_bp, subscriptions_bp, payments_bp, admin_bp, admin_api_bp,
     ):
         app.register_blueprint(blueprint)
 

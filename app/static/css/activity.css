@@ -21,3 +21,11 @@
 .customer-app .business-image-preview p{font-weight:700}
 .customer-app .dashboard-business-heading{display:flex;gap:12px;align-items:flex-start;min-width:0}
 @media(max-width:600px){.customer-app .notification-row{flex-direction:column}.customer-app .notification-row form,.customer-app .notification-row button{width:100%}.customer-app .notification-bell{margin-left:auto}.customer-app .business-avatar{width:28px;height:28px}.customer-app .business-avatar-large{width:96px;height:96px}}
+.notification-preferences { margin-top: 24px; }
+.notification-preferences label { display:flex; align-items:center; gap:12px; min-height:44px; overflow-wrap:anywhere; }
+.notification-preferences input[type=checkbox] { width:20px; height:20px; flex:0 0 20px; }
+[data-notification-open] { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+[data-notification-open] button:focus-visible { outline:3px solid #18744b; outline-offset:3px; }
+[data-image-preview] { max-width:100%; object-fit:contain; border-radius:12px; }
+[data-notification-open] { min-width:0; max-width:100%; }
+[data-notification-open] button { max-width:100%; white-space:normal; overflow-wrap:anywhere; text-align:left; }

@@ -240,7 +240,40 @@ class Notification(db.Model):
 
 
 class NotificationPreference(db.Model):
-    """Future transactional email opt-ins; in-app activity remains available."""
+    """Existing business-scoped optional alerts; stock warnings remain enabled."""
     business_id = db.Column(db.Integer, db.ForeignKey('business.id', ondelete='CASCADE'), primary_key=True)
-    low_stock_email = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
-    out_of_stock_email = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    low_stock_email = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
+    out_of_stock_email = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
+
+    product_added = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
+    sales = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
+    restocking = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
+
+
+class EmailOutbox(db.Model):
+    """Immutable inventory event snapshot; never contains transport credentials."""
+    id = db.Column(db.Integer, primary_key=True)
+    business_id = db.Column(db.Integer, db.ForeignKey('business.id', ondelete='CASCADE'), nullable=False)
+    recipient_user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
+    recipient_email = db.Column(db.String(180), nullable=False)
+    event_type = db.Column(db.String(40), nullable=False)
+    event_key = db.Column(db.String(180), nullable=False, unique=True)
+    subject = db.Column(db.String(240), nullable=False)
+    template_name = db.Column(db.String(40), nullable=False, default='inventory_alert')
+    payload = db.Column(db.JSON, nullable=False)
+    status = db.Column(db.String(16), nullable=False, default='pending')
+    attempt_count = db.Column(db.Integer, nullable=False, default=0)
+    max_attempts = db.Column(db.Integer, nullable=False, default=5)
+    next_attempt_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    last_attempt_at = db.Column(db.DateTime)
+    claim_token = db.Column(db.String(32))
+    claim_expires_at = db.Column(db.DateTime)
+    sent_at = db.Column(db.DateTime)
+    last_error = db.Column(db.String(80))
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    __table_args__ = (
+        db.Index('ix_email_outbox_due', 'status', 'next_attempt_at', 'claim_expires_at'),
+        db.CheckConstraint("status IN ('pending','processing','sent','retry','failed','suppressed')", name='ck_email_outbox_status'),
+        db.CheckConstraint('attempt_count >= 0 AND max_attempts > 0', name='ck_email_outbox_attempts'),
+    )

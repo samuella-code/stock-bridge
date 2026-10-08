@@ -12,7 +12,7 @@ businesses_bp = Blueprint('businesses', __name__, url_prefix='/businesses')
 @businesses_bp.errorhandler(413)
 def oversized_upload(error):
     if request.endpoint == 'businesses.logo_upload':
-        flash('Choose an image no larger than 1 MB.', 'error')
+        flash('Choose an image no larger than 5 MB (5 MiB).', 'error')
         return redirect(url_for('businesses.profile', business_id=request.view_args['business_id']))
     return error
 

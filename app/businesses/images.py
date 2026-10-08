@@ -30,11 +30,12 @@ def storage_configured():
 def validate_image(upload):
     extensions = {'jpg': 'JPEG', 'jpeg': 'JPEG', 'png': 'PNG', 'webp': 'WEBP'}
     extension = (upload.filename or '').rsplit('.', 1)[-1].lower()
-    if extension not in extensions:
+    if (extension not in extensions or upload.mimetype not in ('image/jpeg', 'image/png', 'image/webp')
+            or upload.mimetype != {'JPEG': 'image/jpeg', 'PNG': 'image/png', 'WEBP': 'image/webp'}.get(extensions.get(extension))):
         raise ValueError('Choose a JPEG, PNG or WebP image.')
     data = upload.stream.read(current_app.config['BUSINESS_LOGO_MAX_BYTES'] + 1)
     if not data or len(data) > current_app.config['BUSINESS_LOGO_MAX_BYTES']:
-        raise ValueError('Choose an image no larger than 1 MB.')
+        raise ValueError('Choose an image no larger than 5 MB (5 MiB).')
     try:
         with warnings.catch_warnings():
             warnings.simplefilter('error', Image.DecompressionBombWarning)
@@ -45,10 +46,13 @@ def validate_image(upload):
             with Image.open(io.BytesIO(data), formats=['JPEG', 'PNG', 'WEBP']) as image:
                 image.load()
                 clean = ImageOps.exif_transpose(image).convert('RGBA')
-                clean.thumbnail((512, 512))
+                clean.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
                 # Re-encode pixels only: discard filename, EXIF, profiles and appended payloads.
                 output = io.BytesIO()
-                clean.save(output, format='WEBP', quality=85)
+                clean.save(output, format='WEBP', quality=85, method=6)
+                if output.tell() > 500 * 1024:
+                    output = io.BytesIO()
+                    clean.save(output, format='WEBP', quality=75, method=6)
         return output.getvalue()
     except (ValueError, OSError, UnidentifiedImageError, Image.DecompressionBombError, Image.DecompressionBombWarning):
         raise ValueError('This image could not be read. Choose a valid, non-animated JPEG, PNG or WebP under 12 megapixels.') from None

@@ -2,9 +2,13 @@
 from flask import url_for
 from app import db
 from app.models import Business, Notification, Product
+from app.notifications.email_outbox import enabled, queue_alert
 
 
 def notify(business_id, kind, title, body, event_key, resource_id=None):
+    field = {'product_created': 'product_added', 'sale_recorded': 'sales', 'restock_recorded': 'restocking'}.get(kind)
+    if field and not enabled(business_id, field):
+        return None
     business = db.session.get(Business, business_id)
     row = Notification(user_id=business.user_id, business_id=business_id, kind=kind,
         title=title, body=body, event_key=event_key, resource_id=resource_id)
@@ -23,10 +27,12 @@ def stock_transition(product, before, after, event_key):
     if before > 0 and after == 0:
         notify(product.business_id, 'out_of_stock', 'Out of stock',
             f'{product.name} is now out of stock.', f'{event_key}:out', product.id)
+        queue_alert(product, after, 'out_of_stock', f'{event_key}:out')
     elif before > product.minimum_stock_level and 0 < after <= product.minimum_stock_level:
         notify(product.business_id, 'low_stock', 'Low stock',
             f'{product.name} has {after} {product.unit} remaining. Low-stock threshold: {product.minimum_stock_level}.',
             f'{event_key}:low', product.id)
+        queue_alert(product, after, 'low_stock', f'{event_key}:low')
 
 
 def destination(notification):
