@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/billing.css') }}">
 <link rel="stylesheet" href="{{url_for('static',filename='css/catalogue.css',v='catalogue-20260930')}}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/businesses.css') }}">
-{% if current_user.is_authenticated %}<link rel="stylesheet" href="{{ url_for('static', filename='css/customer.css', v='ui-6.1') }}"><link rel="stylesheet" href="{{ url_for('static', filename='css/activity.css', v='activity-10') }}">{% endif %}
+{% if current_user.is_authenticated %}<link rel="stylesheet" href="{{ url_for('static', filename='css/customer.css', v='responsive-22460dd-2') }}"><link rel="stylesheet" href="{{ url_for('static', filename='css/activity.css', v='activity-10') }}">{% endif %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/entry.css', v='entry-7.3') }}">
 {% block extra_styles %}{% endblock %}
 </head>
@@ -122,7 +122,7 @@
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 {% if current_user.is_authenticated %}<form hidden data-email-dispatch action="{{ url_for('notifications.email_dispatch') }}"><input name="csrf_token" value="{{ csrf_token() }}"></form><script src="{{ url_for('static', filename='js/activity.js') }}" defer></script><script src="{{ url_for('static', filename='js/business-image.js') }}" defer></script>{% endif %}
-{% if current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/customer.js', v='ui-6.1') }}" defer></script>{% endif %}
+{% if current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/customer.js', v='responsive-22460dd-2') }}" defer></script>{% endif %}
 {% if current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/onboarding.js', v='guidance-6.1') }}" defer></script>{% endif %}
 {% if not current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/public.js', v='entry-7') }}" defer></script>{% endif %}
 {% block scripts %}{% endblock %}
