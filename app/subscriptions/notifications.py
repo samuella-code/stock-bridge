@@ -24,7 +24,7 @@ def queue_due(now=None):
         lock_account(user.id)
         if effective_access(user,now=now).subscription:
             continue
-        fallback='Your original Lifetime Access continues.' if effective_access(user,now=now).legacy else 'Your records remain available to view.'
+        fallback='Your existing account access continues.' if effective_access(user,now=now).legacy else 'Your records remain available to view.'
         notice(user.id,f'period-ended:{sub.id}:{sub.current_period_end.isoformat()}','subscription_expired','This paid subscription period has ended. '+fallback,sub.id)
     db.session.commit()
 

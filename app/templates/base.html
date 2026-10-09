@@ -48,7 +48,7 @@
                 {{ nav_link('Reports', url_for('main.reports'), request.endpoint == 'main.reports', '▥') }}
                 <span class="nav-section">Account</span>
                 {{ nav_link('My Businesses', url_for('businesses.index'), request.blueprint == 'businesses', '◫') }}
-                {{ nav_link('Billing & Plan' if config.SUBSCRIPTIONS_ENABLED else 'Lifetime access', url_for('subscriptions.index'), request.blueprint == 'subscriptions' or request.blueprint == 'payments', '◇') }}
+                {{ nav_link('Billing & Plan', url_for('subscriptions.index'), request.blueprint == 'subscriptions' or request.blueprint == 'payments', '◇') }}
                 {{ nav_link('Profile & settings', url_for('profile.index'), request.blueprint == 'profile', '○') }}
             </nav>
 
@@ -56,7 +56,7 @@
                 <div class="workspace-card">
                     <div class="workspace-dot"></div>
                     <div>
-                        <span class="workspace-label">{{ billing_label if config.SUBSCRIPTIONS_ENABLED else ('Lifetime access' if subscription_business and subscription_business.has_write_access else 'Explore StockBridge') }}</span>
+                        <span class="workspace-label">{{ billing_label if config.SUBSCRIPTIONS_ENABLED else ('Existing account access' if subscription_business and subscription_business.has_write_access else 'Explore StockBridge') }}</span>
                         <strong>{{ 'Choose your active business' if business_selection_required|default(false) else subscription_business.name if subscription_business else 'My business' }}</strong>
                     </div>
                 </div>
@@ -97,7 +97,7 @@
                     <div class="profile-copy">
                         <strong>{{ current_user.full_name }}</strong>
                         <span>Owner</span>
-                    </div></button><div class="profile-dropdown" id="profileDropdown"><a href="{{ url_for('profile.index') }}">Profile & settings</a><a href="{{ url_for('businesses.index') }}">My Businesses</a><a href="{{ url_for('subscriptions.index') }}">{{ "Billing & plans" if config.SUBSCRIPTIONS_ENABLED else "Lifetime access" }}</a></div></div>
+                    </div></button><div class="profile-dropdown" id="profileDropdown"><a href="{{ url_for('profile.index') }}">Profile & settings</a><a href="{{ url_for('businesses.index') }}">My Businesses</a><a href="{{ url_for('subscriptions.index') }}">{{ "Billing & plans" }}</a></div></div>
             </header>
             {% endif %}
 

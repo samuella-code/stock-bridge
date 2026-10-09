@@ -44,7 +44,8 @@ def test_unverified_signup_cannot_enter_dashboard_or_pay(client, app, monkeypatc
         token = verification_token("ada@example.com")
     preview = client.get(f"/auth/verify/{token}", follow_redirects=True)
     assert b"Explore StockBridge" in preview.data
-    assert b"Unlock Lifetime Access" in preview.data
+    assert b"View Basic and Plus plans" in preview.data
+    assert b"Lifetime" not in preview.data
     assert client.get("/products/").headers["Location"].endswith("/plans/")
 
 
@@ -57,6 +58,7 @@ def test_verified_unpaid_user_can_dashboard_but_stock_tools_show_payment(client,
     assert response.status_code==302
     assert response.headers["Location"].endswith("/plans/")
     page=client.get("/plans/")
-    assert b"3,000 once" in page.data and b"Unlock Lifetime Access" in page.data
-    assert b"No recurring charges" in page.data
+    assert b"3,000/month" in page.data and b"5,000/month" in page.data
+    assert b"Lifetime" not in page.data
+    assert b"Subscription checkout is not currently available" in page.data
     assert b"create your account after confirmation" not in page.data

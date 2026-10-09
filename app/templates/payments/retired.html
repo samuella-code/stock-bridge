@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block title %}Checkout unavailable · StockBridge{% endblock %}
+{% block page_title %}Checkout unavailable{% endblock %}
+{% block content %}<section class="panel-card"><h2>This purchase option is no longer available</h2><p>StockBridge offers Basic and Plus plans. Existing valid account access and historical payments are unchanged.</p>{% if not config.SUBSCRIPTIONS_ENABLED %}<p>Subscription checkout is not currently available.</p>{% endif %}<a class="primary-btn" href="{{ url_for('subscriptions.index') }}">View Basic and Plus plans</a></section>{% endblock %}

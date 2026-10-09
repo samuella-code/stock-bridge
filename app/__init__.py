@@ -120,7 +120,7 @@ def create_app(test_config=None):
             business = selected_business(current_user)
             db.session.refresh(business)
             if not business.has_write_access and (not app.config.get("SUBSCRIPTIONS_ENABLED") or request.method not in {"GET", "HEAD", "OPTIONS"}):
-                flash("Your records remain available. Choose a plan to record new business activity." if app.config.get("SUBSCRIPTIONS_ENABLED") else "Unlock Products, Sales, Expenses and Restocking with the one-time ₦3,000 payment.", "warning")
+                flash("Your records remain available. Choose a plan to record new business activity." if app.config.get("SUBSCRIPTIONS_ENABLED") else "Subscription checkout is not currently available. Your existing valid access is unchanged.", "warning")
                 return redirect(url_for("subscriptions.index"))
 
     @app.context_processor

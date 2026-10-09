@@ -136,7 +136,7 @@ def test_paid_and_lifetime_accounts_never_get_trial_pressure(app,kind):
     account.trial_started_at=datetime.utcnow();account.trial_ends_at=datetime.utcnow()+timedelta(days=7);db.session.commit()
     client=app.test_client();login(client,user);html=client.get('/dashboard').get_data(as_text=True)
     assert 'trial-status' not in html and 'After your seven-day trial' not in html
-    if kind.startswith('lifetime'):assert 'Legacy Lifetime Access' in html
+    if kind.startswith('lifetime'):assert 'Existing account access' in html
 
 
 def test_expired_guidance_preserves_write_guard(app):

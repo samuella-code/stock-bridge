@@ -465,8 +465,8 @@ def test_price_is_server_owned_and_lifetime_checkout_disabled(client,fake):
     u,b=seed(eligible=False);login(client,u)
     response=client.post('/plans/checkout',data={'plan':'plus','interval':'yearly','amount':'1','user_id':'999'})
     assert response.status_code==303 and Payment.query.one().amount_kobo==5000000 and Payment.query.one().user_id==u.id
-    assert client.post('/payments/initialize').location.endswith('/plans/')
-    assert client.get('/payments/checkout').location.endswith('/plans/')
+    assert client.post('/payments/initialize').status_code == 410
+    assert client.get('/payments/checkout').status_code == 410
 
 
 @pytest.mark.parametrize('plan,interval,amount,limit',[

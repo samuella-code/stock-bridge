@@ -30,7 +30,7 @@ def failed(error):
 def index():
     business = selected_business(current_user) if current_user.is_authenticated else None
     if not current_app.config.get('SUBSCRIPTIONS_ENABLED'):
-        return render_template('subscriptions/index.html', business=business, lifetime_price=current_app.config['LIFETIME_PRICE_NAIRA'])
+        return render_template('subscriptions/index.html', business=business, plan_prices={plan: {interval: PLANS[(plan, interval)]['amount'] / 100 for interval in ('monthly', 'yearly')} for plan in ('basic', 'plus')})
     access = effective_access(current_user, business=business) if current_user.is_authenticated else None
     history = RecurringSubscription.query.filter_by(user_id=current_user.id).order_by(RecurringSubscription.id.desc()).limit(20).all() if current_user.is_authenticated else []
     events = BillingEvent.query.filter(BillingEvent.user_id==current_user.id, BillingEvent.kind.notin_(('provider_event','business_created','business_selected'))).order_by(BillingEvent.id.desc()).limit(10).all() if current_user.is_authenticated else []
@@ -66,7 +66,7 @@ def review():
         spec = plan_spec(plan, interval)
         access = effective_access(current_user)
         if access.legacy and plan != 'plus':
-            raise ValueError('Your Lifetime Access already includes Basic tools. Plus is optional.')
+            raise ValueError('Your existing account access already includes Basic tools. Plus is optional.')
         sub = access.subscription
         if sub and (sub.plan_code, sub.billing_interval) == (plan, interval):
             raise ValueError('That plan and interval are already selected.')

@@ -71,7 +71,7 @@ def begin_checkout(user,plan,interval,*,replacement_of_id=None):
         raise ValueError('Use Change Plan to stop the old renewal before starting another subscription.')
     account=account_for(user,create=True)
     if account.legacy_granted_at and plan!='plus':
-        raise ValueError('Your Lifetime Access already includes the core tools. Only choose Plus voluntarily.')
+        raise ValueError('Your existing account access already includes the core tools. Only choose Plus voluntarily.')
     sub=RecurringSubscription(user_id=user.id,business_id=selected_business(user).id,plan_code=plan,
         billing_interval=interval,amount_kobo=spec['amount'],provider_plan_code=code,
         checkout_reference='SBS-'+uuid.uuid4().hex,status='initializing',replacement_of_id=replacement_of_id)
@@ -199,7 +199,7 @@ def cancel(user,sub):
     provider.disable_subscription(sub.provider_subscription_code,data.get('email_token'))
     sub.cancel_at_period_end=True;sub.cancelled_at=datetime.utcnow();sub.status='cancelled' if scheduled else 'cancel_at_period_end'
     account=account_for(user)
-    fallback=' Your original Lifetime Access will remain available.' if account and account.legacy_granted_at else ' Your data will remain available in read-only mode.'
+    fallback=' Your existing account access will remain available.' if account and account.legacy_granted_at else ' Your data will remain available in read-only mode.'
     notice(user.id,'cancel:'+sub.provider_subscription_code,'cancellation_scheduled',
         ('Your scheduled subscription was cancelled before its start.' if scheduled else f'Renewal is stopped. Paid access continues until {sub.current_period_end:%d %b %Y}.')+fallback,sub.id)
     db.session.commit()
@@ -209,7 +209,7 @@ def change_plan(user,sub,plan,interval):
     spec=plan_spec(plan,interval)
     account=account_for(user)
     if account and account.legacy_granted_at and plan!='plus':
-        raise ValueError('Your Lifetime Access already includes Basic tools. Plus is optional.')
+        raise ValueError('Your existing account access already includes Basic tools. Plus is optional.')
     if sub.user_id!=user.id:raise ValueError('This subscription does not belong to your account.')
     if (sub.plan_code,sub.billing_interval)==(plan,interval):raise ValueError('That plan and interval are already selected.')
     if sub.current_period_end is None or sub.current_period_end<=datetime.utcnow():
@@ -297,7 +297,7 @@ def process_event(event):
         if not sub.current_period_end or failed_start>=sub.current_period_end:
             sub.status='past_due'
             notice(sub.user_id,'failed:'+code+':'+invoice,'renewal_failed',
-                "We couldn't renew your StockBridge subscription. Update your billing information. Your data and original Lifetime Access, if any, are retained.",sub.id)
+                "We couldn't renew your StockBridge subscription. Update your billing information. Your data and existing account access, if any, are retained.",sub.id)
     elif name in ('subscription.not_renew','subscription.disable'):
         if details.get('status') in ('non-renewing','cancelled','completed'):
             sub.cancel_at_period_end=True;sub.cancelled_at=sub.cancelled_at or datetime.utcnow()

@@ -91,7 +91,7 @@ def effective_access(user, *, business=None, now=None):
 
 def access_label(user):
     labels={'trial':'Free Trial','basic':'StockBridge Basic','plus':'StockBridge Plus',
-        'legacy_lifetime':'Legacy Lifetime Access','legacy_lifetime_plus':'Legacy Lifetime Access + Plus',
+        'legacy_lifetime':'Existing account access','legacy_lifetime_plus':'Existing account access + Plus',
         'restricted':'Read-only — choose a plan'}
     access=effective_access(user)
     label=labels[access.kind]

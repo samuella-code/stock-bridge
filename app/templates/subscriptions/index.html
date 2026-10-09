@@ -1,14 +1,6 @@
-{% from 'components/legal_links.html' import legal_links, billing_links %}
 {% extends "base.html" %}
-{% block title %}Lifetime access · StockBridge{% endblock %}
-{% block page_title %}Lifetime access{% endblock %}
-{% block content %}{{ billing_links() }}
-<section class="dashboard-wrap billing-page">
-  <div class="checkout-steps" aria-label="Access progress"><div class="done"><span>1</span><strong>Create account</strong></div><div class="done"><span>2</span><strong>Verify email</strong></div><div class="active"><span>3</span><strong>Unlock lifetime access</strong></div></div>
-  <div class="billing-intro"><div><p class="eyebrow">One payment. Lifetime access.</p><h2>Unlock the business tools when you're ready</h2><p class="muted">Create an account, verify your email and explore StockBridge. Pay once to record products, sales, restocks and expenses.</p></div>{% if business %}<div class="subscription-summary"><span>Current access</span><strong>{{ 'Lifetime access' if business.has_write_access else 'Exploring' }}</strong><small>{{ 'Business tools unlocked' if business.has_write_access else 'Business tools unlock after payment' }}</small></div>{% endif %}</div>
-  <article class="lifetime-card"><div><span class="popular-badge">One business</span><h3>StockBridge Lifetime Access</h3><p>Track stock, sales, expenses and profit, and know when to restock.</p><ul><li>✓ Products and inventory</li><li>✓ Sales and expense tracking</li><li>✓ Low-stock alerts</li><li>✓ Restocking insights</li><li>✓ Dashboard and profit reports</li><li>✓ Lifetime access for one business</li></ul></div><div class="lifetime-price"><span>Pay once</span><strong>₦{{ "{:,.0f}".format(lifetime_price) }} once</strong><small>No subscription. No recurring charges.</small><small>Lifetime access for one business.</small>{% if business and business.has_write_access %}<a class="primary-btn" href="{{ url_for('main.dashboard') }}">Open dashboard</a>{% elif business %}<a class="primary-btn" href="{{ url_for('payments.checkout') }}">Unlock Lifetime Access</a>{% else %}<a class="primary-btn" href="{{ url_for('auth.signup') }}">Create account</a>{% endif %}</div></article>
-  <p class="payment-note">Payments are securely processed by Paystack. StockBridge does not store card or bank details.</p>
-</section>
-{% endblock %}
-
-{% block extra_styles %}<link rel="stylesheet" href="{{ url_for('static', filename='css/legal.css') }}">{% endblock %}
+{% from 'components/public.html' import price_toggle, pricing_cards %}
+{% from 'components/legal_links.html' import billing_links %}
+{% block title %}Billing & Plan · StockBridge{% endblock %}
+{% block page_title %}Billing & Plan{% endblock %}
+{% block content %}{{ billing_links() }}<section class="billing-page"><div class="billing-intro"><h2>Basic and Plus</h2><p>Subscription checkout is not currently available. Trials are unavailable while subscription rollout is off. Your existing valid access is unchanged.</p></div>{{ price_toggle() }}{{ pricing_cards(plan_prices) }}{% if business %}<a class="secondary-btn" href="{{ url_for('main.dashboard') }}">Open dashboard</a>{% endif %}</section>{% endblock %}

@@ -68,7 +68,8 @@ def test_verification_resend_and_welcome_only_on_first_verification(app, message
     assert len(messages) == 2
     assert client.get(f"/auth/verify/{token}").status_code == 302
     assert len(messages) == 3
-    assert "₦3,000 once" in messages[2].get_body(preferencelist=("plain",)).get_content()
+    assert "subscription checkout is not currently available" in messages[2].get_body(preferencelist=("plain",)).get_content()
+    assert "Lifetime" not in messages[2].get_body(preferencelist=("html",)).get_content()
     client.get(f"/auth/verify/{token}")
     assert len(messages) == 3
 

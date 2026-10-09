@@ -14,7 +14,7 @@ def test_rollout_flag_controls_public_trial_promises(app,enabled,path):
     if not enabled:
         for promise in ('free trial','7-day trial','seven-day trial','7 days free','start your 7-day'):
             assert promise not in html
-        assert 'lifetime' in html or path.startswith('/auth/')
+        assert 'lifetime' not in html
     elif path!='/auth/login':
         assert 'trial' in html
 
@@ -28,7 +28,7 @@ def test_rollout_flag_controls_social_completion_copy(app,enabled):
         session['social_pending']={'provider':'google','email':'copy@example.invalid','sub':'copy-sub','expires':time.time()+600}
     html=client.get('/auth/social/finish').get_data(as_text=True)
     assert ('existing trial rules' in html)==enabled
-    assert ('Business tools unlock with Lifetime Access' in html)==(not enabled)
+    assert ('Subscription checkout is not currently available' in html)==(not enabled)
 
 
 @pytest.mark.parametrize('enabled',[False,True])
@@ -158,7 +158,7 @@ def test_current_plan_trial_and_legacy_presentation(app,kind):
         assert '7 days remaining' in html
     else:assert 'Your trial has' not in html
     if kind.startswith('lifetime'):
-        assert 'Your original Lifetime Access is preserved' in html
+        assert 'Your existing account access is preserved' in html
         assert 'Choose Basic' not in html
         assert client.get('/plans/review?plan=basic&interval=monthly').location.endswith('/plans/')
 

@@ -79,58 +79,21 @@ def _activate_account(payment, *, commit=True):
     return True
 
 
+def _purchase_unavailable():
+    # Retired purchase endpoints never initialize a provider transaction.
+    return render_template("payments/retired.html"), 410
+
+
 @payments_bp.get("/checkout")
 @login_required
 def checkout():
-    if current_app.config.get("SUBSCRIPTIONS_ENABLED"):
-        return redirect(url_for("subscriptions.index"))
-    if current_user.is_authenticated and current_user.businesses[0].has_write_access:
-        return redirect(url_for("main.dashboard"))
-    configured = _payments_configured()
-    return render_template("payments/checkout.html", price=current_app.config["LIFETIME_PRICE_NAIRA"], configured=configured, account_email=current_user.email)
+    return _purchase_unavailable()
 
 
 @payments_bp.post("/initialize")
 @login_required
 def initialize():
-    if current_app.config.get("SUBSCRIPTIONS_ENABLED"):
-        return redirect(url_for("subscriptions.index"))
-    email = current_user.email
-    if not email or "@" not in email:
-        flash("Enter a valid email address.", "error")
-        return redirect(url_for("payments.checkout"))
-    existing_user = current_user
-    if existing_user and existing_user.businesses[0].has_write_access:
-        flash("That account already has lifetime access. Log in instead.", "success")
-        return redirect(url_for("auth.login"))
-    if not _payments_configured():
-        flash("Payments are being configured. Please try again later.", "warning")
-        return redirect(url_for("payments.checkout"))
-    amount_kobo = current_app.config["LIFETIME_PRICE_NAIRA"] * 100
-    reference = f"SB-{uuid.uuid4().hex}"
-    payment = Payment(customer_email=email, reference=reference, amount_kobo=amount_kobo)
-    db.session.add(payment)
-    callback_url = (f"https://{current_app.config['CUSTOMER_HOST']}{url_for('payments.callback')}"
-        if os.getenv("VERCEL_ENV") == "production" else url_for("payments.callback", _external=True))
-    try:
-        details = initialize_transaction(current_app.config["PAYSTACK_SECRET_KEY"], email,
-            amount_kobo, reference, callback_url)
-        checkout_url = details.get("authorization_url", "")
-        parsed = urlparse(checkout_url)
-        if (details.get("reference") != reference or parsed.scheme != "https"
-                or parsed.hostname != "checkout.paystack.com"):
-            raise PaystackError("Invalid checkout response from Paystack.")
-        db.session.commit()
-    except PaystackError as error:
-        db.session.rollback()
-        current_app.logger.warning("Paystack checkout initialization failed: http_status=%s code=%s reference=%s",
-            error.status_code, error.code, reference)
-        if error.status_code in (401, 403):
-            flash("Secure checkout is temporarily unavailable. Please contact StockBridge support.", "error")
-        else:
-            flash("Secure checkout could not open. Please try again.", "error")
-        return redirect(url_for("payments.checkout"))
-    return redirect(checkout_url, code=303)
+    return _purchase_unavailable()
 
 
 def _payments_configured():
@@ -161,7 +124,7 @@ def callback():
             current_app.logger.warning("Paystack verification pending for %s", reference)
     if _activate_account(payment):
         safely_send(send_access_receipt_once, payment)
-        flash("Payment confirmed. Your lifetime access is active.", "success")
+        flash("Payment confirmed. Your existing account access is active.", "success")
         return redirect(url_for("main.dashboard"))
     return render_template("payments/pending.html", reference=reference)
 

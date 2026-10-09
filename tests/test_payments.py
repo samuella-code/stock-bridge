@@ -34,20 +34,13 @@ def transaction(payment, amount=300_000):
             "product":"stockbridge_lifetime"}}
 
 
-def test_logged_in_user_initializes_payment(client, app, monkeypatch):
+def test_logged_in_user_cannot_initialize_retired_payment(client, app, monkeypatch):
     create_account(client, app)
     calls=[]
-    def start(key, email, amount, reference, callback):
-        calls.append((key, email, amount, callback))
-        return {"reference":reference,"authorization_url":"https://checkout.paystack.com/test-session"}
-    monkeypatch.setattr("app.payments.routes.initialize_transaction", start)
-    response = client.post("/payments/initialize")
-    assert response.status_code == 303
-    assert response.headers["Location"] == "https://checkout.paystack.com/test-session"
-    assert calls[0][:3] == ("sk_test_secret", "ada@example.com", 300_000)
-    assert calls[0][3].endswith("/payments/callback")
-    with app.app_context():
-        payment = Payment.query.one(); assert payment.customer_email == "ada@example.com"; assert payment.amount_kobo == 300_000
+    monkeypatch.setattr("app.payments.routes.initialize_transaction", lambda *args: calls.append(args))
+    assert client.post("/payments/initialize").status_code == 410
+    assert calls == []
+    with app.app_context(): assert Payment.query.count() == 0
 
 
 def test_verified_payment_unlocks_stock_tools(client, app):
@@ -155,7 +148,7 @@ def test_failed_initialization_does_not_save_a_pending_payment(client, app, monk
     create_account(client, app)
     monkeypatch.setattr("app.payments.routes.initialize_transaction",
         lambda *args: (_ for _ in ()).throw(PaystackError("rejected")))
-    assert client.post("/payments/initialize").status_code==302
+    assert client.post("/payments/initialize").status_code==410
     with app.app_context(): assert Payment.query.count()==0
 
 
@@ -213,8 +206,8 @@ def test_live_checkout_auth_failure_is_clear_and_creates_no_payment(client, app,
     monkeypatch.setattr("app.payments.routes.initialize_transaction",lambda *args:
         (_ for _ in ()).throw(PaystackError("Rejected",status_code=401,code="invalid_api_key")))
     response=client.post("/payments/initialize",follow_redirects=True)
-    assert b"contact StockBridge support" in response.data
-    assert warnings and warnings[0][1:3]==(401,"invalid_api_key")
+    assert response.status_code == 410 and b"View Basic and Plus plans" in response.data
+    assert warnings == []
     assert "sk_live_do_not_log" not in repr(warnings)
     with app.app_context():
         assert Payment.query.count()==0
