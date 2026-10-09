@@ -101,7 +101,6 @@ def receive():
     batch = str(uuid4())
     try:
         for pid, qty, cost in sorted(parsed):
-            product = products[pid]
             receipt = Restock(business_id=b.id, product_id=pid, quantity=qty,
                 unit_cost=cost, supplier=supplier, note=note, batch_id=batch)
             db.session.add(receipt)
@@ -122,6 +121,19 @@ def receive():
         message = (f'{products[parsed[0][0]].name} was restocked with {parsed[0][1]} {products[parsed[0][0]].unit}.'
             if len(parsed) == 1 else f'Stock replenished for {len(parsed)} products ({sum(qty for _, qty, _ in parsed)} units received).')
         notify(b.id, 'restock_recorded', 'Stock replenished', message, f'restock:{batch}:created')
+        from app.notifications.email_outbox import queue_restock_alert
+        queue_restock_alert(
+            b.id,
+            [
+                {
+                    'name': products[pid].name,
+                    'quantity': qty,
+                    'unit': products[pid].unit,
+                }
+                for pid, qty, _ in sorted(parsed)
+            ],
+            f'restock:{batch}:created',
+        )
         db.session.commit()
     except Exception:
         db.session.rollback()

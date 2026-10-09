@@ -45,7 +45,65 @@ def queue_alert(product, quantity, kind, event_key):
     db.session.info['inventory_alert_created'] = True
     return row
 
+def queue_restock_alert(business_id, items, event_key):
+    """Queue one durable email for a successful restocking batch."""
+    if not enabled(business_id, 'restocking'):
+        return None
 
+    business = db.session.get(Business, business_id)
+    if business is None:
+        return None
+
+    owner = db.session.get(User, business.user_id)
+    if (
+        owner is None
+        or not owner.email_verified_at
+        or owner.suspended_at
+        or business.suspended_at
+        or owner.role == 'admin'
+        or not valid_recipient(owner.email)
+    ):
+        return None
+
+    if not items or len(items) > 100:
+        return None
+
+    payload_items = []
+    for item in items:
+        name = str(item['name']).replace('\r', ' ').replace('\n', ' ')
+        unit = str(item['unit']).replace('\r', ' ').replace('\n', ' ')
+        quantity = item['quantity']
+        if not isinstance(quantity, int) or isinstance(quantity, bool) or quantity <= 0:
+            raise ValueError('Restock quantities must be positive integers')
+        payload_items.append({'name': name, 'quantity': quantity, 'unit': unit})
+
+    count = len(payload_items)
+    subject = (
+        f"Stock Replenished — {payload_items[0]['name']} | StockBridge"
+        if count == 1
+        else f"Stock Replenished — {count} Products | StockBridge"
+    )
+
+    row = EmailOutbox(
+        business_id=business.id,
+        recipient_user_id=owner.id,
+        recipient_email=owner.email,
+        event_type='restock_recorded',
+        event_key=event_key,
+        subject=subject.replace('\r', ' ').replace('\n', ' ')[:240],
+        max_attempts=max(
+            1,
+            min(10, current_app.config['INVENTORY_EMAIL_MAX_ATTEMPTS'])
+        ),
+        payload={
+            'business_name': business.name,
+            'items': payload_items,
+        },
+    )
+
+    db.session.add(row)
+    db.session.info['inventory_alert_created'] = True
+    return row
 def customer_origin():
     # Explicit origin: VERCEL_ENV=production also describes staging-project deploys.
     raw = current_app.config['INVENTORY_EMAIL_BASE_URL']
@@ -116,36 +174,93 @@ def dispatch_one(user_id=None, business_id=None, now=None):
     if (not business or not owner or business.user_id != owner.id or owner.role == 'admin'
             or owner.suspended_at or business.suspended_at or not owner.email_verified_at
             or owner.email != row.recipient_email or not valid_recipient(row.recipient_email)
-            or row.event_type not in ('low_stock', 'out_of_stock')):
+           or row.event_type not in ('low_stock', 'out_of_stock', 'restock_recorded')):
         finish(row_id, token, 'failed', now, last_error='RecipientUnavailable')
         return 'failed'
-    if not enabled(row.business_id, row.event_type + '_email'):
+    preference_field = (
+        'restocking' if row.event_type == 'restock_recorded'
+        else row.event_type + '_email'
+    )
+    if not enabled(row.business_id, preference_field):
         finish(row_id, token, 'suppressed', now, last_error=None)
         return 'suppressed'
     payload, subject, recipient = dict(row.payload), row.subject, row.recipient_email
     attempts, maximum, kind = row.attempt_count, row.max_attempts, row.event_type
-    link = origin + ('/products/?view=inventory' if kind == 'low_stock' else '/restocking/')
-    action = 'View Inventory' if kind == 'low_stock' else 'Restock Product'
-    body = (f"Hello,\n\n{subject}\nBusiness: {payload['business_name']}\nProduct: {payload['product_name']}\n"
-        f"Current stock: {payload['quantity']} {payload['unit']}\nLow-stock threshold: {payload['threshold']} {payload['unit']}\n\n"
-        f"{action}: {link}\nSelect {payload['business_name']} if another business is active.\n\nStockBridge — Manage your business with confidence.")
-    html = render_template('email/inventory_alert.html', alert=payload, kind=kind, action=action, link=link)
-    db.session.commit()  # No database locks or open transaction during SMTP.
     try:
+        if kind == 'restock_recorded':
+            link = origin + '/restocking/'
+            action = 'View Restocking'
+            item_lines = [
+                f"- {item['name']}: +{item['quantity']} {item['unit']}"
+                for item in payload['items']
+            ]
+            body = (
+                f"Hello,\n\n{subject}\n"
+                f"Business: {payload['business_name']}\n\n"
+                "Products restocked:\n"
+                + "\n".join(item_lines)
+                + f"\n\n{action}: {link}\n"
+                f"Select {payload['business_name']} if another business is active.\n\n"
+                "StockBridge — Manage your business with confidence."
+            )
+            html = render_template(
+                'email/restock_alert.html',
+                alert=payload,
+                action=action,
+                link=link,
+            )
+        else:
+            link = origin + (
+                '/products/?view=inventory'
+                if kind == 'low_stock'
+                else '/restocking/'
+            )
+            action = 'View Inventory' if kind == 'low_stock' else 'Restock Product'
+            body = (
+                f"Hello,\n\n{subject}\n"
+                f"Business: {payload['business_name']}\n"
+                f"Product: {payload['product_name']}\n"
+                f"Current stock: {payload['quantity']} {payload['unit']}\n"
+                f"Low-stock threshold: {payload['threshold']} {payload['unit']}\n\n"
+                f"{action}: {link}\n"
+                f"Select {payload['business_name']} if another business is active.\n\n"
+                "StockBridge — Manage your business with confidence."
+            )
+            html = render_template(
+                'email/inventory_alert.html',
+                alert=payload,
+                kind=kind,
+                action=action,
+                link=link,
+            )
+
+        db.session.commit()  # No database locks or open transaction during SMTP.
         if not email_service._send_email(subject, recipient, body, html=html):
             raise RuntimeError('TransportUnavailable')
     except Exception as error:
+        db.session.rollback()
         # Exception strings can contain SMTP credentials/provider URLs. Never log them.
         error_type = type(error).__name__[:60]
-        current_app.logger.warning('Inventory email job %s delivery failed (%s)', row_id, error_type)
-        delay = min(3600, max(1, current_app.config['INVENTORY_EMAIL_RETRY_SECONDS']) * 2 ** (attempts - 1))
+        current_app.logger.warning(
+            'Inventory email job %s delivery failed (%s)', row_id, error_type
+        )
+        delay = min(
+            3600,
+            max(1, current_app.config['INVENTORY_EMAIL_RETRY_SECONDS']) * 2 ** (attempts - 1)
+        )
         status = 'failed' if attempts >= maximum else 'retry'
-        finish(row_id, token, status, datetime.utcnow(), last_error=error_type,
-            next_attempt_at=now + timedelta(seconds=delay))
+        finish(
+            row_id, token, status, datetime.utcnow(),
+            last_error=error_type,
+            next_attempt_at=now + timedelta(seconds=delay)
+        )
         return status
-    finish(row_id, token, 'sent', datetime.utcnow(), sent_at=datetime.utcnow(), last_error=None)
-    return 'sent'
 
+    finish(
+        row_id, token, 'sent', datetime.utcnow(),
+        sent_at=datetime.utcnow(), last_error=None
+    )
+    return 'sent'
 
 @worker_bp.route('/internal/inventory-emails/dispatch', methods=['GET', 'POST'])
 @csrf.exempt

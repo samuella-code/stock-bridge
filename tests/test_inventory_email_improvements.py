@@ -8,11 +8,12 @@ from PIL import Image
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
 from app import create_app, db
-from app.models import EmailOutbox, Notification, NotificationPreference, Product, Sale, StockMovement
+from app.models import EmailOutbox, Notification, NotificationPreference, Product, Restock, Sale, StockMovement
 from app.notifications.email_outbox import claim, dispatch_one, finish
 from app.notifications.service import stock_transition
 from tests.test_notifications_business_profile import app, setup, product, sale, restock, upload, local
 from tests.test_multi_business import seed, login
+from werkzeug.datastructures import MultiDict
 
 
 def configure(app):
@@ -46,10 +47,139 @@ def test_low_repeat_restock_and_out_cycles(app):
     sale(client, p, 1)  # Oversell does not create another event.
     assert EmailOutbox.query.count() == 2
     restock(client, p, 20)
-    assert EmailOutbox.query.count() == 2
-    sale(client, p, 15)
     assert EmailOutbox.query.count() == 3
-    assert len({x.event_key for x in EmailOutbox.query.all()}) == 3
+    sale(client, p, 15)
+    assert EmailOutbox.query.count() == 4
+    assert len({x.event_key for x in EmailOutbox.query.all()}) == 4
+
+
+def test_single_restock_queues_one_outbox_email(app):
+    client, owner, shops = setup(app)
+    p = product(client, 'Coffee')
+
+    response = restock(client, p, 7)
+
+    row = EmailOutbox.query.one()
+    assert response.status_code == 302
+    assert Restock.query.count() == 1
+    assert (row.business_id, row.recipient_user_id, row.recipient_email) == (
+        shops[0].id, owner.id, owner.email
+    )
+    assert row.event_type == 'restock_recorded'
+    assert row.payload == {
+        'business_name': shops[0].name,
+        'items': [{'name': 'Coffee', 'quantity': 7, 'unit': 'bottles'}],
+    }
+    assert row.event_key.startswith('restock:')
+
+
+def test_multi_product_restock_queues_one_email_with_each_item(app):
+    client, _, shops = setup(app)
+    coffee = product(client, 'Coffee')
+    tea = product(client, 'Tea')
+    data = MultiDict([
+        ('product_id', str(coffee.id)), ('product_id', str(tea.id)),
+        ('quantity', '7'), ('quantity', '11'),
+        ('unit_cost', '280'), ('unit_cost', '290'),
+    ])
+
+    response = client.post('/restocking/receive', data=data)
+
+    row = EmailOutbox.query.one()
+    assert response.status_code == 302
+    assert Restock.query.count() == 2
+    assert row.event_type == 'restock_recorded'
+    assert row.payload == {
+        'business_name': shops[0].name,
+        'items': [
+            {'name': 'Coffee', 'quantity': 7, 'unit': 'bottles'},
+            {'name': 'Tea', 'quantity': 11, 'unit': 'bottles'},
+        ],
+    }
+
+
+def test_disabled_restocking_preference_does_not_queue_email(app):
+    client, _, shops = setup(app)
+    db.session.add(NotificationPreference(business_id=shops[0].id, restocking=False))
+    db.session.commit()
+    p = product(client, 'Coffee')
+
+    response = restock(client, p, 7)
+
+    assert response.status_code == 302
+    assert Restock.query.count() == 1
+    assert Notification.query.filter_by(kind='restock_recorded').count() == 0
+    assert EmailOutbox.query.count() == 0
+
+
+def test_restock_preference_change_suppresses_queued_email(app, monkeypatch):
+    configure(app)
+    client, _, shops = setup(app)
+    p = product(client, 'Coffee')
+    restock(client, p, 7)
+    db.session.add(NotificationPreference(business_id=shops[0].id, restocking=False))
+    db.session.commit()
+    calls = []
+    monkeypatch.setattr(
+        'app.email_service._send_email',
+        lambda *args, **kwargs: calls.append((args, kwargs)) or True,
+    )
+
+    assert dispatch_one() == 'suppressed'
+    assert calls == []
+    assert EmailOutbox.query.one().status == 'suppressed'
+
+
+def test_restock_email_rendering_and_staging_link(app, monkeypatch):
+    configure(app)
+    client, _, shops = setup(app)
+    shops[0].name = '<script>Business</script>'
+    db.session.commit()
+    coffee = product(client, '<b>Coffee</b>')
+    tea = product(client, 'Tea')
+    data = MultiDict([
+        ('product_id', str(coffee.id)), ('product_id', str(tea.id)),
+        ('quantity', '7'), ('quantity', '11'),
+        ('unit_cost', '280'), ('unit_cost', '290'),
+    ])
+    client.post('/restocking/receive', data=data)
+    sent = []
+    monkeypatch.setattr(
+        'app.email_service._send_email',
+        lambda *args, **kwargs: sent.append((args, kwargs)) or True,
+    )
+
+    assert dispatch_one() == 'sent'
+
+    args, kwargs = sent[0]
+    assert args[0].startswith('Stock Replenished — 2 Products')
+    assert 'Business: <script>Business</script>' in args[2]
+    assert '+7 bottles' in args[2] and '+11 bottles' in args[2]
+    assert 'https://stock-bridge-staging.vercel.app/restocking/' in args[2]
+    assert 'href="https://stock-bridge-staging.vercel.app/restocking/"' in kwargs['html']
+    assert '&lt;b&gt;Coffee&lt;/b&gt;' in kwargs['html']
+    assert '<script>Business' not in kwargs['html']
+    assert '&lt;script&gt;Business&lt;/script&gt;' in kwargs['html']
+    assert 'event_key' not in kwargs['html'] and 'business_id' not in kwargs['html']
+
+
+def test_restock_outbox_rolls_back_with_failed_restock_commit(app, monkeypatch):
+    client, _, _ = setup(app)
+    p = product(client, 'Coffee')
+    monkeypatch.setattr(
+        db.session, 'commit',
+        lambda: (_ for _ in ()).throw(RuntimeError('fixture')),
+    )
+
+    with pytest.raises(RuntimeError):
+        restock(client, p, 7)
+
+    db.session.rollback()
+    assert Restock.query.count() == 0
+    assert StockMovement.query.filter_by(kind='restock').count() == 0
+    assert Notification.query.filter_by(kind='restock_recorded').count() == 0
+    assert EmailOutbox.query.count() == 0
+    assert db.session.get(Product, p.id).stock_quantity == 8
 
 
 @pytest.mark.parametrize('delta,kind', [(-4, 'low_stock'), (-8, 'out_of_stock')])
@@ -90,7 +220,10 @@ def test_optional_activity_preference(app, field, event):
     p = product(client); sale(client, p, 3); restock(client, p, 8)
     assert Notification.query.filter_by(kind=event).count() == 0
     assert Notification.query.filter_by(kind='low_stock').count() == 1
-    assert EmailOutbox.query.count() == 1
+    assert EmailOutbox.query.count() == (1 if field == 'restocking' else 2)
+    assert EmailOutbox.query.filter_by(event_type='restock_recorded').count() == (
+        0 if field == 'restocking' else 1
+    )
 
 
 def test_queue_and_inventory_rollback_together(app, monkeypatch):
