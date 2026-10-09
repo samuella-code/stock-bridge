@@ -1,0 +1,4 @@
+{% extends 'base.html' %}{% from 'components/public.html' import brand %}{% from 'components/legal_links.html' import legal_links %}
+{% block title %}{% block policy_title %}{% endblock %} · StockBridge{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="{{ url_for('static', filename='css/legal.css') }}">{% endblock %}
+{% block content %}<div class="policy-page"><header>{{ brand() }}<p class="eyebrow">StockBridge policies</p><h1>{{ self.policy_title() }}</h1></header><aside class="policy-draft" aria-label="Draft status"><strong>Draft — not effective legal terms.</strong><p>For business-owner and qualified Nigerian legal review before public release. No effective date has been approved. Items marked “Decision pending” require approval.</p></aside>{{ legal_links() }}<article>{% block policy_body %}{% endblock %}</article><footer>{{ legal_links() }}<a href="{{ url_for('main.index') }}">Back to StockBridge</a></footer></div>{% endblock %}

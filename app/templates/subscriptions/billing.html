@@ -1,8 +1,9 @@
+{% from 'components/legal_links.html' import legal_links, billing_links %}
 {% extends 'base.html' %}
 {% block title %}Billing & plans · StockBridge
 {% endblock %}
 {% block page_title %}Billing & Plan{% endblock %}
-{% block content %}
+{% block content %}{{ billing_links() }}
 <section class="dashboard-wrap billing-page">
 <h2>Billing & Plan</h2>
 <p class="muted">View your access, compare plans and manage billing securely.</p>
@@ -30,3 +31,5 @@
 {% if events %}<h2>Billing updates</h2>{% for event in events %}<p>{{ event.message }}</p>{% endfor %}{% endif %}
 </section>
 {% endblock %}
+
+{% block extra_styles %}<link rel="stylesheet" href="{{ url_for('static', filename='css/legal.css') }}">{% endblock %}

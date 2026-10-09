@@ -43,6 +43,7 @@ def create_app(test_config=None):
     from app.auth.routes import auth_bp
     from app.auth.social import init_social
     init_social(app)
+    from app.legal.routes import legal_bp
     from app.main.routes import main_bp
     from app.products.routes import products_bp
     from app.sales.routes import sales_bp
@@ -58,7 +59,7 @@ def create_app(test_config=None):
     from app.admin.routes import admin_bp, admin_api_bp
 
     for blueprint in (
-        auth_bp, main_bp, products_bp, sales_bp,
+        auth_bp, main_bp, legal_bp, products_bp, sales_bp,
         expenses_bp, restocking_bp, profile_bp, businesses_bp, notifications_bp, worker_bp, subscriptions_bp, payments_bp, admin_bp, admin_api_bp,
     ):
         app.register_blueprint(blueprint)
