@@ -108,7 +108,7 @@ def test_disabled_restocking_preference_does_not_queue_email(app):
 
     assert response.status_code == 302
     assert Restock.query.count() == 1
-    assert Notification.query.filter_by(kind='restock_recorded').count() == 0
+    assert Notification.query.filter_by(kind='restock_recorded').count() == 1
     assert EmailOutbox.query.count() == 0
 
 
@@ -218,7 +218,7 @@ def test_optional_activity_preference(app, field, event):
     client, _, shops = setup(app)
     db.session.add(NotificationPreference(business_id=shops[0].id, **{field:False})); db.session.commit()
     p = product(client); sale(client, p, 3); restock(client, p, 8)
-    assert Notification.query.filter_by(kind=event).count() == 0
+    assert Notification.query.filter_by(kind=event).count() == (1 if event == 'restock_recorded' else 0)
     assert Notification.query.filter_by(kind='low_stock').count() == 1
     assert EmailOutbox.query.count() == (1 if field == 'restocking' else 2)
     assert EmailOutbox.query.filter_by(event_type='restock_recorded').count() == (

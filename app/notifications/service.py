@@ -6,7 +6,7 @@ from app.notifications.email_outbox import enabled, queue_alert
 
 
 def notify(business_id, kind, title, body, event_key, resource_id=None):
-    field = {'product_created': 'product_added', 'sale_recorded': 'sales', 'restock_recorded': 'restocking'}.get(kind)
+    field = {'product_created': 'product_added', 'sale_recorded': 'sales'}.get(kind)
     if field and not enabled(business_id, field):
         return None
     business = db.session.get(Business, business_id)
