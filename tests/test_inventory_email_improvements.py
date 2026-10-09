@@ -383,6 +383,17 @@ def test_preferences_defaults_validation_and_history(app):
     assert Notification.query.filter_by(kind='low_stock').count()==1 and EmailOutbox.query.count()==0
 
 
+def test_restock_email_preference_label_on_both_settings_surfaces(app):
+    client, _, _ = setup(app)
+    for path in ('/profile/', '/notifications/'):
+        response = client.get(path)
+        assert response.status_code == 200
+        html = response.get_data(as_text=True)
+        assert 'Restocking email alerts' in html
+        assert 'Restocking in-app notifications' not in html
+        assert 'name="restocking"' in html
+
+
 def test_click_to_read_count_idempotency_persistence_and_history(app):
     client,_,_,_,_=queued(app)
     row=Notification.query.filter_by(kind='low_stock').one();initial=Notification.query.filter_by(read_at=None).count()

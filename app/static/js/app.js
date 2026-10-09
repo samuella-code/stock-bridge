@@ -26,7 +26,8 @@ if (menuButton && sidebar) {
         if(!sidebar.classList.contains('open'))return;
         if(event.key==='Escape'){event.preventDefault();setMenu(false,true);}
         if(event.key==='Tab'){
-            const targets=[...sidebar.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),[tabindex="0"]')];
+            const targets=[...sidebar.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),[tabindex="0"]')]
+                .filter(control=>control.type!=='hidden'&&!control.hidden);
             const first=targets[0],last=targets[targets.length-1];
             if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}
             else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
