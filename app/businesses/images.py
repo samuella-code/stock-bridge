@@ -128,13 +128,32 @@ def image_storage() -> ImageStorage:
     raise StorageError('Image storage unavailable')
 
 
-def cleanup(storage, key):
+def verify_upload(storage, key, data, business_id):
+    """Read back the private optimized object before publishing its reference."""
+    if not checked_key(key).startswith(f'businesses/{business_id}/'):
+        raise StorageError('Image object belongs to another business')
+    storage.put(key, data)
+    if storage.get(key) != data:
+        raise StorageError('Uploaded image verification failed')
+
+
+def cleanup(storage, key, business_id):
     if key:
+        try:
+            valid_owner = checked_key(key).startswith(f'businesses/{business_id}/')
+        except StorageError:
+            valid_owner = False
+        if not valid_owner:
+            current_app.logger.warning('Business image cleanup refused: object ownership mismatch.')
+            return False
         try:
             storage.delete(key)
         except Exception:
-            # Do not include provider exception/URL/credentials in logs.
-            current_app.logger.warning('Business image cleanup deferred; review storage lifecycle.')
+            # Only the validated object key is recorded for a safe cleanup retry.
+            # Provider exceptions can contain URLs or credentials and are omitted.
+            current_app.logger.warning('Business image cleanup deferred: business=%s object=%s.', business_id, key)
+            return False
+    return True
 
 
 def new_key(business_id):

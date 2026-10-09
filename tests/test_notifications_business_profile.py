@@ -296,6 +296,89 @@ def test_cleanup_failure_does_not_rollback_new_reference(app,tmp_path,monkeypatc
     assert shops[0].logo_key is None
 
 
+@pytest.mark.parametrize('failure', ['unavailable', 'wrong_bytes'])
+def test_replacement_readback_failure_keeps_old_image(app, tmp_path, monkeypatch, failure):
+    local(app, tmp_path)
+    client, _, shops = setup(app)
+    upload(client, shops[0])
+    old = shops[0].logo_key
+    old_data = (tmp_path / old).read_bytes()
+    def readback(storage, key):
+        if failure == 'unavailable':
+            raise OSError('private provider error')
+        return b'wrong object contents'
+    monkeypatch.setattr(LocalStorage, 'get', readback)
+    response = upload(client, shops[0], fmt='JPEG')
+    assert response.status_code == 302
+    assert db.session.get(Business, shops[0].id).logo_key == old
+    assert (tmp_path / old).read_bytes() == old_data
+    assert [str(p.relative_to(tmp_path)) for p in tmp_path.rglob('*.webp')] == [old]
+
+
+def test_replacement_order_verifies_then_commits_then_deletes(app, tmp_path, monkeypatch):
+    local(app, tmp_path)
+    client, _, shops = setup(app)
+    upload(client, shops[0])
+    old = shops[0].logo_key
+    events = []
+    original_get, original_commit, original_delete = LocalStorage.get, db.session.commit, LocalStorage.delete
+    def get(storage, key):
+        assert shops[0].logo_key == old and (tmp_path / old).exists()
+        data = original_get(storage, key)
+        events.append('verified')
+        return data
+    def commit():
+        assert events == ['verified'] and (tmp_path / old).exists()
+        original_commit()
+        events.append('committed')
+    def delete(storage, key):
+        assert events == ['verified', 'committed'] and key == old
+        assert db.session.get(Business, shops[0].id).logo_key != old
+        events.append('deleted')
+        original_delete(storage, key)
+    monkeypatch.setattr(LocalStorage, 'get', get)
+    monkeypatch.setattr(db.session, 'commit', commit)
+    monkeypatch.setattr(LocalStorage, 'delete', delete)
+    upload(client, shops[0], fmt='JPEG')
+    assert events == ['verified', 'committed', 'deleted']
+    assert not (tmp_path / old).exists()
+    assert (tmp_path / shops[0].logo_key).exists()
+
+
+def test_failed_old_cleanup_reports_retry_key_and_keeps_new_image(app, tmp_path, monkeypatch, caplog):
+    # Alembic's fileConfig disables existing loggers in earlier migration tests.
+    monkeypatch.setattr(app.logger, 'disabled', False)
+    monkeypatch.setattr(app.logger, 'propagate', True)
+    caplog.set_level('WARNING', logger=app.logger.name)
+    local(app, tmp_path)
+    client, _, shops = setup(app)
+    upload(client, shops[0])
+    old = shops[0].logo_key
+    monkeypatch.setattr(LocalStorage, 'delete', lambda *a: (_ for _ in ()).throw(OSError('provider-secret-fixture')))
+    upload(client, shops[0], fmt='JPEG')
+    new = db.session.get(Business, shops[0].id).logo_key
+    assert new != old and (tmp_path / old).exists() and (tmp_path / new).exists()
+    assert client.get(f'/businesses/{shops[0].id}/logo').status_code == 200
+    assert old in caplog.text and 'provider-secret-fixture' not in caplog.text
+    assert b'Previous-image cleanup is pending' in client.get(f'/businesses/{shops[0].id}/profile').data
+
+
+@pytest.mark.parametrize('operation', ['replace', 'remove'])
+def test_cleanup_cannot_delete_other_business_object(app, tmp_path, operation):
+    local(app, tmp_path)
+    client, _, shops = setup(app, 2)
+    upload(client, shops[1])
+    other_key = shops[1].logo_key
+    shops[0].logo_key = other_key  # Defensive check even with an inconsistent DB reference.
+    db.session.commit()
+    if operation == 'replace':
+        upload(client, shops[0])
+    else:
+        client.post(f'/businesses/{shops[0].id}/logo/remove')
+    assert db.session.get(Business, shops[1].id).logo_key == other_key
+    assert (tmp_path / other_key).exists()
+
+
 def test_disabled_storage_and_vercel_local_guard(app,tmp_path,monkeypatch):
     client, _, shops = setup(app)
     assert 'uploads are not available yet' in client.get(f'/businesses/{shops[0].id}/profile').get_data(as_text=True)

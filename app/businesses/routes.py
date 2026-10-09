@@ -132,7 +132,7 @@ def profile(business_id):
 @login_required
 def logo_upload(business_id):
     business = profile_business(business_id, writing=True)
-    from app.businesses.images import image_storage, validate_image, new_key, cleanup
+    from app.businesses.images import image_storage, validate_image, new_key, cleanup, verify_upload
     upload = request.files.get('logo')
     if not upload:
         flash('Choose a JPEG, PNG or WebP image.', 'error')
@@ -145,7 +145,7 @@ def logo_upload(business_id):
     key, old_key, storage = new_key(business.id), None, None
     try:
         storage = image_storage()
-        storage.put(key, data)
+        verify_upload(storage, key, data, business.id)
         # Serialize replacements so each one retires the key it actually replaced.
         business = Business.query.filter_by(id=business.id, user_id=current_user.id).with_for_update().populate_existing().one()
         if not accessible_business(current_user, business) or not business.has_write_access:
@@ -156,10 +156,11 @@ def logo_upload(business_id):
     except Exception:
         db.session.rollback()
         if storage:
-            cleanup(storage, key)
+            cleanup(storage, key, business_id)
         flash('The image could not be saved. Your previous image is unchanged. Please try again later.', 'error')
         return redirect(url_for('businesses.profile', business_id=business_id))
-    cleanup(storage, old_key)
+    if not cleanup(storage, old_key, business_id):
+        flash('Your new image is saved. Previous-image cleanup is pending; support can safely retry it.', 'warning')
     flash('Business image updated.', 'success')
     return redirect(url_for('businesses.profile', business_id=business.id))
 
@@ -175,7 +176,7 @@ def logo_remove(business_id):
     if old_key:
         from app.businesses.images import image_storage, cleanup
         try:
-            cleanup(image_storage(), old_key)
+            cleanup(image_storage(), old_key, business_id)
         except Exception:
             current_app.logger.warning('Business image cleanup deferred; review storage lifecycle.')
     flash('Business image removed.', 'success')
