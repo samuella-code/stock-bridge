@@ -1,5 +1,5 @@
 {% macro nav_link(label, href, active, icon) -%}
-<a class="nav-link {{ 'active' if active }}" href="{{ href }}" {% if active %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">{{ icon }}</span><span>{{ label }}</span></a>
+<a class="nav-link {{ 'active' if active }}" href="{{ href }}" {% if active %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">{% if icon in ['↗', '↻'] %}<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">{% if icon == '↗' %}<path d="M5 19 19 5M5 5h14v14"/>{% else %}<path d="M20 7v5h-5M20 12a8 8 0 1 0-2 5"/>{% endif %}</svg>{% else %}{{ icon }}{% endif %}</span><span>{{ label }}</span></a>
 {%- endmacro %}
 {% macro help_panel(topic) -%}
 <details class="context-help"><summary>Learn about {{ topic }}</summary><div class="help-content">{{ caller() }}</div></details>

@@ -15,6 +15,7 @@
 .customer-app .nav-link.active{background:#e5f3ee;color:#125442;font-weight:700}
 .customer-app .nav-link:hover{background:#f1f6f4;color:#154d43}
 .customer-app .nav-icon{font-size:17px}
+.customer-app .nav-icon svg{display:inline-block;vertical-align:middle}
 
 .customer-app .workspace-card{border-color:var(--line);background:#f7f9f8}
 .customer-app .workspace-label{color:var(--muted);font-size:12px}
@@ -271,7 +272,9 @@
 .customer-app .inventory-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
 .customer-app .inventory-summary .mini-stat:last-child:nth-child(odd){grid-column:1/-1}
 .customer-app .quick-actions a{flex:1 1 44%}
-.customer-app .period-picker{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));padding:12px}
+.customer-app .period-picker{display:grid;grid-template-columns:minmax(0,1fr);padding:12px}
+.customer-app .period-picker label{width:100%;max-width:100%;min-width:0}
+.customer-app .period-picker input,.customer-app .period-picker select,.customer-app .period-picker button{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
 .customer-app .period-picker label:first-child{grid-column:1/-1}
 .customer-app .period-picker button{grid-column:1/-1}
 .customer-app .inventory-toolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));padding:14px}
