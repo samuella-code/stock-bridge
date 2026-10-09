@@ -82,3 +82,32 @@ def test_legal_routes_unique_and_private_routes_still_protected(app):
     client = app.test_client()
     for path in ['/dashboard', '/products/', '/notifications/', '/profile/', '/admin/']:
         assert client.get(path).status_code in (302, 403, 404)
+
+@pytest.mark.parametrize('path', PAGES)
+@pytest.mark.parametrize('authenticated', [False, True])
+def test_legal_pages_always_use_public_shell(app, path, authenticated):
+    client = app.test_client()
+    if authenticated:
+        user, _ = seed('plus', 2); login(client, user)
+    response = client.get(path)
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'class="legal-public"' in html and 'Skip to policy' in html
+    for forbidden in ['id="sidebar"', 'Working in', 'notification-bell', 'customer-app', 'customer.css', 'Dashboard</h', 'subscription-badge']:
+        assert forbidden not in html
+    assert f'href="{path}" aria-current="page"' in html
+    assert html.count('aria-current="page"') == 1
+    assert 'Draft — not effective legal terms.' in html
+    assert 'href="/#features"' in html and 'href="/#pricing"' in html
+
+
+def test_contact_categories_and_dashboard_shell_unchanged(app):
+    html = app.test_client().get('/contact').get_data(as_text=True)
+    for category in ['General assistance', 'Account access', 'Billing &amp; refunds', 'Privacy requests']:
+        # Literal template text may use & rather than escaped entity.
+        assert category in html or category.replace('&amp;', '&') in html
+    assert '<form' not in html and 'approval pending' in html
+    user, _ = seed('plus', 2); client = app.test_client(); login(client, user)
+    html = client.get('/dashboard').get_data(as_text=True)
+    assert 'id="sidebar"' in html and 'customer-app' in html and 'Working in' in html
+    assert 'class="legal-public"' not in html

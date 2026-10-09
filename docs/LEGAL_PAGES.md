@@ -2,7 +2,7 @@
 
 Base: 472642ab12f4fd690e93f76bf5ab4346dcc5e679. Presentation-only change; no migration, entitlement, authentication or checkout changes.
 
-Routes: /privacy, /terms, /refund-policy, /subscription-terms, /contact. Separate legal blueprint avoids verified business-area requirements for anonymous visitors. Existing global account/host restrictions are retained. Shared layout uses the existing base, branding and a small responsive stylesheet. No new JavaScript, provider calls or dependencies. Prices come from the existing PLANS source through public_plan_prices.
+Routes: /privacy, /terms, /refund-policy, /subscription-terms, /contact. Separate legal blueprint avoids verified business-area requirements for anonymous visitors. Existing global account/host restrictions are retained. Legal pages use an independent public HTML shell with existing homepage branding, public site navigation and footer styling; authenticated dashboard chrome is never inherited. No new JavaScript, provider calls or dependencies. Prices come from the existing PLANS source through public_plan_prices.
 
 ## Implementation audit
 
@@ -41,3 +41,9 @@ Local commit only. Owner/legal review comes first; request approval before push/
 24 new legal-route/integration tests pass in isolation. Existing JavaScript suites: 232 assertions pass; catalogue and mobile-menu DOM suites also pass. Playwright is present, but launching Chromium fails because its executable is not installed (chromium_headless_shell-1234). Actual 375, 390, 430, 768 and desktop viewport checks are BLOCKED; no browser installation or hosted verification performed. Changed-file credential-format scan and git diff --check pass. Public security header behavior matches existing authentication pages; existing additional headers apply to admin routes and were not altered.
 
 Final complete Python regression: 616 passed, 0 failed (120.23 seconds; existing deprecation warnings remain). No existing tests removed or weakened.
+
+## Design refinement
+
+Legal shell no longer extends the authenticated base. Public pages use a green-and-white two-column policy reader, wrapping policy navigation with exactly one aria-current=page marker, skip link and visible focus styles. On smaller screens navigation moves above the article. Contact guidance is grouped into four semantic sections without adding a form or contact claims; its existing sentences and warnings remain. The other four policy bodies are unchanged byte-for-byte. The dashboard base, authentication, billing code and database schemas are unchanged. Browser launch was attempted again: Chromium executable is unavailable, so actual 375/390/430/768/desktop visual and overflow verification remains BLOCKED.
+
+Refinement verification: 53 targeted legal/customer UI tests passed; complete Python suite 627 passed, 0 failed; 232 JavaScript assertions and catalogue/mobile DOM suites passed. No existing tests removed. Credential-format scan and diff validation passed. Six files changed; local commit only.
