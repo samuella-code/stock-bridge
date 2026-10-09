@@ -93,6 +93,11 @@ def test_legal_pages_always_use_public_shell(app, path, authenticated):
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert 'class="legal-public"' in html and 'Skip to policy' in html
+    default_subtitle = 'Clear information about your account, your business records and using StockBridge.'
+    contact_subtitle = 'Need help with StockBridge? Find information about account support, subscriptions, billing and privacy enquiries.'
+    expected_subtitle = contact_subtitle if path == '/contact' else default_subtitle
+    assert f'<p class="policy-lead">{expected_subtitle}</p>' in html
+    assert (default_subtitle if path == '/contact' else contact_subtitle) not in html
     for forbidden in ['id="sidebar"', 'Working in', 'notification-bell', 'customer-app', 'customer.css', 'Dashboard</h', 'subscription-badge']:
         assert forbidden not in html
     assert f'href="{path}" aria-current="page"' in html
