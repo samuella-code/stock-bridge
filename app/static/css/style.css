@@ -17,6 +17,36 @@
 }
 
 * { box-sizing: border-box; }
+/* Draw disclosure arrows instead of using platform-specific summary markers. */
+.faq-section details > summary,
+.context-help > summary {
+    position: relative;
+    list-style: none;
+    padding-left: 22px;
+}
+.faq-section details > summary::-webkit-details-marker,
+.context-help > summary::-webkit-details-marker { display: none; }
+.faq-section details > summary::marker,
+.context-help > summary::marker { content: ""; }
+.faq-section details > summary::before,
+.context-help > summary::before {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: calc(14px + .75em - 4px);
+    width: 0;
+    height: 0;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    border-left: 6px solid #111827;
+}
+.customer-app details.context-help > summary { padding-left: 30px; }
+.customer-app .context-help > summary::before {
+    left: 16px;
+    top: calc(12px + .75em - 4px);
+}
+.faq-section details[open] > summary::before,
+.context-help[open] > summary::before { transform: rotate(90deg); }
 html { scroll-behavior: smooth; }
 body {
     margin: 0;
