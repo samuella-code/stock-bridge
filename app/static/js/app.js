@@ -43,6 +43,14 @@ const profileButton=document.getElementById("profileButton"),profileDropdown=doc
 
 const csrf=document.querySelector('meta[name="csrf-token"]')?.content;document.querySelectorAll('form[method="POST"],form[method="post"]').forEach(form=>{if(csrf&&!form.querySelector('[name="csrf_token"]')){const input=document.createElement("input");input.type="hidden";input.name="csrf_token";input.value=csrf;form.prepend(input)}});if(!document.body.classList.contains("customer-app"))document.querySelectorAll(".flash").forEach(el=>setTimeout(()=>el.classList.add("flash-hide"),4500));
 
+// Recover unavailable business logos without changing stored image references.
+document.querySelectorAll('[data-business-logo]').forEach(image=>{
+ const fallback=image.parentElement.querySelector('[data-business-initial]');
+ const showInitial=()=>{if(fallback){fallback.hidden=false;image.remove();}};
+ image.addEventListener('error',showInitial,{once:true});
+ if(image.complete&&image.naturalWidth===0)showInitial();
+});
+
 // Keep business tables readable as labelled cards on narrow screens.
 document.querySelectorAll('table.responsive-table').forEach(table=>{
  table.querySelector('tr:first-child')?.classList.add('table-head-row');
