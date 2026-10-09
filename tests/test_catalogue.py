@@ -381,7 +381,15 @@ def test_vercel_build_migration_guard(monkeypatch,environment):
     from scripts import vercel_build
     if environment:monkeypatch.setenv('VERCEL_ENV',environment)
     else:monkeypatch.delenv('VERCEL_ENV',raising=False)
+    # Isolate the policy from the developer/CI environment.
+    for key in ('VERCEL_PROJECT_ID', 'VERCEL_TARGET_ENV', vercel_build.SKIP_SETTING):
+        monkeypatch.delenv(key, raising=False)
     calls=[];monkeypatch.setattr(vercel_build.subprocess,'call',lambda args:calls.append(args) or 0)
-    assert vercel_build.main()==0
-    assert bool(calls)==(environment=='production')
-    if calls:assert calls[0][-2:]==['db','upgrade']
+    assert vercel_build.main()==(1 if environment=='production' else 0)
+    assert calls==[]
+    if environment=='production':
+        # A positively identified non-staging production build still upgrades.
+        monkeypatch.setenv('VERCEL_PROJECT_ID', 'prj_TestProduction123')
+        assert vercel_build.main()==0
+        assert len(calls)==1
+        assert calls[0]==[vercel_build.sys.executable, '-m', 'flask', '--app', 'app:create_app', 'db', 'upgrade']
