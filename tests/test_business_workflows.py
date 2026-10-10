@@ -15,7 +15,7 @@ def test_sales_chart_handles_postgresql_and_sqlite_dates(date_as_string):
     key = monday.isoformat() if date_as_string else monday
     chart = sales_chart([(key, Decimal("14000"))], start)
     assert len(chart) == 7
-    assert chart[5] == {"label": "Mon", "total": 14000.0, "height": 100}
+    assert chart[5] == {"date": monday, "label": "Mon", "total": 14000.0, "height": 100}
     assert all(row["total"] == 0 and row["height"] == 3
                for i, row in enumerate(chart) if i != 5)
 

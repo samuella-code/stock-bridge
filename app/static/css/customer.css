@@ -315,3 +315,8 @@
 .customer-app .billing-page input[type=checkbox] { flex-shrink:0; margin-top:4px; }
 .customer-app .billing-page h3[id] { scroll-margin-top:100px; }
 .customer-app .pager a { display:inline-flex; align-items:center; min-height:44px; padding:8px; }
+
+/* Accessible values accompany the decorative dashboard chart. */
+.customer-app .daily-revenue{margin:16px 0 0}
+.customer-app .daily-revenue > div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;padding:6px 0;border-bottom:1px solid var(--line)}
+.customer-app .daily-revenue dd{margin:0;overflow-wrap:anywhere}

@@ -87,7 +87,7 @@ def sales_chart(per_day, week_start):
     chart = []
     for offset in range(7):
         day = (week_start + timedelta(days=offset)).date()
-        chart.append({"label": day.strftime("%a"), "total": daily.get(day.isoformat(), 0)})
+        chart.append({"date": day, "label": day.strftime("%a"), "total": daily.get(day.isoformat(), 0)})
     maximum = max([row["total"] for row in chart] + [1])
     for row in chart:
         row["height"] = max(3, round(row["total"] / maximum * 100))
