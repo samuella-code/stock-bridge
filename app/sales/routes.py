@@ -103,25 +103,32 @@ def index():
 def delete(sale_id):
     # Keep the historic route, but void the transaction with an audit trail.
     b = business()
-    sale = db.session.get(Sale, sale_id)
-    if not sale or sale.business_id != b.id:
-        abort(404)
-    if sale.voided_at:
-        flash("This sale is already voided.", "warning")
-        return redirect(url_for("sales.index"))
-    reason = request.form.get("reason", "").strip()
-    if not reason:
-        flash("Give a reason before voiding a sale.", "error")
-        return redirect(url_for("sales.index"))
-    now = datetime.utcnow()
-    for item in sale.items:
-        db.session.execute(update(Product).where(Product.id == item.product_id, Product.business_id == b.id)
-                           .values(stock_quantity=Product.stock_quantity + item.quantity))
-        db.session.add(StockMovement(business_id=b.id, product_id=item.product_id,
-            kind="void", quantity_change=item.quantity, reason=reason[:300], sale_id=sale.id,
-            occurred_at=now))
-    sale.voided_at = now
-    sale.void_reason = reason[:300]
-    db.session.commit()
+    try:
+        # Refresh any identity-map copy after acquiring the lock: another request
+        # may have committed a void while this request waited.
+        sale = (Sale.query.filter_by(id=sale_id, business_id=b.id)
+                .populate_existing().with_for_update().first())
+        if not sale:
+            abort(404)
+        if sale.voided_at:
+            flash("This sale is already voided.", "warning")
+            return redirect(url_for("sales.index"))
+        reason = request.form.get("reason", "").strip()
+        if not reason:
+            flash("Give a reason before voiding a sale.", "error")
+            return redirect(url_for("sales.index"))
+        now = datetime.utcnow()
+        for item in sorted(sale.items, key=lambda item: (item.product_id, item.id)):
+            db.session.execute(update(Product).where(Product.id == item.product_id, Product.business_id == b.id)
+                               .values(stock_quantity=Product.stock_quantity + item.quantity))
+            db.session.add(StockMovement(business_id=b.id, product_id=item.product_id,
+                kind="void", quantity_change=item.quantity, reason=reason[:300], sale_id=sale.id,
+                occurred_at=now))
+        sale.voided_at = now
+        sale.void_reason = reason[:300]
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
     flash("Sale voided and stock restored.", "success")
     return redirect(url_for("sales.index"))
