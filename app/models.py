@@ -277,3 +277,16 @@ class EmailOutbox(db.Model):
         db.CheckConstraint("status IN ('pending','processing','sent','retry','failed','suppressed')", name='ck_email_outbox_status'),
         db.CheckConstraint('attempt_count >= 0 AND max_attempts > 0', name='ck_email_outbox_attempts'),
     )
+
+class TransactionSubmission(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    business_id = db.Column(db.Integer, db.ForeignKey('business.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    operation = db.Column(db.String(32), nullable=False)
+    key = db.Column(db.String(64), nullable=False)
+    payload_hash = db.Column(db.String(64), nullable=False)
+    result_reference = db.Column(db.String(120))
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime)
+    __table_args__ = (db.UniqueConstraint('business_id', 'user_id', 'operation', 'key',
+                                        name='uq_transaction_submission_scope'),)
