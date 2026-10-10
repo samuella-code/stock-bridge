@@ -197,3 +197,39 @@ def test_successful_collector_preserves_evidence():
     response=SimpleNamespace(returncode=0,stdout=json.dumps(evidence),stderr='ignored-private-output')
     with patch.object(module,'os',SimpleNamespace(name='nt')),patch.object(module.subprocess,'run',return_value=response):
         assert module.windows_evidence()==evidence
+
+
+
+def test_collector_uses_fixed_bounded_timeout():
+    import json
+    from types import SimpleNamespace
+    from tests.support import postgres_preflight as module
+    response=SimpleNamespace(returncode=0,stdout=json.dumps(os_snapshot()),stderr='')
+    with patch.object(module,'os',SimpleNamespace(name='nt')),patch.object(module.subprocess,'run',return_value=response) as run:
+        module.windows_evidence()
+        assert run.call_args.kwargs['timeout']==60
+        assert run.call_args.kwargs['check'] is False
+
+
+def test_timeout_prevents_database_connection():
+    import subprocess
+    from types import SimpleNamespace
+    from tests.support import postgres_preflight as module
+    with patch.object(module,'os',SimpleNamespace(name='nt')),patch.object(module.subprocess,'run',side_effect=subprocess.TimeoutExpired('private',60,output='private',stderr='private')),patch('psycopg.connect') as connect:
+        with pytest.raises(UnsafeTestDatabase,match='timed out after 60 seconds') as error:module.preflight(configuration())
+        assert 'private' not in str(error.value)
+        connect.assert_not_called()
+
+
+@pytest.mark.parametrize('rule',[
+    dict(protocol='UDP',program='Any',ports=['5432'],remote=[]),
+    dict(protocol='TCP',program=r'C:\Windows\unrelated.exe',ports=['5432'],remote=[]),
+])
+def test_irrelevant_rules_need_no_remote_address_query(rule):
+    evidence=firewall_snapshot();evidence['inbound_allow_rules']=[rule]
+    assert validate_os(evidence)
+
+
+def test_relevant_rule_still_requires_remote_evidence():
+    evidence=firewall_snapshot();evidence['inbound_allow_rules']=[dict(protocol='TCP',program='Any',ports=['5432'],remote=[])]
+    with pytest.raises(UnsafeTestDatabase,match='remote address unavailable'):validate_os(evidence)

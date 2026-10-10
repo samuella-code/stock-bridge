@@ -23,9 +23,20 @@ $stage = 'firewall-port-filter'
   $port = $_ | Get-NetFirewallPortFilter
 $stage = 'firewall-application-filter'
   $app = $_ | Get-NetFirewallApplicationFilter
-$stage = 'firewall-address-filter'
-  $address = $_ | Get-NetFirewallAddressFilter
-  [ordered]@{ protocol = [string]$port.Protocol; ports = @($port.LocalPort); program = [string]$app.Program; remote = @($address.RemoteAddress) }
+  # Match Python's relevance rules exactly. Preserve every rule, protocol,
+  # program and port; omit only address queries Python cannot consult.
+  $protocol = [string]$port.Protocol
+  $program = [string]$app.Program
+  $normalizedProgram = $program.ToLowerInvariant()
+  $remote = @()
+  if (($protocol -ne 'UDP' -and $protocol -ne '17') -and
+      ($normalizedProgram -eq 'any' -or $normalizedProgram -eq 'system' -or
+       $normalizedProgram.EndsWith('\postgres.exe'))) {
+    $stage = 'firewall-address-filter'
+    $address = $_ | Get-NetFirewallAddressFilter
+    $remote = @($address.RemoteAddress)
+  }
+  [ordered]@{ protocol = $protocol; ports = @($port.LocalPort); program = $program; remote = $remote }
 })
 $stage = 'evidence-serialization'
 [ordered]@{

@@ -129,6 +129,9 @@ def validate_database(snapshot, expected_directory, phase='empty', expected_tabl
     return True
 
 
+# Fixed total collection budget; never configurable through untrusted environment.
+WINDOWS_INSPECTION_TIMEOUT_SECONDS = 60
+
 WINDOWS_FAILURE_CODES = {
     'service-query', 'service-not-running', 'listener-query', 'listener-ambiguous',
     'listener-process', 'service-process', 'firewall-profiles', 'firewall-rules',
@@ -143,9 +146,9 @@ def windows_evidence():
     if not script.is_file():reject('Windows evidence collector file missing')
     try:
         result=subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-File',str(script)],
-                              capture_output=True,text=True,timeout=10,check=False)
+                              capture_output=True,text=True,timeout=WINDOWS_INSPECTION_TIMEOUT_SECONDS,check=False)
     except subprocess.TimeoutExpired:
-        reject('Windows evidence collector timed out after 10 seconds')
+        reject(f'Windows evidence collector timed out after {WINDOWS_INSPECTION_TIMEOUT_SECONDS} seconds')
     except FileNotFoundError:
         reject('Windows PowerShell executable unavailable')
     except PermissionError:
