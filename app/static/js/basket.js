@@ -1,7 +1,7 @@
 (() => {
  document.querySelectorAll('.basket').forEach(basket=>{
   const mode=basket.dataset.mode,search=basket.querySelector('.basket-search'),results=basket.querySelector('.basket-results'),lines=basket.querySelector('.basket-lines'),message=basket.querySelector('.basket-message');
-  const form=basket.closest('form');let timer,controller,sequence=0;
+  const form=basket.closest('form'),submitButton=form.querySelector('button[type=submit]'),serverDisabled=submitButton.disabled;let timer,controller,sequence=0;
   const money=value=>'₦'+Number(value).toLocaleString('en-NG',{minimumFractionDigits:2,maximumFractionDigits:2});
   function total(){let amount=0;lines.querySelectorAll('.basket-line').forEach(row=>{const q=Number(row.querySelector('[name=quantity]').value||0),price=Number(row.querySelector('.line-price').value||0);amount+=q*price;row.querySelector('.line-total').textContent=money(q*price);});basket.querySelector('.basket-total').textContent='Total: '+money(amount);}
   function add(product){const existing=[...lines.children].find(r=>r.dataset.id===String(product.id));if(existing){existing.querySelector('[name=quantity]').focus();message.textContent='This product is already in the basket. Change its quantity there.';return;}
@@ -29,13 +29,13 @@
    const saved=form.querySelector('.sale-restore');
    if(saved)JSON.parse(saved.textContent).forEach(product=>{add(product);const row=[...lines.children].find(r=>r.dataset.id===String(product.id));row.querySelector('[name=quantity]').value=product.quantity;row.querySelector('[name=unit_price]').required=false;});
    total();
-   window.addEventListener('pageshow',()=>{form.querySelector('button[type=submit]').disabled=false;});
+   window.addEventListener('pageshow',()=>{submitButton.disabled=serverDisabled;});
   }
   if(mode==='restock'){
    const saved=form.querySelector('.restock-restore');
    if(saved)JSON.parse(saved.textContent).forEach(product=>{add(product);const row=[...lines.children].find(r=>r.dataset.id===String(product.id));row.querySelector('[name=quantity]').value=product.quantity;});
    total();
-   window.addEventListener('pageshow',()=>{form.querySelector('button[type=submit]').disabled=false;});
+   window.addEventListener('pageshow',()=>{submitButton.disabled=serverDisabled;});
   }
   const initial=basket.querySelector('.basket-initial');if(initial)add(JSON.parse(initial.textContent));
  });
