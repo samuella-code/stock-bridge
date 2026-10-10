@@ -29,7 +29,9 @@ def validate_network(evidence):
     import ipaddress
     for rule in rules:
         protocol=rule.get('protocol')
-        if protocol in ('UDP','17'):continue
+        # Exact observed IP protocols only. Encapsulated IPv6 does not grant
+        # TCP permission: any resulting TCP traffic must still pass TCP rules.
+        if protocol in ('UDP','17','2','41'):continue
         if protocol not in ('TCP','6','Any','256'):reject('firewall protocol requires manual review')
         program=rule.get('program','').lower()
         if program not in ('any','system') and not program.endswith('\\postgres.exe'):continue

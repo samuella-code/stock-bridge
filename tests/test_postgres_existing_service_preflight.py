@@ -317,3 +317,28 @@ def test_internal_collector_invocation_is_pinned_to_module_file():
         assert run.call_args.kwargs['text'] is True
         assert run.call_args.kwargs['capture_output'] is True
         assert 'shell' not in run.call_args.kwargs
+
+
+@pytest.mark.parametrize('protocol',['2','41','UDP','17'])
+def test_confirmed_non_tcp_rules_do_not_grant_tcp_access(protocol):
+    evidence=firewall_snapshot()
+    evidence['inbound_allow_rules']=[dict(protocol=protocol,ports=['Any'],program='System',package='',remote=['Any'])]
+    assert validate_os(evidence)
+    evidence['inbound_allow_rules'].append(dict(protocol='TCP',ports=['5432'],program='Any',remote=['Any']))
+    with pytest.raises(UnsafeTestDatabase):validate_os(evidence)
+
+
+@pytest.mark.parametrize('protocol',['TCP','6','Any','256'])
+def test_tcp_applicable_protocols_still_enforce_remote_restrictions(protocol):
+    evidence=firewall_snapshot()
+    evidence['inbound_allow_rules']=[dict(protocol=protocol,ports=['Any'],program='System',package='',remote=['Any'])]
+    with pytest.raises(UnsafeTestDatabase):validate_os(evidence)
+    evidence['inbound_allow_rules'][0]['remote']=['127.0.0.1','::1']
+    assert validate_os(evidence)
+
+
+@pytest.mark.parametrize('protocol',[None,'','unknown','02',' 41','41 ','6/41','999',2,41,True])
+def test_unsupported_protocol_evidence_still_fails_closed(protocol):
+    evidence=firewall_snapshot()
+    evidence['inbound_allow_rules']=[dict(protocol=protocol,ports=['Any'],program='System',remote=['Any'])]
+    with pytest.raises(UnsafeTestDatabase,match='protocol requires manual review'):validate_os(evidence)
