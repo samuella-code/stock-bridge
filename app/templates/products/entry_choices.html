@@ -1,5 +1,5 @@
 <div class="entry-choices" aria-label="Ways to add products">
-<a class="entry-choice" href="{{url_for('products.create')}}"><strong>Add a Product</strong><small>Add one product to your catalogue.</small></a>
+<a class="entry-choice" href="{{url_for('products.create', **catalogue_navigation)}}"><strong>Add a Product</strong><small>Add one product to your catalogue.</small></a>
 <a class="entry-choice" href="{{url_for('products.quick_add')}}"><strong>Quick Add Products</strong><small>Enter several products at once.</small></a>
 <a class="entry-choice" href="{{url_for('products.import_products')}}"><strong>Import Products</strong><small>Bring in an existing product list from a spreadsheet, Notes, WhatsApp, Word or text file.</small></a>
 </div>

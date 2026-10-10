@@ -10,8 +10,14 @@ from app.products.catalogue import product_data, duplicate_errors, add_product, 
 from sqlalchemy.exc import IntegrityError
 from app.transaction_submissions import issue_token, claim, complete, SubmissionError, SubmissionConflict
 
+from app.products.navigation import catalogue_context
+
 products_bp = Blueprint("products", __name__, url_prefix="/products")
 ADJUSTMENT_REASONS = ("Damaged", "Expired", "Lost", "Stock count correction", "Returned", "Other")
+
+@products_bp.context_processor
+def catalogue_navigation():
+    return {"catalogue_navigation": catalogue_context(request.args)}
 
 def current_business():
     return selected_business(current_user)
@@ -80,8 +86,8 @@ def create():
             else:
                 flash(f"{product.name} was added to inventory.", "success")
                 if request.form.get("after_save") == "another":
-                    return redirect(url_for("products.create"))
-                return redirect(url_for("products.detail", product_id=product.id))
+                    return redirect(url_for("products.create", **catalogue_context(request.args)))
+                return redirect(url_for("products.detail", product_id=product.id, **catalogue_context(request.args)))
         for error in errors: flash(error, "error")
     return render_template("products/form.html", business=b, product=None)
 
@@ -101,7 +107,7 @@ def edit(product_id):
                 errors.append("Another product already uses this SKU. Please check it.")
             else:
                 flash(f"{product.name} was updated.", "success")
-                return redirect(url_for("products.detail", product_id=product.id))
+                return redirect(url_for("products.detail", product_id=product.id, **catalogue_context(request.args)))
         for error in errors: flash(error, "error")
     return render_template("products/form.html", business=b, product=product)
 
