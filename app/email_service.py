@@ -1,4 +1,5 @@
 """Transactional email rendering and SMTP transport."""
+from app.error_handling import log_failure
 import os
 import smtplib
 from datetime import datetime, timedelta
@@ -130,7 +131,7 @@ def safely_send(sender, *args, **kwargs):
     try:
         return sender(*args, **kwargs)
     except Exception:
-        current_app.logger.exception("Transactional email delivery failed: %s", sender.__name__)
+        log_failure("transactional_email_failed")
         return False
 
 

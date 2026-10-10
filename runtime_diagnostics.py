@@ -9,13 +9,18 @@ from contextlib import contextmanager
 
 
 def _watch(label, delay=8):
+    from flask import has_request_context
+    correlation = 'startup'
+    if has_request_context():
+        from app.error_handling import request_id
+        correlation = request_id()
     thread_id = threading.get_ident()
     def report():
         frame = sys._current_frames().get(thread_id)
         # Function names/locations only: never source lines, arguments or locals.
         stack = ' > '.join(f'{os.path.basename(row.filename)}:{row.lineno}:{row.name}'
                            for row in traceback.extract_stack(frame)) if frame else 'thread unavailable'
-        logging.getLogger('stockbridge.runtime').warning('slow phase=%s stack=%s', label, stack)
+        logging.getLogger('stockbridge.runtime').warning('slow phase=%s stack=%s request_id=%s', label, stack, correlation)
     timer = threading.Timer(delay, report)
     timer.daemon = True
     timer.start()

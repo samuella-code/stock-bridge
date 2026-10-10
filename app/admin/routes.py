@@ -1,3 +1,4 @@
+from app.error_handling import log_failure
 import hashlib
 import secrets
 import time
@@ -198,7 +199,7 @@ def forgot_password():
                     f"Hello {user.full_name},\n\nOpen this link to create a new StockBridge admin password:\n{link}\n\nThis link expires in one hour and works only once. If you did not request this, ignore this email. If this is also your business account, its password will change too.")
             except Exception:
                 sent=False
-                current_app.logger.exception("Could not send admin password reset email")
+                log_failure("admin_password_reset_email_failed")
             if not sent:
                 db.session.rollback()
             else:

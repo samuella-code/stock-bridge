@@ -20,13 +20,18 @@ login_manager.login_view = "auth.login"
 login_manager.login_message_category = "warning"
 
 def create_app(test_config=None):
-    app = Flask(__name__, instance_relative_config=True)
+    from app.error_handling import SafeFlask, register_error_handling, log_failure
+    app = SafeFlask(__name__, instance_relative_config=True)
     app.config.from_object(Config)
 
     if test_config:
         app.config.update(test_config)
     if app.testing:
         app.config["WTF_CSRF_ENABLED"] = False
+
+    register_error_handling(app)
+    from runtime_diagnostics import register_request_diagnostics
+    register_request_diagnostics(app)
 
     db.init_app(app)
     login_manager.init_app(app)
@@ -63,9 +68,6 @@ def create_app(test_config=None):
         expenses_bp, restocking_bp, profile_bp, businesses_bp, notifications_bp, worker_bp, subscriptions_bp, payments_bp, admin_bp, admin_api_bp,
     ):
         app.register_blueprint(blueprint)
-
-    from runtime_diagnostics import register_request_diagnostics
-    register_request_diagnostics(app)
 
     @app.before_request
     def require_lifetime_access():
@@ -167,7 +169,7 @@ def create_app(test_config=None):
             db.session.execute(db.text("SELECT 1"))
             return jsonify(status="healthy"), 200
         except Exception:
-            app.logger.exception("Health check failed")
+            log_failure("database_health_failed")
             return jsonify(status="unhealthy"), 503
 
     if not app.testing and not os.getenv("VERCEL"):

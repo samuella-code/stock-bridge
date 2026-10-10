@@ -1,3 +1,4 @@
+from app.error_handling import log_failure
 from datetime import datetime
 from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
@@ -66,7 +67,7 @@ def signup():
             sent = send_verification_email(user)
         except Exception:
             sent = False
-            current_app.logger.exception("Could not send verification email to %s", user.email)
+            log_failure("verification_email_failed")
         flash("Account created. Check your email to verify your account." if sent else "Account created, but the verification email could not be sent. Please use resend after email is configured.", "success" if sent else "warning")
         return redirect(url_for("auth.verification_pending"))
 
@@ -114,7 +115,7 @@ def forgot_password():
             try:
                 send_password_reset_email(user)
             except Exception:
-                current_app.logger.exception("Could not send password reset email to %s", user.email)
+                log_failure("password_reset_email_failed")
         flash("If that email belongs to a StockBridge account, a password-reset link has been sent.", "success")
         return redirect(url_for("auth.login"))
 
@@ -202,7 +203,7 @@ def resend_verification():
         sent = send_verification_email(current_user)
     except Exception:
         sent = False
-        current_app.logger.exception("Could not resend verification email to %s", current_user.email)
+        log_failure("verification_resend_failed")
     if sent:
         current_user.verification_sent_at = datetime.utcnow()
         db.session.commit()
