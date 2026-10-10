@@ -1,4 +1,4 @@
-# Transaction idempotency foundation and sales integration
+# Transaction idempotency foundation and sales and restocking integration
 
 Migration `0017_transaction_submission` follows the single existing head
 `0016_inventory_email_outbox`. Apply it in a separately approved migration window
@@ -55,12 +55,12 @@ Destructive downgrade is refused because removing receipts reopens replay risk.
 
 Future integrations must preserve submitted tokens on validation errors and
 uncertain responses, reject missing keys, map conflicts safely, verify result
-ownership, and never automatically retry uncertain financial operations. The foundation is now integrated into sales creation only. Restocking, adjustments
+ownership, and never automatically retry uncertain financial operations. The foundation is now integrated into sales and restocking creation. Adjustments
 and expenses remain outside this phase.
 
 ## Sales deployment dependency
 
-Do not deploy the sales integration until migration 0017 is safely applied and
+Do not deploy the sales and restocking integration until migration 0017 is safely applied and
 verified under separate approval. No hosted migration or deployment was performed.
 All sales creation uses POST /sales/; Dashboard Record Sale and basket entry use
 that form. Missing/invalid/expired tokens return 400 with history/refresh guidance;
@@ -70,3 +70,25 @@ token. Successful replay redirects only to the server-selected sales history and
 identifies the original sale. No automatic retry or browser redirect is accepted.
 Explicit price intent differs from default price intent, even if the amounts match.
 Legacy direct POST clients must fetch a form token; there is no token-free bypass.
+
+## Restocking integration
+
+The sole restocking creation endpoint is POST /restocking/receive. The basket,
+Dashboard Restock link, and product-selected ?product_id= form share it. Settings
+POSTs do not create restock transactions and are unchanged. Each fresh form gets
+a user/business/restock token; validation re-renders owned basket rows, supplier,
+notes and the original token. Browser Back restores the button without changing
+the token. Invalid/expired tokens return 400 and history/refresh guidance; changed
+contents return 409. Successful replay uses the stored original batch UUID,
+redirects only to restocking history, and never regenerates the batch or changes
+stock, cost, movements, notifications or outbox records.
+
+Canonical restock intent contains sorted product IDs, integer quantities, fixed
+two-decimal explicit unit costs, normalized supplier and note. Existing restocking
+requires explicit unit_cost; blank costs remain invalid. UI prefilled product costs
+are submitted as explicit values; no server-resolved default cost is introduced.
+The token must be claimed before product locks/stock validation and completed
+with the batch identifier before the shared commit. Failures roll back all writes
+without retry. Apply and verify migration 0017 under separate approval BEFORE
+deploying this workflow. Actual PostgreSQL concurrency remains pending; no hosted
+resources were used.

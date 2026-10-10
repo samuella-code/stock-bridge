@@ -1,3 +1,4 @@
+from tests.restock_submission_helpers import with_restock_token
 from tests.sales_submission_helpers import with_sale_token
 """Disposable local DBs and mocked SMTP only; hosted delivery is not inferred."""
 import io
@@ -84,7 +85,7 @@ def test_multi_product_restock_queues_one_email_with_each_item(app):
         ('unit_cost', '280'), ('unit_cost', '290'),
     ])
 
-    response = client.post('/restocking/receive', data=data)
+    response = client.post('/restocking/receive', data=with_restock_token(client, data))
 
     row = EmailOutbox.query.one()
     assert response.status_code == 302
@@ -143,7 +144,7 @@ def test_restock_email_rendering_and_staging_link(app, monkeypatch):
         ('quantity', '7'), ('quantity', '11'),
         ('unit_cost', '280'), ('unit_cost', '290'),
     ])
-    client.post('/restocking/receive', data=data)
+    client.post('/restocking/receive', data=with_restock_token(client, data))
     sent = []
     monkeypatch.setattr(
         'app.email_service._send_email',

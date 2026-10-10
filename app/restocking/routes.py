@@ -8,6 +8,7 @@ from sqlalchemy import func, update
 from app import db
 from app.models import Product, Sale, SaleItem, StockMovement, Restock
 from app.admin.routes import log
+from app.transaction_submissions import issue_token, validate_token, claim, complete, SubmissionError, SubmissionConflict
 
 restocking_bp = Blueprint("restocking", __name__, url_prefix="/restocking")
 
@@ -38,6 +39,9 @@ def recommendations(b, products):
 @login_required
 def index():
     b = selected_business(current_user)
+    return render_restock(b, issue_token(current_user.id, b.id, 'restock'))
+
+def render_restock(b, token, status=200):
     restocks = Restock.query.filter_by(business_id=b.id).order_by(Restock.received_at.desc(), Restock.id.desc()).paginate(
         page=request.args.get("page", 1, type=int), per_page=20, error_out=False)
     from app.products.catalogue import search_products
@@ -46,8 +50,19 @@ def index():
         page=request.args.get('insight_page', 1, type=int), per_page=20, error_out=False)
     has_products = Product.query.filter_by(business_id=b.id, active=True).first() is not None
     selected = Product.query.filter_by(business_id=b.id, active=True, id=request.args.get('product_id', type=int)).first()
+    submitted = []
+    if request.method == 'POST' and request.endpoint == 'restocking.receive':
+        for raw_id, qty, cost in zip(request.form.getlist('product_id')[:100], request.form.getlist('quantity')[:100], request.form.getlist('unit_cost')[:100]):
+            try:
+                product = Product.query.filter_by(id=int(raw_id), business_id=b.id).first()
+            except ValueError:
+                product = None
+            if product:
+                submitted.append(dict(id=product.id, name=product.name, stock=product.stock_quantity,
+                                      unit=product.unit, cost=cost, quantity=qty))
+        selected = None
     return render_template("restocking/index.html", business=b, recommendations=recommendations(b, product_page.items),
-        restocks=restocks, product_page=product_page, query=term, has_products=has_products, selected=selected)
+        restocks=restocks, product_page=product_page, query=term, has_products=has_products, selected=selected, submission_token=token, submitted_items=submitted), status
 
 @restocking_bp.post("/<int:product_id>/settings")
 @login_required
@@ -72,12 +87,20 @@ def settings(product_id):
 @login_required
 def receive():
     b = selected_business(current_user)
+    token = request.form.get('submission_token', '')
+    def show_form(status=200):
+        return render_restock(b, token, status)
+    try:
+        validate_token(token, current_user.id, b.id, 'restock')
+    except SubmissionError:
+        flash('Submission token is invalid or expired. Check restocking history before refreshing the form or recording another restock.', 'error')
+        return show_form(400)
     ids = request.form.getlist("product_id")
     quantities = request.form.getlist("quantity")
     costs = request.form.getlist("unit_cost")
     if not ids or len(ids) != len(quantities) or len(ids) != len(costs) or len(ids) > 100:
         flash("Add at least one valid product to restock.", "error")
-        return redirect(url_for("restocking.index"))
+        return show_form()
     try:
         parsed = []
         seen = set()
@@ -88,18 +111,40 @@ def receive():
             parsed.append((pid, qty, cost))
     except (ValueError, InvalidOperation):
         flash("Check the product, quantity and cost. Each product should appear once.", "error")
-        return redirect(url_for("restocking.index"))
-    products = {p.id: p for p in Product.query.filter(Product.business_id == b.id,
-        Product.active.is_(True), Product.id.in_(seen)).order_by(Product.id).with_for_update().all()}
-    if len(products) != len(parsed): abort(404)
+        return show_form()
+    supplier = request.form.get("supplier", "").strip()[:140]
+    note = request.form.get("note", "").strip()[:500]
+    intent = dict(items=[dict(product_id=pid, quantity=qty, unit_cost=format(cost, '.2f'))
+                         for pid, qty, cost in sorted(parsed)], supplier=supplier, note=note)
+    try:
+        submission, replay = claim(token, current_user.id, b.id, 'restock', intent)
+        if replay:
+            batch = submission.result_reference
+            if not Restock.query.filter_by(business_id=b.id, batch_id=batch).first():
+                db.session.rollback()
+                flash('Original restock is unavailable. Check restocking history.', 'error')
+                return show_form(409)
+            db.session.rollback()
+            flash("Received stock and updated inventory. This restock was already recorded; stock was not increased again.", "success")
+            return redirect(url_for('restocking.index'))
+        products = {p.id: p for p in Product.query.filter(Product.business_id == b.id,
+            Product.active.is_(True), Product.id.in_(seen)).order_by(Product.id).with_for_update().populate_existing().all()}
+    except SubmissionConflict:
+        db.session.rollback()
+        flash('This submission was already used with different contents. Check restocking history.', 'error')
+        return show_form(409)
+    except Exception:
+        db.session.rollback()
+        raise
+    if len(products) != len(parsed):
+        db.session.rollback()
+        abort(404)
     if any(products[pid].stock_quantity > 2147483647 - qty for pid, qty, _ in parsed):
         db.session.rollback()
         flash('The resulting stock quantity is too large. Check quantities received.', 'error')
-        return redirect(url_for('restocking.index'))
-    supplier = request.form.get("supplier", "").strip()[:140]
-    note = request.form.get("note", "").strip()[:500]
-    batch = str(uuid4())
+        return show_form()
     try:
+        batch = str(uuid4())
         for pid, qty, cost in sorted(parsed):
             receipt = Restock(business_id=b.id, product_id=pid, quantity=qty,
                 unit_cost=cost, supplier=supplier, note=note, batch_id=batch)
@@ -113,7 +158,7 @@ def receive():
             if result.rowcount != 1:
                 db.session.rollback()
                 flash('Stock changed while recording this receipt. Review quantities and try again.', 'error')
-                return redirect(url_for('restocking.index'))
+                return show_form()
             db.session.add(StockMovement(business_id=b.id, product_id=pid, kind="restock",
                 quantity_change=qty, restock_id=receipt.id, occurred_at=receipt.received_at))
         log("RESTOCK_CREATED", f"Stock receipt {batch} recorded for {len(parsed)} products.", actor=current_user, business_id=b.id)
@@ -134,6 +179,7 @@ def receive():
             ],
             f'restock:{batch}:created',
         )
+        complete(submission, batch)
         db.session.commit()
     except Exception:
         db.session.rollback()

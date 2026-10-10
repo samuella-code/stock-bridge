@@ -1,3 +1,4 @@
+from tests.restock_submission_helpers import with_restock_token
 from tests.sales_submission_helpers import with_sale_token
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -58,7 +59,7 @@ def test_end_to_end_stock_and_profit(client):
         assert Product.query.get(pid).opening_quantity==20
         assert StockMovement.query.filter_by(product_id=pid,kind="opening").one().quantity_change==20
     client.post("/sales/",data=with_sale_token(client, {"product_id":pid,"quantity":"3","unit_price":""}))
-    client.post("/restocking/receive",data={"product_id":pid,"quantity":"20","unit_cost":"280"})
+    client.post("/restocking/receive",data=with_restock_token(client, {"product_id":pid,"quantity":"20","unit_cost":"280"}))
     client.post("/sales/",data=with_sale_token(client, {"product_id":pid,"quantity":"5","unit_price":""}))
     client.post("/expenses/",data={"description":"Delivery","category":"Transportation","amount":"1500"})
     with client.application.app_context():
@@ -122,7 +123,7 @@ def test_zero_stock_adjustments_and_isolation(client):
         other_id=other.id
     assert client.get(f"/products/{other_id}").status_code==404
     assert client.post(f"/products/{other_id}/adjust",data={"quantity":"1","direction":"increase","reason":"Other"}).status_code==404
-    assert client.post("/restocking/receive",data={"product_id":other_id,"quantity":"1","unit_cost":"1"}).status_code==404
+    assert client.post("/restocking/receive",data=with_restock_token(client, {"product_id":other_id,"quantity":"1","unit_cost":"1"})).status_code==404
     assert client.post("/sales/",data=with_sale_token(client, {"product_id":other_id,"quantity":"1","unit_price":""})).status_code==404
     assert b"Private" not in client.get("/products/").data
     assert b"Private" not in client.get("/reports").data
@@ -144,15 +145,15 @@ def test_multi_product_restock_and_validation(client):
     owner(client)
     first=add(client,"Fanta",1,cost="100")
     second=add(client,"Bread",2,cost="200")
-    client.post("/restocking/receive",data={"product_id":[first,second],
-        "quantity":["4","3"],"unit_cost":["120","230"],"supplier":"Wholesaler"})
+    client.post("/restocking/receive",data=with_restock_token(client, {"product_id":[first,second],
+        "quantity":["4","3"],"unit_cost":["120","230"],"supplier":"Wholesaler"}))
     with client.application.app_context():
         assert Restock.query.count()==2
         assert len({row.batch_id for row in Restock.query.all()})==1
         assert [db.session.get(Product,pid).stock_quantity for pid in (first,second)]==[5,5]
         assert [row.unit_cost for row in Restock.query.order_by(Restock.product_id).all()]==[Decimal("120"),Decimal("230")]
-    client.post("/restocking/receive",data={"product_id":[first,second],
-        "quantity":["1","-5"],"unit_cost":["120","230"]})
+    client.post("/restocking/receive",data=with_restock_token(client, {"product_id":[first,second],
+        "quantity":["1","-5"],"unit_cost":["120","230"]}))
     with client.application.app_context():
         assert Restock.query.count()==2
         assert [db.session.get(Product,pid).stock_quantity for pid in (first,second)]==[5,5]

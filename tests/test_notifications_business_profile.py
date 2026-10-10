@@ -1,3 +1,4 @@
+from tests.restock_submission_helpers import with_restock_token
 from tests.sales_submission_helpers import with_sale_token
 """Disposable fixtures only. No SMTP, provider payments or hosted DB writes."""
 import io
@@ -33,7 +34,7 @@ def sale(client, p, quantity):
 
 
 def restock(client, p, quantity):
-    return client.post('/restocking/receive', data={'product_id': p.id, 'quantity': str(quantity), 'unit_cost': '280'})
+    return client.post('/restocking/receive', data=with_restock_token(client, {'product_id': p.id, 'quantity': str(quantity), 'unit_cost': '280'}))
 
 
 def count(kind):
@@ -134,10 +135,10 @@ def test_restock_one_notification_per_batch_and_failed_receipt(app):
     client, _, _ = setup(app)
     a, b = product(client, 'Coke'), product(client, 'Bread')
     data = MultiDict([('product_id',str(a.id)),('product_id',str(b.id)),('quantity','2'),('quantity','3'),('unit_cost','280'),('unit_cost','290')])
-    client.post('/restocking/receive', data=data)
+    client.post('/restocking/receive', data=with_restock_token(client, data))
     assert Restock.query.count() == 2 and count('restock_recorded') == 1
     assert '2 products' in Notification.query.filter_by(kind='restock_recorded').one().body
-    client.post('/restocking/receive', data={'product_id': a.id, 'quantity': '-2', 'unit_cost': '280'})
+    client.post('/restocking/receive', data=with_restock_token(client, {'product_id': a.id, 'quantity': '-2', 'unit_cost': '280'}))
     assert Restock.query.count() == 2 and count('restock_recorded') == 1
 
 

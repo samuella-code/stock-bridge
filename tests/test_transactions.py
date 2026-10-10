@@ -1,3 +1,4 @@
+from tests.restock_submission_helpers import with_restock_token
 from tests.sales_submission_helpers import with_sale_token
 import pytest
 from datetime import datetime
@@ -57,7 +58,7 @@ def test_expense_and_dashboard(client):
 def test_restock_creates_record_and_updates_stock(client):
     from app.models import Restock
     product_id = seed(client)
-    response = client.post("/restocking/receive", data={"product_id": product_id, "quantity": "4", "unit_cost": "120.50", "supplier": "Distributor"}, follow_redirects=True)
+    response = client.post("/restocking/receive", data=with_restock_token(client, {"product_id": product_id, "quantity": "4", "unit_cost": "120.50", "supplier": "Distributor"}), follow_redirects=True)
     assert b"Received stock" in response.data
     with client.application.app_context():
         assert db.session.get(Product, product_id).stock_quantity == 14
@@ -69,6 +70,6 @@ def test_restock_creates_record_and_updates_stock(client):
 
 def test_invalid_restock_does_not_change_inventory(client):
     product_id = seed(client)
-    client.post("/restocking/receive", data={"product_id": product_id, "quantity": "-1", "unit_cost": "120"})
+    client.post("/restocking/receive", data=with_restock_token(client, {"product_id": product_id, "quantity": "-1", "unit_cost": "120"}))
     with client.application.app_context():
         assert db.session.get(Product, product_id).stock_quantity == 10

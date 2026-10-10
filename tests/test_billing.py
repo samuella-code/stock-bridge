@@ -1,3 +1,4 @@
+from tests.restock_submission_helpers import with_restock_token
 from tests.sales_submission_helpers import with_sale_token
 """Subscription acceptance tests: disposable database, mocked provider, no live charges."""
 from copy import deepcopy
@@ -360,7 +361,7 @@ def test_new_entitlements_preserve_complete_business_workflow(client):
     client.post('/products/new',data={'name':'Coke','stock_quantity':20,'buying_price':250,'selling_price':350,'minimum_stock_level':5})
     p=Product.query.one()
     client.post('/sales/',data=with_sale_token(client, {'product_id':str(p.id),'quantity':'3','unit_price':'350','payment_method':'Cash'}))
-    client.post('/restocking/receive',data={'product_id':str(p.id),'quantity':'20','unit_cost':'280'})
+    client.post('/restocking/receive',data=with_restock_token(client, {'product_id':str(p.id),'quantity':'20','unit_cost':'280'}))
     client.post('/sales/',data=with_sale_token(client, {'product_id':str(p.id),'quantity':'5','unit_price':'350','payment_method':'Cash'}))
     client.post('/expenses/',data={'description':'Delivery','category':'Transportation','amount':'1500'})
     db.session.refresh(p)

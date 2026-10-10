@@ -31,6 +31,12 @@
    total();
    window.addEventListener('pageshow',()=>{form.querySelector('button[type=submit]').disabled=false;});
   }
+  if(mode==='restock'){
+   const saved=form.querySelector('.restock-restore');
+   if(saved)JSON.parse(saved.textContent).forEach(product=>{add(product);const row=[...lines.children].find(r=>r.dataset.id===String(product.id));row.querySelector('[name=quantity]').value=product.quantity;});
+   total();
+   window.addEventListener('pageshow',()=>{form.querySelector('button[type=submit]').disabled=false;});
+  }
   const initial=basket.querySelector('.basket-initial');if(initial)add(JSON.parse(initial.textContent));
  });
 })();

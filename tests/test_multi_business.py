@@ -1,3 +1,4 @@
+from tests.restock_submission_helpers import with_restock_token
 from tests.sales_submission_helpers import with_sale_token
 """Multi-business acceptance uses disposable databases; no Paystack or SMTP."""
 import re
@@ -129,7 +130,7 @@ def test_acceptance_entitlement_server_matrix(app, state, kind, limit):
     # Create history through real Flask routes before changing the entitlement.
     product = add_product(client,'Retained history',20,2,5)
     assert client.post('/sales/',data=with_sale_token(client, {'product_id':product.id,'quantity':'2','unit_price':'5'})).status_code==302
-    assert client.post('/restocking/receive',data={'product_id':product.id,'quantity':'3','unit_cost':'2'}).status_code==302
+    assert client.post('/restocking/receive',data=with_restock_token(client, {'product_id':product.id,'quantity':'3','unit_cost':'2'})).status_code==302
     assert client.post('/expenses/',data={'description':'Retained expense','category':'Transportation','amount':'1'}).status_code==302
     models = (Business,Product,Sale,SaleItem,Restock,StockMovement,Expense)
     before = tuple(model.query.count() for model in models)
@@ -186,7 +187,7 @@ def test_acceptance_manual_resource_id_authorization(app, scope):
     product=add_product(client,'Private matrix product',10,2,5)
     client.post('/sales/',data=with_sale_token(client, {'product_id':product.id,'quantity':'1','unit_price':'5'}))
     client.post('/expenses/',data={'description':'Private matrix expense','category':'Transportation','amount':'2'})
-    client.post('/restocking/receive',data={'product_id':product.id,'quantity':'1','unit_cost':'2'})
+    client.post('/restocking/receive',data=with_restock_token(client, {'product_id':product.id,'quantity':'1','unit_cost':'2'}))
     sale=Sale.query.filter_by(business_id=targets[0].id).one()
     expense=Expense.query.filter_by(business_id=targets[0].id).one()
     client.get('/dashboard')  # consume target's flash messages before changing account
@@ -202,6 +203,7 @@ def test_acceptance_manual_resource_id_authorization(app, scope):
         ('/restocking/receive',{'product_id':product.id,'quantity':'1','unit_cost':'2'}),
         ('/sales/',{'product_id':product.id,'quantity':'1','unit_price':'5'}),
     ):
+        if path == '/restocking/receive': data = with_restock_token(client, data)
         if path == '/sales/': data = with_sale_token(client, data)
         assert client.post(path,data=data).status_code==404
     for path in ('/products/','/sales/','/expenses/','/restocking/','/reports','/dashboard'):
@@ -239,14 +241,14 @@ def test_two_business_end_to_end_and_all_route_isolation(app):
     assert client.get('/products/lookup?q=Coke').json['products']==[]
     assert client.get(f'/products/{coke.id}').status_code==404
     assert client.post('/sales/',data=with_sale_token(client, {'product_id':coke.id,'quantity':'1','unit_price':'500'})).status_code==404
-    assert client.post('/restocking/receive',data={'product_id':coke.id,'quantity':'1','unit_cost':'300'}).status_code==404
+    assert client.post('/restocking/receive',data=with_restock_token(client, {'product_id':coke.id,'quantity':'1','unit_cost':'300'})).status_code==404
     assert client.post(f'/products/{coke.id}/adjust',data={'quantity':'1','direction':'increase','reason':'Other'}).status_code==404
     sale=Sale.query.filter_by(business_id=shops[0].id).one()
     expense=Expense.query.filter_by(business_id=shops[0].id).one()
     assert client.post(f'/sales/{sale.id}/delete',data={'reason':'attack'}).status_code==404
     assert client.post(f'/expenses/{expense.id}/delete').status_code==404
     assert b'No matching products' in client.get('/products/?q=Coke&business_id='+str(shops[0].id)).data
-    client.post('/restocking/receive',data={'product_id':shirt.id,'quantity':'2','unit_cost':'4000'})
+    client.post('/restocking/receive',data=with_restock_token(client, {'product_id':shirt.id,'quantity':'2','unit_cost':'4000'}))
     assert db.session.get(Product,coke.id).stock_quantity==90
     assert Restock.query.one().business_id==fashion.id
     assert StockMovement.query.filter_by(product_id=coke.id).count()==2
