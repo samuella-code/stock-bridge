@@ -1,21 +1,33 @@
 # Read-only OS evidence. No credential, service or configuration changes.
 $ErrorActionPreference = 'Stop'
+$stage = 'service-query'
+try {
 $service = Get-CimInstance Win32_Service -Filter "Name='postgresql-x64-17'"
-if (-not $service -or $service.State -ne 'Running') { throw 'Expected PostgreSQL service is not running.' }
+if (-not $service -or $service.State -ne 'Running') { $stage = 'service-not-running'; throw 'Evidence unavailable' }
+$stage = 'listener-query'
 $ports = @(Get-NetTCPConnection -State Listen -LocalPort 5432)
+$stage = 'listener-ambiguous'
 $ids = @($ports | Select-Object -ExpandProperty OwningProcess -Unique)
 if ($ids.Count -ne 1) { throw 'Listener identity is ambiguous.' }
+$stage = 'listener-process'
 $listener = Get-CimInstance Win32_Process -Filter "ProcessId=$($ids[0])"
+$stage = 'service-process'
 $serviceProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$($service.ProcessId)"
+$stage = 'firewall-profiles'
 $profiles = @(Get-NetFirewallProfile -PolicyStore ActiveStore | ForEach-Object {
   [ordered]@{ Name = $_.Name; Enabled = ($_.Enabled -eq 'True'); DefaultInboundAction = [string]$_.DefaultInboundAction }
 })
+$stage = 'firewall-rules'
 $allows = @(Get-NetFirewallRule -PolicyStore ActiveStore -Enabled True -Direction Inbound -Action Allow | ForEach-Object {
+$stage = 'firewall-port-filter'
   $port = $_ | Get-NetFirewallPortFilter
+$stage = 'firewall-application-filter'
   $app = $_ | Get-NetFirewallApplicationFilter
+$stage = 'firewall-address-filter'
   $address = $_ | Get-NetFirewallAddressFilter
   [ordered]@{ protocol = [string]$port.Protocol; ports = @($port.LocalPort); program = [string]$app.Program; remote = @($address.RemoteAddress) }
 })
+$stage = 'evidence-serialization'
 [ordered]@{
   firewall_profiles = $profiles
   inbound_allow_rules = $allows
@@ -30,3 +42,9 @@ $allows = @(Get-NetFirewallRule -PolicyStore ActiveStore -Enabled True -Directio
   listener_executable = $listener.ExecutablePath
   listener_addresses = @($ports | Select-Object -ExpandProperty LocalAddress -Unique)
 } | ConvertTo-Json -Depth 4 -Compress
+
+} catch {
+  # Emit only a fixed stage code; never raw exception text or command output.
+  [ordered]@{ inspection_error = $stage } | ConvertTo-Json -Compress
+  exit 1
+}

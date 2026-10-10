@@ -142,3 +142,58 @@ def test_manifest_oid_binding():
     directory=validate_os(os_snapshot())
     assert validate_database(snapshot,directory,expected_identity=(100,101))
     with pytest.raises(UnsafeTestDatabase):validate_database(snapshot,directory,expected_identity=(102,101))
+
+
+@pytest.mark.parametrize('failure,expected', [
+    ('timeout','timed out'),('missing','PowerShell executable unavailable'),
+    ('denied','execution denied'),('os','could not be started'),
+    ('decode','output decoding failed'),('json','invalid JSON'),
+    ('nonobject','non-object'),('raw','without structured diagnostics'),
+    ('unknown','without recognized diagnostics'),
+])
+def test_windows_collector_safe_diagnostics(failure,expected):
+    import subprocess
+    from types import SimpleNamespace
+    from tests.support import postgres_preflight as module
+    secret='synthetic-private-token-do-not-log'
+    exceptions={
+        'timeout':subprocess.TimeoutExpired(secret,10,output=secret,stderr=secret),
+        'missing':FileNotFoundError(secret),'denied':PermissionError(secret),
+        'os':OSError(secret),'decode':UnicodeError(secret),
+    }
+    outputs={'json':(0,secret),'nonobject':(0,'[]'),'raw':(1,secret),
+             'unknown':(1,'{"inspection_error":"'+secret+'"}')}
+    kwargs={'side_effect':exceptions[failure]} if failure in exceptions else {
+        'return_value':SimpleNamespace(returncode=outputs[failure][0],stdout=outputs[failure][1],stderr=secret)}
+    with patch.object(module,'os',SimpleNamespace(name='nt')),patch.object(module.subprocess,'run',**kwargs):
+        with pytest.raises(UnsafeTestDatabase,match=expected) as error:module.windows_evidence()
+        assert secret not in str(error.value)
+
+
+@pytest.mark.parametrize('stage',sorted(__import__('tests.support.postgres_preflight',fromlist=['WINDOWS_FAILURE_CODES']).WINDOWS_FAILURE_CODES))
+def test_windows_collector_stage_codes(stage):
+    import json
+    from types import SimpleNamespace
+    from tests.support import postgres_preflight as module
+    response=SimpleNamespace(returncode=1,stdout=json.dumps({'inspection_error':stage}),stderr='private-output')
+    with patch.object(module,'os',SimpleNamespace(name='nt')),patch.object(module.subprocess,'run',return_value=response):
+        with pytest.raises(UnsafeTestDatabase,match=stage) as error:module.windows_evidence()
+        assert 'private-output' not in str(error.value)
+
+
+def test_missing_collector_rejected_before_execution():
+    from types import SimpleNamespace
+    from tests.support import postgres_preflight as module
+    with patch.object(module,'os',SimpleNamespace(name='nt')),patch.object(module.Path,'is_file',return_value=False),patch.object(module.subprocess,'run') as run:
+        with pytest.raises(UnsafeTestDatabase,match='collector file missing'):module.windows_evidence()
+        run.assert_not_called()
+
+
+def test_successful_collector_preserves_evidence():
+    import json
+    from types import SimpleNamespace
+    from tests.support import postgres_preflight as module
+    evidence=os_snapshot()
+    response=SimpleNamespace(returncode=0,stdout=json.dumps(evidence),stderr='ignored-private-output')
+    with patch.object(module,'os',SimpleNamespace(name='nt')),patch.object(module.subprocess,'run',return_value=response):
+        assert module.windows_evidence()==evidence

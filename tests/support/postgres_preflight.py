@@ -58,14 +58,14 @@ def validate_os(evidence):
     for key, filename in [('listener_executable', 'postgres.exe'), ('service_executable', 'pg_ctl.exe')]:
         value = evidence.get(key, '')
         if not isinstance(value,str) or value.lower() != expected + filename:
-            reject('Windows executable identity unavailable or unexpected')
+            reject('Windows '+key+' missing or unexpected')
     if (evidence.get('service_name') != 'postgresql-x64-17'
             or evidence.get('service_state') != 'Running'
             or evidence.get('listener_name') != 'postgres.exe'
             or evidence.get('listener_parent_pid') != evidence.get('service_pid')
             or not isinstance(evidence.get('listener_pid'),int)
             or evidence['listener_pid'] <= 0):
-        reject('Windows service/listener relationship')
+        reject('Windows service/listener relationship missing or unexpected')
     service_path = evidence.get('service_path','')
     match = re.search(r'-D\s+"([^"]+)"', service_path)
     if not match or not service_path.lower().startswith('"' + expected + 'pg_ctl.exe"'):
@@ -129,14 +129,44 @@ def validate_database(snapshot, expected_directory, phase='empty', expected_tabl
     return True
 
 
+WINDOWS_FAILURE_CODES = {
+    'service-query', 'service-not-running', 'listener-query', 'listener-ambiguous',
+    'listener-process', 'service-process', 'firewall-profiles', 'firewall-rules',
+    'firewall-port-filter', 'firewall-application-filter', 'firewall-address-filter',
+    'evidence-serialization',
+}
+
+
 def windows_evidence():
     if os.name != 'nt':reject('Windows inspection unavailable on this machine')
     script=Path(__file__).with_name('windows_postgres_identity.ps1')
+    if not script.is_file():reject('Windows evidence collector file missing')
     try:
         result=subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-File',str(script)],
-                              capture_output=True,text=True,timeout=10,check=True)
-        return json.loads(result.stdout)
-    except Exception:reject('Windows inspection incomplete')
+                              capture_output=True,text=True,timeout=10,check=False)
+    except subprocess.TimeoutExpired:
+        reject('Windows evidence collector timed out after 10 seconds')
+    except FileNotFoundError:
+        reject('Windows PowerShell executable unavailable')
+    except PermissionError:
+        reject('Windows evidence collector execution denied')
+    except OSError:
+        reject('Windows evidence collector could not be started')
+    except UnicodeError:
+        reject('Windows evidence collector output decoding failed')
+    # Never echo stderr, stdout or exception details: they may contain secrets.
+    try:
+        evidence=json.loads(result.stdout)
+    except (ValueError,TypeError):
+        reject('Windows collector failed without structured diagnostics' if result.returncode else
+               'Windows evidence collector returned invalid JSON')
+    if not isinstance(evidence,dict):reject('Windows evidence collector returned a non-object')
+    if result.returncode or evidence.get('inspection_error'):
+        code=evidence.get('inspection_error')
+        if code in WINDOWS_FAILURE_CODES:
+            reject('Windows evidence collection failed at '+code)
+        reject('Windows collector failed without recognized diagnostics')
+    return evidence
 
 
 def database_snapshot(connection):
