@@ -25,13 +25,25 @@ def validated_test_url(environ):
         url = make_url(raw)
     except Exception:
         reject()
+    mode = environ.get('STOCKBRIDGE_TEST_POSTGRES_MODE', 'disposable-instance')
+    if mode not in ('disposable-instance', 'existing-local-service'):
+        reject()
+    existing = mode == 'existing-local-service'
+    if existing and environ.get('STOCKBRIDGE_TEST_POSTGRES_SERVICE_ACK') != 'postgresql-x64-17:stockbridge_disposable_test:stockbridge_test_user':
+        reject()
+    # Existing-service URLs pass only static validation here. Read-only preflight
+    # must verify OS/database identity before any future mutation is authorized.
+    expected_database = 'stockbridge_disposable_test' if existing else 'stockbridge_test_' + run_id
+    expected_user = 'stockbridge_test_user' if existing else 'stockbridge_test_' + run_id
     # A strict positive allowlist rejects Neon/staging/production connection URLs,
     # including encoded hostnames, query-string host overrides and Unix sockets.
     if (url.drivername != 'postgresql+psycopg'
             or url.host not in ('127.0.0.1', '::1')
-            or url.port is None or not 1024 <= url.port <= 65535 or url.port == 5432
-            or url.database != 'stockbridge_test_' + run_id
-            or url.username != 'stockbridge_test_' + run_id
+            or url.port is None or not 1024 <= url.port <= 65535
+            or (existing and (url.host != '127.0.0.1' or url.port != 5432))
+            or (not existing and url.port == 5432)
+            or url.database != expected_database
+            or url.username != expected_user
             or not url.password or url.query):
         reject()
     if any(key.startswith('PG') and value for key, value in environ.items()):

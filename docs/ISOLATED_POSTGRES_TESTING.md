@@ -130,3 +130,92 @@ and an approved disposable instance are missing. An optional testcontainers
 package is unnecessary if lifecycle management uses an explicit small harness.
 Only pure guard unit tests have run. SQLite coverage and PostgreSQL SQL
 compilation remain functional/structural evidence, not concurrency verification.
+
+## Phase 5D.5B existing Windows service preparation
+
+An explicit existing-service mode now statically accepts ONLY this target:
+`127.0.0.1:5432`, database `stockbridge_disposable_test`, role
+`stockbridge_test_user`. The existing disposable-instance mode remains intact.
+This static acceptance is NOT permission to mutate and is not runtime identity
+verification. The restricted role's password remains local and must never be
+included in reports, manifests, shell arguments or committed files.
+
+Additional process-only configuration (set only after approval):
+- `STOCKBRIDGE_TEST_POSTGRES_MODE=existing-local-service`
+- `STOCKBRIDGE_TEST_POSTGRES_SERVICE_ACK=postgresql-x64-17:stockbridge_disposable_test:stockbridge_test_user`
+- The existing acknowledgment, explicit URL and random run ID remain mandatory.
+
+The read-only preflight can later be invoked from the Windows testing worktree:
+`python -m tests.support.postgres_preflight`. It has no migration/seed/cleanup
+code and runs SQL inside a read-only transaction with bounded timeouts. It checks
+OS evidence BEFORE connecting. It does not import Flask or application Config.
+The current environment cannot execute Windows inspection, and this preparation
+phase has not executed preflight against any database.
+
+OS evidence uses CIM and active Windows firewall policies, without modifying
+anything. Listener PID must be a postgres.exe child of the expected service's
+pg_ctl.exe; executable paths and the service data directory must be available
+and match the PostgreSQL 17 installation. Missing paths/permission failures are
+BLOCKED, not guessed from names. Wildcard listening (`listen_addresses=*`) is
+accepted only with complete effective firewall evidence: all three profiles
+must be enabled/default-inbound-block, and no potentially applicable inbound
+allow rule may expose PostgreSQL beyond loopback. Unknown protocols, symbolic
+port selectors, address selectors or incomplete evidence fail closed. This
+conservative audit can block a safe but complex firewall policy; report the
+exact category for separate review rather than edit settings or bypass it.
+
+Database evidence verifies both connected/session identities, ownership,
+PostgreSQL major 17, server address/port, role attributes, memberships and
+ownership of other databases. It checks schemas, extensions and relations,
+data-directory agreement, listening settings and password-authentication HBA
+rules. Reading data_directory or pg_hba_file_rules may be denied to the
+restricted role. Do not grant broad monitoring/superuser privileges: this is a
+remaining read-only evidence blocker requiring a separately approved solution.
+Complex HBA selectors also require review. Password authentication by itself
+is not evidence that a wildcard listener is safely firewalled.
+
+The empty phase refuses existing relations or migration records. The migrated
+phase requires an approved exact relation inventory and revision
+`0017_transaction_submission`; it does not apply that migration. The prepared
+HTTP suite is skipped by default BEFORE connection/app creation. Running it
+later requires BOTH `STOCKBRIDGE_TEST_POSTGRES_MUTATIONS_ACK=approved-phase5d5b-synthetic-only`
+and `STOCKBRIDGE_TEST_POSTGRES_MANIFEST=<local approved JSON file>`.
+The manifest must contain run_id, database, role, database_oid, role_oid, revision, relations (fully
+qualified tables AND sequences), and approved_synthetic_mutations=true. It must
+be produced/reviewed after an explicitly approved migration; no manifest is
+created by this preparation. No secrets belong in it. A boolean manifest field
+is acknowledgment only, never a substitute for fresh runtime verification.
+
+The runner checks initially empty application tables, revalidates identity
+before each synthetic fixture, and uses actual email/password authentication
+and CSRF for each independent client. Every test uses a unique synthetic
+business/user; the module deliberately leaves synthetic records rather than
+resetting tables or automatically deleting a database. Subsequent runs refuse
+pre-existing application rows. Cleanup needs a separately authorized scoped
+procedure. No unrestricted drop_all/create_all or existing SQLite fixtures are
+used. External HTTP, SMTP and S3 transports are blocked by mocks.
+
+Prepared scenarios: 21 creation races (seven single/multi and increase/decrease
+variants times same-key, changed-intent and distinct-key), seven forced rollback
+and explicit retry cases, and one concurrent multi-product sale void. Actual
+PostgreSQL lock contention is observed for same-key/changed-key races and voids;
+distinct-key races establish independent backend PIDs and overlapping execution.
+The observer uses a separate read-only connection. No worker retries uncertain
+operations. Every barrier/hold, SQL wait, observation and join is bounded; worker
+connections alone may be cancelled on timeout. These cases are preparation,
+not executed concurrency evidence. Additional adversarial interleavings (first
+claim rolls back while another waits), entitlement/isolation PostgreSQL cases,
+and comprehensive history-field assertions may be expanded after review.
+
+Before any mutations: approve the implementation, review successful Windows
+read-only preflight, then separately authorize migration of ONLY the dedicated
+empty database and verify 0017, approve the relation manifest, and explicitly
+authorize synthetic tests. Neither the empty state nor a passing guard test
+supplies that authorization. Production/staging safeguards and deployment
+migration control are unchanged.
+
+Database/role OIDs from read-only preflight are bound to the approved migrated
+manifest and rechecked before seeding. A recreated database with the same name
+is not automatically accepted. For initial authorized execution use pytest
+`-x` so a failed/timeout scenario stops further mutations; there is no automatic
+cleanup or retry of an uncertain result.
