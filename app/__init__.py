@@ -29,6 +29,9 @@ def create_app(test_config=None):
     if app.testing:
         app.config["WTF_CSRF_ENABLED"] = False
 
+    from app.config_safety import validate_startup
+    validate_startup(app.config)
+
     register_error_handling(app)
     from runtime_diagnostics import register_request_diagnostics
     register_request_diagnostics(app)
