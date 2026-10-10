@@ -1,3 +1,4 @@
+from tests.sales_submission_helpers import with_sale_token
 """Disposable local DBs and mocked SMTP only; hosted delivery is not inferred."""
 import io
 from datetime import datetime, timedelta
@@ -486,7 +487,7 @@ def test_migration_preserves_existing_false_preferences_and_logo(tmp_path):
         db.session.execute(text("INSERT INTO user(id,full_name,email,password_hash,created_at,role,admin_enabled,admin_auth_version) VALUES(1,'Owner','test@example.invalid','fixture',CURRENT_TIMESTAMP,'user',0,0)"))
         db.session.execute(text("INSERT INTO business(id,user_id,name,created_at,trial_started_at,trial_ends_at,logo_key) VALUES(1,1,'Shop',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'businesses/1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.webp')"))
         db.session.execute(text("INSERT INTO notification_preference(business_id,low_stock_email,out_of_stock_email) VALUES(1,0,1)"));db.session.commit()
-        upgrade()
+        upgrade(revision='0016_inventory_email_outbox')
         assert db.session.execute(text('SELECT low_stock_email,out_of_stock_email,product_added,sales,restocking FROM notification_preference')).one()==(0,1,1,1,1)
         assert db.session.execute(text('SELECT logo_key FROM business')).scalar().endswith('.webp')
         assert db.session.execute(text('SELECT version_num FROM alembic_version')).scalar()=='0016_inventory_email_outbox'
@@ -546,7 +547,7 @@ def test_rollback_does_not_publish_inventory_trigger(app,monkeypatch):
 def test_multiple_sale_items_queue_separate_stock_events(app):
     from werkzeug.datastructures import MultiDict
     client,_,_=setup(app);a=product(client,'A',8);b=product(client,'B',8)
-    response=client.post('/sales/',data=MultiDict([('product_id',str(a.id)),('product_id',str(b.id)),('quantity','3'),('quantity','8'),('unit_price',''),('unit_price','')]))
+    response=client.post('/sales/',data=with_sale_token(client, MultiDict([('product_id',str(a.id)),('product_id',str(b.id)),('quantity','3'),('quantity','8'),('unit_price',''),('unit_price','')])))
     assert response.status_code==302 and Sale.query.count()==1
     assert {r.event_type for r in EmailOutbox.query.all()}=={'low_stock','out_of_stock'}
     assert {r.payload['product_name'] for r in EmailOutbox.query.all()}=={'A','B'}

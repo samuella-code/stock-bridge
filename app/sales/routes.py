@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 from app import db
 from app.models import Product, Sale, SaleItem, StockMovement
 from app.admin.routes import log
+from app.transaction_submissions import issue_token, validate_token, claim, complete, SubmissionError, SubmissionConflict
 
 sales_bp = Blueprint("sales", __name__, url_prefix="/sales")
 PAYMENT_METHODS = ("Cash", "Bank Transfer", "POS", "Other")
@@ -19,17 +20,43 @@ def business():
 @login_required
 def index():
     b = business()
+    token = request.form.get('submission_token', '') if request.method == 'POST' else issue_token(current_user.id, b.id, 'sale')
+    def show_form(status=200):
+        has_products = Product.query.filter_by(business_id=b.id, active=True).first() is not None
+        sales = (Sale.query.options(selectinload(Sale.items).selectinload(SaleItem.product))
+                 .filter_by(business_id=b.id).order_by(Sale.sold_at.desc(), Sale.id.desc())
+                 .paginate(page=request.args.get('page', 1, type=int), per_page=20, error_out=False))
+        totals = db.session.query(func.coalesce(func.sum(SaleItem.quantity * SaleItem.unit_price), 0),
+            func.coalesce(func.sum(SaleItem.quantity * (SaleItem.unit_price - SaleItem.unit_cost)), 0)
+            ).join(Sale).filter(Sale.business_id == b.id, Sale.voided_at.is_(None)).one()
+        submitted = []
+        if request.method == 'POST':
+            for raw_id, qty, price in zip(request.form.getlist('product_id'), request.form.getlist('quantity'), request.form.getlist('unit_price')):
+                try:
+                    product = Product.query.filter_by(id=int(raw_id), business_id=b.id).first()
+                except ValueError:
+                    product = None
+                if product:
+                    submitted.append(dict(id=product.id, name=product.name, stock=product.stock_quantity,
+                        unit=product.unit, price=price, quantity=qty))
+        return render_template('sales/index.html', business=b, has_products=has_products, sales=sales,
+            total=totals[0], profit=totals[1], payment_methods=PAYMENT_METHODS, submission_token=token, submitted_items=submitted), status
     if request.method == "POST":
+        try:
+            validate_token(token, current_user.id, b.id, 'sale')
+        except SubmissionError:
+            flash('Submission token is invalid or expired. Check sales history before refreshing the form or recording another sale.', 'error')
+            return show_form(400)
         ids = request.form.getlist("product_id")
         quantities = request.form.getlist("quantity")
         prices = request.form.getlist("unit_price") or ([""] if len(ids) == 1 else [])
         if not (ids and len(ids) == len(quantities) == len(prices)) or len(ids) > 100:
             flash("Add at least one valid sale item.", "error")
-            return redirect(url_for("sales.index"))
+            return show_form()
         method = request.form.get("payment_method", "Other")
         if method not in PAYMENT_METHODS:
             flash("Choose a valid payment method.", "error")
-            return redirect(url_for("sales.index"))
+            return show_form()
         try:
             sold_at = datetime.strptime(request.form["sold_at"], "%Y-%m-%d") if request.form.get("sold_at") else datetime.utcnow()
             parsed = []
@@ -43,14 +70,44 @@ def index():
                 parsed.append((pid, qty, price))
         except (KeyError, ValueError, InvalidOperation):
             flash("Check products, quantities, prices and date. Each product should appear once.", "error")
-            return redirect(url_for("sales.index"))
-        products = {p.id: p for p in Product.query.filter(Product.business_id == b.id, Product.id.in_(seen), Product.active.is_(True)).order_by(Product.id).with_for_update().all()}
+            return show_form()
+        note = request.form.get("note", "").strip()[:500]
+        intent = {'items': [{'product_id': pid, 'quantity': qty,
+                    'price': {'default': True} if price is None else {'explicit': format(price, '.2f')}}
+                    for pid, qty, price in sorted(parsed)], 'payment_method': method,
+                  'date': request.form.get('sold_at', '') or None, 'note': note}
+        try:
+            receipt, replay = claim(token, current_user.id, b.id, 'sale', intent)
+        except SubmissionConflict:
+            db.session.rollback()
+            flash('This submission was already used with different contents. Check sales history.', 'error')
+            return show_form(409)
+        except Exception:
+            db.session.rollback()
+            raise
+        if replay:
+            original = Sale.query.filter_by(id=int(receipt.result_reference.split(':')[1]), business_id=b.id).first()
+            if not original:
+                db.session.rollback()
+                abort(409, description='Original sale is unavailable. Check sales history.')
+            original_id = original.id
+            db.session.rollback()
+            flash(f'Sale {original_id} was already recorded. Stock was not changed again.', 'success')
+            return redirect(url_for('sales.index'))
+        try:
+            products = {p.id: p for p in Product.query.filter(Product.business_id == b.id, Product.id.in_(seen), Product.active.is_(True)).order_by(Product.id).with_for_update().all()}
+        except Exception:
+            db.session.rollback()
+            raise
         if len(products) != len(parsed):
+            db.session.rollback()
             abort(404)
         for pid, qty, _ in parsed:
             if products[pid].stock_quantity < qty:
-                flash(f"Only {products[pid].stock_quantity} units of {products[pid].name} are currently available.", "error")
-                return redirect(url_for("sales.index"))
+                available, name = products[pid].stock_quantity, products[pid].name
+                db.session.rollback()
+                flash(f"Only {available} units of {name} are currently available.", "error")
+                return show_form()
         try:
             sale = Sale(business_id=b.id, sold_at=sold_at, payment_method=method,
                         note=request.form.get("note", "").strip()[:500])
@@ -69,7 +126,7 @@ def index():
                 if result.rowcount != 1:
                     db.session.rollback()
                     flash(f"Stock changed while recording {product.name}. Please review the sale.", "error")
-                    return redirect(url_for("sales.index"))
+                    return show_form()
                 db.session.add(SaleItem(sale_id=sale.id, product_id=pid, quantity=qty,
                                         unit_price=product.selling_price if price is None else price,
                                         unit_cost=product.buying_price))
@@ -81,22 +138,14 @@ def index():
             from app.notifications.service import notify
             notify(b.id, 'sale_recorded', 'Sale recorded', f'₦{total:,.2f} sale recorded successfully.', f'sale:{sale.id}:created', sale.id)
             log("SALE_CREATED", f"Sale {sale.id} created with {len(parsed)} items.", actor=current_user, business_id=b.id)
+            complete(receipt, f'sale:{sale.id}')
             db.session.commit()
         except Exception:
             db.session.rollback()
             raise
         flash("Sale recorded and stock updated.", "success")
         return redirect(url_for("sales.index"))
-    has_products = Product.query.filter_by(business_id=b.id, active=True).first() is not None
-    sales = (Sale.query.options(selectinload(Sale.items).selectinload(SaleItem.product))
-             .filter_by(business_id=b.id).order_by(Sale.sold_at.desc(), Sale.id.desc())
-             .paginate(page=request.args.get("page", 1, type=int), per_page=20, error_out=False))
-    totals = db.session.query(
-        func.coalesce(func.sum(SaleItem.quantity * SaleItem.unit_price), 0),
-        func.coalesce(func.sum(SaleItem.quantity * (SaleItem.unit_price - SaleItem.unit_cost)), 0)
-    ).join(Sale).filter(Sale.business_id == b.id, Sale.voided_at.is_(None)).one()
-    return render_template("sales/index.html", business=b, has_products=has_products, sales=sales,
-                           total=totals[0], profit=totals[1], payment_methods=PAYMENT_METHODS)
+    return show_form()
 
 @sales_bp.post("/<int:sale_id>/delete")
 @login_required

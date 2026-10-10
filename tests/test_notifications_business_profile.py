@@ -1,3 +1,4 @@
+from tests.sales_submission_helpers import with_sale_token
 """Disposable fixtures only. No SMTP, provider payments or hosted DB writes."""
 import io
 from datetime import datetime, timedelta
@@ -28,7 +29,7 @@ def product(client, name='Coke', stock=8, minimum=5):
 
 
 def sale(client, p, quantity):
-    return client.post('/sales/', data={'product_id': p.id, 'quantity': str(quantity), 'unit_price': ''})
+    return client.post('/sales/', data=with_sale_token(client, {'product_id': p.id, 'quantity': str(quantity), 'unit_price': ''}))
 
 
 def restock(client, p, quantity):
@@ -73,10 +74,10 @@ def test_one_sale_notification_for_multiple_items_and_oversell(app):
     client, _, _ = setup(app)
     a, b = product(client, 'Coke', 20), product(client, 'Bread', 20)
     data = MultiDict([('product_id', str(a.id)), ('product_id', str(b.id)), ('quantity', '2'), ('quantity', '3'), ('unit_price', ''), ('unit_price', '')])
-    assert client.post('/sales/', data=data).status_code == 302
+    assert client.post('/sales/', data=with_sale_token(client, data)).status_code == 302
     assert Sale.query.count() == count('sale_recorded') == 1
     assert '₦1,750.00' in Notification.query.filter_by(kind='sale_recorded').one().body
-    assert sale(client, a, 100).status_code == 302
+    assert sale(client, a, 100).status_code == 200
     assert Sale.query.count() == count('sale_recorded') == 1
 
 
@@ -440,7 +441,7 @@ def test_new_migration_preserves_existing_business_and_round_trip(tmp_path):
         db.session.execute(text("INSERT INTO user (id,full_name,email,password_hash,created_at,role,admin_enabled,admin_auth_version) VALUES (1,'Original','migration@example.invalid','original-password',CURRENT_TIMESTAMP,'user',0,0)"))
         db.session.execute(text("INSERT INTO business (id,user_id,name,created_at,subscription_plan,subscription_status,trial_started_at,trial_ends_at) VALUES (1,1,'Original shop',CURRENT_TIMESTAMP,'lifetime','active',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"))
         db.session.commit()
-        upgrade()
+        upgrade(revision='0016_inventory_email_outbox')
         assert db.session.execute(text('SELECT name,subscription_plan,logo_key FROM business')).one()==('Original shop','lifetime',None)
         assert db.session.execute(text('SELECT password_hash FROM user')).scalar()=='original-password'
         assert Notification.query.count()==0 and NotificationPreference.query.count()==0

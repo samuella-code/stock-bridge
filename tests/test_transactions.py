@@ -1,3 +1,4 @@
+from tests.sales_submission_helpers import with_sale_token
 import pytest
 from datetime import datetime
 from decimal import Decimal
@@ -36,7 +37,7 @@ def seed(client):
 
 def test_sale_reduces_and_delete_restores_stock(client):
     product_id = seed(client)
-    response = client.post("/sales/", data={"product_id":product_id, "quantity":2, "unit_price":150}, follow_redirects=True)
+    response = client.post("/sales/", data=with_sale_token(client, {"product_id":product_id, "quantity":2, "unit_price":150}), follow_redirects=True)
     assert b"Sale recorded" in response.data
     with client.application.app_context():
         sale_id = Sale.query.one().id
@@ -61,7 +62,7 @@ def test_restock_creates_record_and_updates_stock(client):
     with client.application.app_context():
         assert db.session.get(Product, product_id).stock_quantity == 14
         assert Restock.query.one().total == Decimal("482.00")
-    client.post("/sales/", data={"product_id": product_id, "quantity": "3"})
+    client.post("/sales/", data=with_sale_token(client, {"product_id": product_id, "quantity": "3"}))
     with client.application.app_context():
         assert db.session.get(Product, product_id).stock_quantity == 11
         assert SaleItem.query.one().unit_cost == Decimal("120.50")

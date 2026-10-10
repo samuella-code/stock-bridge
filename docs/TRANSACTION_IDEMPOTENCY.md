@@ -1,4 +1,4 @@
-# Transaction idempotency foundation (not integrated)
+# Transaction idempotency foundation and sales integration
 
 Migration `0017_transaction_submission` follows the single existing head
 `0016_inventory_email_outbox`. Apply it in a separately approved migration window
@@ -55,5 +55,18 @@ Destructive downgrade is refused because removing receipts reopens replay risk.
 
 Future integrations must preserve submitted tokens on validation errors and
 uncertain responses, reject missing keys, map conflicts safely, verify result
-ownership, and never automatically retry uncertain financial operations. The
-foundation does not change any existing route, form, calculation or behavior.
+ownership, and never automatically retry uncertain financial operations. The foundation is now integrated into sales creation only. Restocking, adjustments
+and expenses remain outside this phase.
+
+## Sales deployment dependency
+
+Do not deploy the sales integration until migration 0017 is safely applied and
+verified under separate approval. No hosted migration or deployment was performed.
+All sales creation uses POST /sales/; Dashboard Record Sale and basket entry use
+that form. Missing/invalid/expired tokens return 400 with history/refresh guidance;
+changed payload returns 409. Validation returns the form with the same token and
+owned basket rows. Browser Back restores the submit button without changing the
+token. Successful replay redirects only to the server-selected sales history and
+identifies the original sale. No automatic retry or browser redirect is accepted.
+Explicit price intent differs from default price intent, even if the amounts match.
+Legacy direct POST clients must fetch a form token; there is no token-free bypass.

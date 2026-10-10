@@ -1,3 +1,4 @@
+from tests.sales_submission_helpers import with_sale_token
 """Multi-business acceptance uses disposable databases; no Paystack or SMTP."""
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -127,7 +128,7 @@ def test_acceptance_entitlement_server_matrix(app, state, kind, limit):
     client = app.test_client(); login(client,user)
     # Create history through real Flask routes before changing the entitlement.
     product = add_product(client,'Retained history',20,2,5)
-    assert client.post('/sales/',data={'product_id':product.id,'quantity':'2','unit_price':'5'}).status_code==302
+    assert client.post('/sales/',data=with_sale_token(client, {'product_id':product.id,'quantity':'2','unit_price':'5'})).status_code==302
     assert client.post('/restocking/receive',data={'product_id':product.id,'quantity':'3','unit_cost':'2'}).status_code==302
     assert client.post('/expenses/',data={'description':'Retained expense','category':'Transportation','amount':'1'}).status_code==302
     models = (Business,Product,Sale,SaleItem,Restock,StockMovement,Expense)
@@ -183,7 +184,7 @@ def test_acceptance_manual_resource_id_authorization(app, scope):
     client=app.test_client(); login(client,target)
     client.post(f'/businesses/{targets[0].id}/switch')
     product=add_product(client,'Private matrix product',10,2,5)
-    client.post('/sales/',data={'product_id':product.id,'quantity':'1','unit_price':'5'})
+    client.post('/sales/',data=with_sale_token(client, {'product_id':product.id,'quantity':'1','unit_price':'5'}))
     client.post('/expenses/',data={'description':'Private matrix expense','category':'Transportation','amount':'2'})
     client.post('/restocking/receive',data={'product_id':product.id,'quantity':'1','unit_cost':'2'})
     sale=Sale.query.filter_by(business_id=targets[0].id).one()
@@ -201,6 +202,7 @@ def test_acceptance_manual_resource_id_authorization(app, scope):
         ('/restocking/receive',{'product_id':product.id,'quantity':'1','unit_cost':'2'}),
         ('/sales/',{'product_id':product.id,'quantity':'1','unit_price':'5'}),
     ):
+        if path == '/sales/': data = with_sale_token(client, data)
         assert client.post(path,data=data).status_code==404
     for path in ('/products/','/sales/','/expenses/','/restocking/','/reports','/dashboard'):
         response=client.get(path+'?business_id='+str(targets[0].id))
@@ -217,11 +219,11 @@ def test_two_business_end_to_end_and_all_route_isolation(app):
     user,shops=seed('plus'); shops[0].name='Tosin Mini Mart'; db.session.commit()
     client=app.test_client(); login(client,user)
     coke=add_product(client,'Coke',100,300,500)
-    client.post('/sales/',data={'product_id':coke.id,'quantity':'10','unit_price':'500'})
+    client.post('/sales/',data=with_sale_token(client, {'product_id':coke.id,'quantity':'10','unit_price':'500'}))
     client.post('/expenses/',data={'description':'Mini Mart transport','category':'Transportation','amount':'2000'})
     add_business(client,user,'Tosin Fashion'); fashion=Business.query.filter_by(name='Tosin Fashion').one()
     shirt=add_product(client,'T-Shirt',30,4000,7000)
-    client.post('/sales/',data={'product_id':shirt.id,'quantity':'2','unit_price':'7000'})
+    client.post('/sales/',data=with_sale_token(client, {'product_id':shirt.id,'quantity':'2','unit_price':'7000'}))
     client.post('/expenses/',data={'description':'Fashion packaging','category':'Packaging','amount':'3000'})
     db.session.expire_all()
     assert db.session.get(Product,coke.id).stock_quantity==90
@@ -236,7 +238,7 @@ def test_two_business_end_to_end_and_all_route_isolation(app):
         assert response.status_code==200 and b'Coke' not in response.data and b'Mini Mart transport' not in response.data
     assert client.get('/products/lookup?q=Coke').json['products']==[]
     assert client.get(f'/products/{coke.id}').status_code==404
-    assert client.post('/sales/',data={'product_id':coke.id,'quantity':'1','unit_price':'500'}).status_code==404
+    assert client.post('/sales/',data=with_sale_token(client, {'product_id':coke.id,'quantity':'1','unit_price':'500'})).status_code==404
     assert client.post('/restocking/receive',data={'product_id':coke.id,'quantity':'1','unit_cost':'300'}).status_code==404
     assert client.post(f'/products/{coke.id}/adjust',data={'quantity':'1','direction':'increase','reason':'Other'}).status_code==404
     sale=Sale.query.filter_by(business_id=shops[0].id).one()

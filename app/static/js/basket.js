@@ -25,6 +25,12 @@
   search.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();clearTimeout(timer);if(search.value.trim())lookup(search.value.trim());}});
   lines.addEventListener('input',total);
   form.addEventListener('submit',e=>{if(!lines.children.length){e.preventDefault();message.textContent='Add at least one product to the basket.';search.focus();}else if(form.checkValidity()){form.querySelector('button[type=submit]').disabled=true;}});
+  if(mode==='sale'){
+   const saved=form.querySelector('.sale-restore');
+   if(saved)JSON.parse(saved.textContent).forEach(product=>{add(product);const row=[...lines.children].find(r=>r.dataset.id===String(product.id));row.querySelector('[name=quantity]').value=product.quantity;row.querySelector('[name=unit_price]').required=false;});
+   total();
+   window.addEventListener('pageshow',()=>{form.querySelector('button[type=submit]').disabled=false;});
+  }
   const initial=basket.querySelector('.basket-initial');if(initial)add(JSON.parse(initial.textContent));
  });
 })();

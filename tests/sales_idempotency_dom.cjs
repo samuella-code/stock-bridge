@@ -1,0 +1,13 @@
+const {JSDOM}=require('jsdom');const fs=require('node:fs');const assert=require('node:assert/strict');
+const dom=new JSDOM(`<form id="sale-form"><input type="hidden" name="submission_token" value="original-token"><div class="basket" data-mode="sale" data-lookup="/lookup"><input class="basket-search"><div class="basket-results"></div><p class="basket-message"></p><div class="basket-lines"></div><strong class="basket-total"></strong></div><script type="application/json" class="sale-restore">[{"id":1,"name":"Water","stock":10,"unit":"units","price":"","quantity":"2"}]</script><button type="submit">Complete sale</button></form>`,{url:'http://localhost',runScripts:'outside-only'});
+dom.window.eval(fs.readFileSync('app/static/js/basket.js','utf8'));
+const d=dom.window.document, form=d.querySelector('form'), button=d.querySelector('button[type=submit]');
+assert.equal(d.querySelector('[name=submission_token]').value,'original-token');
+assert.equal(d.querySelectorAll('.basket-line').length,1);
+assert.equal(d.querySelector('[name=quantity]').value,'2');
+assert.equal(d.querySelector('[name=unit_price]').value,'');
+assert.equal(d.querySelector('[name=unit_price]').required,false);
+form.dispatchEvent(new dom.window.Event('submit',{cancelable:true}));assert.equal(button.disabled,true);
+dom.window.dispatchEvent(new dom.window.Event('pageshow'));assert.equal(button.disabled,false);
+assert.equal(d.querySelector('[name=submission_token]').value,'original-token');
+dom.window.close();console.log('PASS: 8 sales token, basket restoration and history-return assertions');

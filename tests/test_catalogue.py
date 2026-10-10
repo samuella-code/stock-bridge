@@ -1,3 +1,4 @@
+from tests.sales_submission_helpers import with_sale_token
 import csv
 import io
 from datetime import datetime, timedelta
@@ -239,7 +240,7 @@ def test_search_filters_and_business_isolation(client):
     assert client.get('/products/lookup?q=COKE').json['products']==[]
     for suffix in ('','/edit'):
         assert client.get(f'/products/{pid}{suffix}').status_code==404
-    assert client.post('/sales/',data={'product_id':pid,'quantity':1,'unit_price':350}).status_code==404
+    assert client.post('/sales/',data=with_sale_token(client, {'product_id':pid,'quantity':1,'unit_price':350})).status_code==404
     assert client.post('/restocking/receive',data={'product_id':pid,'quantity':1,'unit_cost':250}).status_code==404
     assert client.post(f'/products/{pid}/adjust',data={'quantity':1,'direction':'increase','reason':'Returned'}).status_code==404
 
@@ -263,7 +264,7 @@ def test_supermarket_end_to_end(client):
     ids={p.name:p.id for p in Product.query.all()}
     # IDs are obtained via the same tenant-scoped SKU lookup used by a searchable basket.
     coke=client.get('/products/lookup?q=111').json['products'][0]['id']
-    client.post('/sales/',data={'product_id':[coke,ids['Bread'],ids['Indomie']],'quantity':[2,1,3],'unit_price':['','','']})
+    client.post('/sales/',data=with_sale_token(client, {'product_id':[coke,ids['Bread'],ids['Indomie']],'quantity':[2,1,3],'unit_price':['','','']}))
     assert Sale.query.count()==1 and SaleItem.query.count()==3
     assert Sale.query.one().total==Decimal('3000')
     client.post('/restocking/receive',data={'product_id':[coke,ids['Bread'],ids['Fanta']], 'quantity':[50,20,40], 'unit_cost':[280,950,270]})
@@ -299,7 +300,7 @@ def test_mid_operation_failure_rolls_back(client,monkeypatch,operation):
     event.listen(model,'before_insert',fail)
     try:
         with pytest.raises(RuntimeError):
-            if operation=='sale':client.post('/sales/',data={'product_id':ids,'quantity':[1,1],'unit_price':['','']})
+            if operation=='sale':client.post('/sales/',data=with_sale_token(client, {'product_id':ids,'quantity':[1,1],'unit_price':['','']}))
             elif operation=='restock':client.post('/restocking/receive',data={'product_id':ids,'quantity':[1,1],'unit_cost':[250,250]})
             elif operation=='quick':quick(client,[{'name':'Third'},{'name':'Fourth'}])
             else:confirm(client,preview)
@@ -313,7 +314,7 @@ def test_mid_operation_failure_rolls_back(client,monkeypatch,operation):
 def test_oversell_and_archived_sku_uniqueness(client):
     quick(client,[{'name':'One','stock_quantity':1,'sku':'123'},{'name':'Two','stock_quantity':10}])
     ids=[p.id for p in Product.query.order_by(Product.id)]
-    client.post('/sales/',data={'product_id':ids,'quantity':[2,1],'unit_price':['','']})
+    client.post('/sales/',data=with_sale_token(client, {'product_id':ids,'quantity':[2,1],'unit_price':['','']}))
     assert Sale.query.count()==0 and Product.query.first().stock_quantity==1
     client.post(f'/products/{ids[0]}/adjust',data={'quantity':1,'direction':'decrease','reason':'Damaged'})
     client.post(f'/products/{ids[0]}/delete')
@@ -339,7 +340,7 @@ def test_new_pages_render(client,url):
 def test_transaction_price_bounds(client,operation,value):
     client.post('/products/new',data={'name':'P','stock_quantity':10})
     pid=Product.query.one().id
-    if operation=='sale':client.post('/sales/',data={'product_id':pid,'quantity':1,'unit_price':value})
+    if operation=='sale':client.post('/sales/',data=with_sale_token(client, {'product_id':pid,'quantity':1,'unit_price':value}))
     else:client.post('/restocking/receive',data={'product_id':pid,'quantity':1,'unit_cost':value})
     assert Product.query.one().stock_quantity==10
     assert Sale.query.count()==0 and Restock.query.count()==0

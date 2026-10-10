@@ -1,3 +1,4 @@
+from tests.sales_submission_helpers import with_sale_token
 """Disposable SQLite functional coverage; not PostgreSQL concurrency proof."""
 import pytest
 from sqlalchemy.dialects import postgresql
@@ -11,8 +12,8 @@ def recorded(client):
     owner(client)
     ids = [add(client, name, 10) for name in ('Water', 'Bread')]
     # Reverse item order deliberately to exercise deterministic restoration order.
-    client.post('/sales/', data={'product_id': ids[::-1], 'quantity': ['3', '2'],
-                               'unit_price': ['', '']})
+    client.post('/sales/', data=with_sale_token(client, {'product_id': ids[::-1], 'quantity': ['3', '2'],
+                               'unit_price': ['', '']}))
     sale_id = Sale.query.one().id
     return ids, sale_id
 

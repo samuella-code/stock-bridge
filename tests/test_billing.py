@@ -1,3 +1,4 @@
+from tests.sales_submission_helpers import with_sale_token
 """Subscription acceptance tests: disposable database, mocked provider, no live charges."""
 from copy import deepcopy
 from datetime import datetime, timedelta
@@ -310,7 +311,7 @@ def test_readonly_preflight_and_migration_preserve_verified_lifetime(tmp_path):
         upgrade();a=db.session.get(AccountBilling,1)
         assert a.legacy_payment_id==1 and not a.trial_eligible and Payment.query.one().reference=='old'
         assert db.session.get(User,2).password_hash=='admin-preserved' and db.session.get(User,2).admin_auth_version==7
-        assert db.session.execute(text('SELECT version_num FROM alembic_version')).scalar()=='0016_inventory_email_outbox'
+        assert db.session.execute(text('SELECT version_num FROM alembic_version')).scalar()=='0017_transaction_submission'
         assert {'account_billing','recurring_subscription','billing_event','social_identity'} <= set(inspect(db.engine).get_table_names())
         assert {'notification','notification_preference'} <= set(inspect(db.engine).get_table_names())
         assert db.session.execute(text('SELECT logo_key FROM business WHERE id=1')).scalar() is None
@@ -358,9 +359,9 @@ def test_new_entitlements_preserve_complete_business_workflow(client):
     u,b=seed();start_trial(u);db.session.commit();login(client,u)
     client.post('/products/new',data={'name':'Coke','stock_quantity':20,'buying_price':250,'selling_price':350,'minimum_stock_level':5})
     p=Product.query.one()
-    client.post('/sales/',data={'product_id':str(p.id),'quantity':'3','unit_price':'350','payment_method':'Cash'})
+    client.post('/sales/',data=with_sale_token(client, {'product_id':str(p.id),'quantity':'3','unit_price':'350','payment_method':'Cash'}))
     client.post('/restocking/receive',data={'product_id':str(p.id),'quantity':'20','unit_cost':'280'})
-    client.post('/sales/',data={'product_id':str(p.id),'quantity':'5','unit_price':'350','payment_method':'Cash'})
+    client.post('/sales/',data=with_sale_token(client, {'product_id':str(p.id),'quantity':'5','unit_price':'350','payment_method':'Cash'}))
     client.post('/expenses/',data={'description':'Delivery','category':'Transportation','amount':'1500'})
     db.session.refresh(p)
     assert p.stock_quantity==32 and Sale.query.count()==2 and SaleItem.query.count()==2

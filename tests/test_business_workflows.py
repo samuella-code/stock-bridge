@@ -1,3 +1,4 @@
+from tests.sales_submission_helpers import with_sale_token
 from datetime import datetime, timedelta
 from decimal import Decimal
 import pytest
@@ -56,9 +57,9 @@ def test_end_to_end_stock_and_profit(client):
     with client.application.app_context():
         assert Product.query.get(pid).opening_quantity==20
         assert StockMovement.query.filter_by(product_id=pid,kind="opening").one().quantity_change==20
-    client.post("/sales/",data={"product_id":pid,"quantity":"3","unit_price":""})
+    client.post("/sales/",data=with_sale_token(client, {"product_id":pid,"quantity":"3","unit_price":""}))
     client.post("/restocking/receive",data={"product_id":pid,"quantity":"20","unit_cost":"280"})
-    client.post("/sales/",data={"product_id":pid,"quantity":"5","unit_price":""})
+    client.post("/sales/",data=with_sale_token(client, {"product_id":pid,"quantity":"5","unit_price":""}))
     client.post("/expenses/",data={"description":"Delivery","category":"Transportation","amount":"1500"})
     with client.application.app_context():
         p=db.session.get(Product,pid)
@@ -82,8 +83,8 @@ def test_multi_product_sale_atomic_and_history(client):
     bid=owner(client)
     ids=[add(client,n,10,cost,price) for n,cost,price in
          (("Coca-Cola","250","350"),("Bread","900","1100"),("Indomie","300","400"))]
-    response=client.post("/sales/",data={"product_id":ids,"quantity":["2","1","3"],
-        "unit_price":["","",""],"payment_method":"POS"})
+    response=client.post("/sales/",data=with_sale_token(client, {"product_id":ids,"quantity":["2","1","3"],
+        "unit_price":["","",""],"payment_method":"POS"}))
     assert response.status_code==302
     with client.application.app_context():
         assert Sale.query.count()==1
@@ -93,7 +94,7 @@ def test_multi_product_sale_atomic_and_history(client):
         assert sale.total==Decimal("3000")
         assert [db.session.get(Product,pid).stock_quantity for pid in ids]==[8,9,7]
     # Reject whole checkout when one item exceeds stock.
-    client.post("/sales/",data={"product_id":ids,"quantity":["1","100","1"],"unit_price":["","",""]})
+    client.post("/sales/",data=with_sale_token(client, {"product_id":ids,"quantity":["1","100","1"],"unit_price":["","",""]}))
     with client.application.app_context():
         assert Sale.query.count()==1
         assert [db.session.get(Product,pid).stock_quantity for pid in ids]==[8,9,7]
@@ -122,7 +123,7 @@ def test_zero_stock_adjustments_and_isolation(client):
     assert client.get(f"/products/{other_id}").status_code==404
     assert client.post(f"/products/{other_id}/adjust",data={"quantity":"1","direction":"increase","reason":"Other"}).status_code==404
     assert client.post("/restocking/receive",data={"product_id":other_id,"quantity":"1","unit_cost":"1"}).status_code==404
-    assert client.post("/sales/",data={"product_id":other_id,"quantity":"1","unit_price":""}).status_code==404
+    assert client.post("/sales/",data=with_sale_token(client, {"product_id":other_id,"quantity":"1","unit_price":""})).status_code==404
     assert b"Private" not in client.get("/products/").data
     assert b"Private" not in client.get("/reports").data
 
