@@ -160,7 +160,7 @@ def windows_evidence():
     script=Path(__file__).with_name('windows_postgres_identity.ps1')
     if not script.is_file():reject('Windows evidence collector file missing')
     try:
-        result=subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-File',str(script)],
+        result=subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',str(script)],
                               capture_output=True,text=True,timeout=WINDOWS_INSPECTION_TIMEOUT_SECONDS,check=False)
     except subprocess.TimeoutExpired:
         reject(f'Windows evidence collector timed out after {WINDOWS_INSPECTION_TIMEOUT_SECONDS} seconds')
@@ -176,8 +176,13 @@ def windows_evidence():
     try:
         evidence=json.loads(result.stdout)
     except (ValueError,TypeError):
-        reject('Windows collector failed without structured diagnostics' if result.returncode else
-               'Windows evidence collector returned invalid JSON')
+        if result.returncode:
+            # Report transport shape, never the content of either stream.
+            shape = 'empty' if not result.stdout.strip() else 'non-JSON'
+            stderr = 'present' if result.stderr else 'empty'
+            reject('Windows collector failed without structured diagnostics'
+                   + f' (exit={result.returncode}; stdout={shape}; stderr={stderr})')
+        reject('Windows evidence collector returned invalid JSON')
     if not isinstance(evidence,dict):reject('Windows evidence collector returned a non-object')
     if result.returncode or evidence.get('inspection_error'):
         code=evidence.get('inspection_error')

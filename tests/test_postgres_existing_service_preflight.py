@@ -284,3 +284,36 @@ def test_package_diagnostic_does_not_echo_untrusted_metadata():
     evidence=package_snapshot();evidence['inbound_allow_rules'][0]['package']='synthetic-secret-credential'
     with pytest.raises(UnsafeTestDatabase) as error:validate_os(evidence)
     assert 'synthetic-secret-credential' not in str(error.value)
+
+
+@pytest.mark.parametrize('stdout,stderr,shape',[
+    ('','synthetic-private-error','stdout=empty; stderr=present'),
+    ('synthetic-private-output','','stdout=non-JSON; stderr=empty'),
+])
+def test_unstructured_failure_reports_safe_transport_shape(stdout,stderr,shape):
+    from types import SimpleNamespace
+    from tests.support import postgres_preflight as module
+    response=SimpleNamespace(returncode=1,stdout=stdout,stderr=stderr)
+    with patch.object(module,'os',SimpleNamespace(name='nt')),patch.object(module.subprocess,'run',return_value=response),patch('psycopg.connect') as connect:
+        with pytest.raises(UnsafeTestDatabase) as error:module.preflight(configuration())
+        assert 'exit=1' in str(error.value)
+        assert shape in str(error.value)
+        assert 'synthetic-private' not in str(error.value)
+        connect.assert_not_called()
+
+
+def test_internal_collector_invocation_is_pinned_to_module_file():
+    import json
+    from pathlib import Path
+    from types import SimpleNamespace
+    from tests.support import postgres_preflight as module
+    response=SimpleNamespace(returncode=0,stdout=json.dumps(os_snapshot()),stderr='')
+    with patch.object(module,'os',SimpleNamespace(name='nt')),patch.object(module.subprocess,'run',return_value=response) as run:
+        module.windows_evidence()
+        command=run.call_args.args[0]
+        assert command==['powershell.exe','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',
+            '-File',str(Path(module.__file__).with_name('windows_postgres_identity.ps1'))]
+        assert Path(command[6]).resolve()==Path(module.__file__).with_name('windows_postgres_identity.ps1').resolve()
+        assert run.call_args.kwargs['text'] is True
+        assert run.call_args.kwargs['capture_output'] is True
+        assert 'shell' not in run.call_args.kwargs
