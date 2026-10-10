@@ -1,3 +1,4 @@
+from tests.operation_submission_helpers import with_operation_token
 from tests.restock_submission_helpers import with_restock_token
 from tests.sales_submission_helpers import with_sale_token
 """Multi-business acceptance uses disposable databases; no Paystack or SMTP."""
@@ -131,7 +132,7 @@ def test_acceptance_entitlement_server_matrix(app, state, kind, limit):
     product = add_product(client,'Retained history',20,2,5)
     assert client.post('/sales/',data=with_sale_token(client, {'product_id':product.id,'quantity':'2','unit_price':'5'})).status_code==302
     assert client.post('/restocking/receive',data=with_restock_token(client, {'product_id':product.id,'quantity':'3','unit_cost':'2'})).status_code==302
-    assert client.post('/expenses/',data={'description':'Retained expense','category':'Transportation','amount':'1'}).status_code==302
+    assert client.post('/expenses/',data=with_operation_token(client, '/expenses/', {'description':'Retained expense','category':'Transportation','amount':'1'})).status_code==302
     models = (Business,Product,Sale,SaleItem,Restock,StockMovement,Expense)
     before = tuple(model.query.count() for model in models)
     if state in ('expired','cancelled','lifetime_fallback'):
@@ -186,7 +187,7 @@ def test_acceptance_manual_resource_id_authorization(app, scope):
     client.post(f'/businesses/{targets[0].id}/switch')
     product=add_product(client,'Private matrix product',10,2,5)
     client.post('/sales/',data=with_sale_token(client, {'product_id':product.id,'quantity':'1','unit_price':'5'}))
-    client.post('/expenses/',data={'description':'Private matrix expense','category':'Transportation','amount':'2'})
+    client.post('/expenses/',data=with_operation_token(client, '/expenses/', {'description':'Private matrix expense','category':'Transportation','amount':'2'}))
     client.post('/restocking/receive',data=with_restock_token(client, {'product_id':product.id,'quantity':'1','unit_cost':'2'}))
     sale=Sale.query.filter_by(business_id=targets[0].id).one()
     expense=Expense.query.filter_by(business_id=targets[0].id).one()
@@ -222,11 +223,11 @@ def test_two_business_end_to_end_and_all_route_isolation(app):
     client=app.test_client(); login(client,user)
     coke=add_product(client,'Coke',100,300,500)
     client.post('/sales/',data=with_sale_token(client, {'product_id':coke.id,'quantity':'10','unit_price':'500'}))
-    client.post('/expenses/',data={'description':'Mini Mart transport','category':'Transportation','amount':'2000'})
+    client.post('/expenses/',data=with_operation_token(client, '/expenses/', {'description':'Mini Mart transport','category':'Transportation','amount':'2000'}))
     add_business(client,user,'Tosin Fashion'); fashion=Business.query.filter_by(name='Tosin Fashion').one()
     shirt=add_product(client,'T-Shirt',30,4000,7000)
     client.post('/sales/',data=with_sale_token(client, {'product_id':shirt.id,'quantity':'2','unit_price':'7000'}))
-    client.post('/expenses/',data={'description':'Fashion packaging','category':'Packaging','amount':'3000'})
+    client.post('/expenses/',data=with_operation_token(client, '/expenses/', {'description':'Fashion packaging','category':'Packaging','amount':'3000'}))
     db.session.expire_all()
     assert db.session.get(Product,coke.id).stock_quantity==90
     assert db.session.get(Product,shirt.id).stock_quantity==28

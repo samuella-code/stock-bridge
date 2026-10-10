@@ -1,3 +1,4 @@
+from tests.operation_submission_helpers import with_operation_token
 from tests.restock_submission_helpers import with_restock_token
 from tests.sales_submission_helpers import with_sale_token
 """Disposable local DBs and mocked SMTP only; hosted delivery is not inferred."""
@@ -188,7 +189,7 @@ def test_restock_outbox_rolls_back_with_failed_restock_commit(app, monkeypatch):
 def test_adjustment_shared_alert_rules(app, delta, kind):
     client, _, _ = setup(app)
     p = product(client)
-    assert client.post(f'/products/{p.id}/adjust', data={'quantity':abs(delta),'direction':'decrease','reason':'Stock count correction'}).status_code == 302
+    assert client.post(f'/products/{p.id}/adjust', data=with_operation_token(client, f'/products/{p.id}/adjust', {'quantity':abs(delta),'direction':'decrease','reason':'Stock count correction'})).status_code == 302
     row = EmailOutbox.query.one()
     assert row.event_type == kind and row.event_key.startswith('adjustment:')
     assert row.payload['quantity'] == 8 + delta
@@ -260,7 +261,7 @@ def test_smtp_failure_preserves_inventory(app, monkeypatch, caplog, operation):
         raise RuntimeError('sensitive-provider-credential-must-not-be-logged')
     monkeypatch.setattr('app.email_service._send_email',failing)
     if operation == 'sale': sale(client,p,3)
-    else: client.post(f'/products/{p.id}/adjust',data={'quantity':3,'direction':'decrease','reason':'Stock count correction'})
+    else: client.post(f'/products/{p.id}/adjust',data=with_operation_token(client, f'/products/{p.id}/adjust', {'quantity':3,'direction':'decrease','reason':'Stock count correction'}))
     assert calls == []  # Network work is not in the stock transaction.
     assert dispatch_one() == 'retry'
     assert db.session.get(Product,p.id).stock_quantity == 5
@@ -573,9 +574,9 @@ def test_repeated_inventory_request_does_not_repeat_crossing_email(app):
 
 def test_positive_adjustment_resets_email_eligibility(app):
     client,_,_,p,_=queued(app)
-    client.post(f'/products/{p.id}/adjust',data={'quantity':10,'direction':'increase','reason':'Stock count correction'})
+    client.post(f'/products/{p.id}/adjust',data=with_operation_token(client, f'/products/{p.id}/adjust', {'quantity':10,'direction':'increase','reason':'Stock count correction'}))
     assert EmailOutbox.query.count()==1
-    client.post(f'/products/{p.id}/adjust',data={'quantity':10,'direction':'decrease','reason':'Stock count correction'})
+    client.post(f'/products/{p.id}/adjust',data=with_operation_token(client, f'/products/{p.id}/adjust', {'quantity':10,'direction':'decrease','reason':'Stock count correction'}))
     assert EmailOutbox.query.count()==2
 
 

@@ -1,3 +1,4 @@
+from tests.operation_submission_helpers import with_operation_token
 from tests.restock_submission_helpers import with_restock_token
 from tests.sales_submission_helpers import with_sale_token
 import csv
@@ -270,14 +271,14 @@ def test_supermarket_end_to_end(client):
     assert Sale.query.one().total==Decimal('3000')
     client.post('/restocking/receive',data=with_restock_token(client, {'product_id':[coke,ids['Bread'],ids['Fanta']], 'quantity':[50,20,40], 'unit_cost':[280,950,270]}))
     assert Restock.query.count()==3 and len({r.batch_id for r in Restock.query})==1
-    client.post(f'/products/{coke}/adjust',data={'quantity':1,'direction':'decrease','reason':'Damaged'})
+    client.post(f'/products/{coke}/adjust',data=with_operation_token(client, f'/products/{coke}/adjust', {'quantity':1,'direction':'decrease','reason':'Damaged'}))
     expected={'Coca-Cola':147,'Bread':49,'Indomie':197,'Fanta':120}
     for name,qty in expected.items():
         p=db.session.get(Product,ids[name]);assert p.stock_quantity==qty
         assert sum(m.quantity_change for m in StockMovement.query.filter_by(product_id=p.id))==qty
     assert SaleItem.query.filter_by(product_id=coke).one().unit_cost==250
     assert Restock.query.filter_by(product_id=coke).one().unit_cost==280
-    client.post('/expenses/',data={'description':'Delivery','amount':1500,'category':'Transportation'})
+    client.post('/expenses/',data=with_operation_token(client, '/expenses/', {'description':'Delivery','amount':1500,'category':'Transportation'}))
     start=datetime.combine(datetime.utcnow().date(),datetime.min.time());metrics=figures(db.session.get(Business,1),start,start+timedelta(days=1))
     assert metrics['revenue']==3000 and metrics['cogs']==2300 and metrics['gross_profit']==700 and metrics['net_profit']==-800
     assert b'3,000' in client.get('/dashboard').data and b'3,000' in client.get('/reports').data
@@ -317,7 +318,7 @@ def test_oversell_and_archived_sku_uniqueness(client):
     ids=[p.id for p in Product.query.order_by(Product.id)]
     client.post('/sales/',data=with_sale_token(client, {'product_id':ids,'quantity':[2,1],'unit_price':['','']}))
     assert Sale.query.count()==0 and Product.query.first().stock_quantity==1
-    client.post(f'/products/{ids[0]}/adjust',data={'quantity':1,'direction':'decrease','reason':'Damaged'})
+    client.post(f'/products/{ids[0]}/adjust',data=with_operation_token(client, f'/products/{ids[0]}/adjust', {'quantity':1,'direction':'decrease','reason':'Damaged'}))
     client.post(f'/products/{ids[0]}/delete')
     assert client.get('/products/lookup?q=123').json['products']==[]
     client.post('/products/new',data={'name':'Duplicate','sku':'123'})

@@ -1,3 +1,4 @@
+from tests.operation_submission_helpers import with_operation_token
 from tests.restock_submission_helpers import with_restock_token
 from tests.sales_submission_helpers import with_sale_token
 from datetime import datetime, timedelta
@@ -61,7 +62,7 @@ def test_end_to_end_stock_and_profit(client):
     client.post("/sales/",data=with_sale_token(client, {"product_id":pid,"quantity":"3","unit_price":""}))
     client.post("/restocking/receive",data=with_restock_token(client, {"product_id":pid,"quantity":"20","unit_cost":"280"}))
     client.post("/sales/",data=with_sale_token(client, {"product_id":pid,"quantity":"5","unit_price":""}))
-    client.post("/expenses/",data={"description":"Delivery","category":"Transportation","amount":"1500"})
+    client.post("/expenses/",data=with_operation_token(client, "/expenses/", {"description":"Delivery","category":"Transportation","amount":"1500"}))
     with client.application.app_context():
         p=db.session.get(Product,pid)
         assert p.stock_quantity==32
@@ -110,7 +111,7 @@ def test_zero_stock_adjustments_and_isolation(client):
     bid=owner(client)
     pid=add(client,"Empty",0)
     assert b"Out of stock" in client.get("/products/").data
-    client.post(f"/products/{pid}/adjust",data={"direction":"increase","quantity":"4","reason":"Returned"})
+    client.post(f"/products/{pid}/adjust",data=with_operation_token(client, f"/products/{pid}/adjust", {"direction":"increase","quantity":"4","reason":"Returned"}))
     with client.application.app_context():
         assert db.session.get(Product,pid).stock_quantity==4
         assert StockMovement.query.filter_by(product_id=pid,kind="adjustment").one().reason=="Returned"
@@ -135,7 +136,7 @@ def test_expense_and_low_stock_filters(client):
     assert b"Low stock" in client.get("/products/?stock=low").data
     response=client.get("/products/?stock=out")
     assert b"Out of stock" in response.data and b"Low</strong>" not in response.data
-    client.post("/expenses/",data={"description":"Electricity","category":"Electricity","amount":"120"})
+    client.post("/expenses/",data=with_operation_token(client, "/expenses/", {"description":"Electricity","category":"Electricity","amount":"120"}))
     assert b"120" in client.get("/reports").data
     client.post(f"/products/{p}/edit",data={"name":"Low","stock_quantity":"999","buying_price":"250","selling_price":"350"})
     with client.application.app_context():
@@ -183,7 +184,7 @@ def test_legacy_migration_preserves_sales_and_stock(tmp_path):
 
 def test_void_expense_keeps_audit_and_updates_report(client):
     bid=owner(client)
-    client.post("/expenses/",data={"description":"Delivery","category":"Transportation","amount":"1500"})
+    client.post("/expenses/",data=with_operation_token(client, "/expenses/", {"description":"Delivery","category":"Transportation","amount":"1500"}))
     with client.application.app_context():
         eid=Expense.query.one().id
     client.post(f"/expenses/{eid}/delete",data={"reason":"Duplicate entry"})

@@ -8,6 +8,7 @@ from app.models import Product, Restock, Sale, SaleItem, StockMovement
 from app.admin.routes import log
 from app.products.catalogue import product_data, duplicate_errors, add_product, search_products
 from sqlalchemy.exc import IntegrityError
+from app.transaction_submissions import issue_token, claim, complete, SubmissionError, SubmissionConflict
 
 products_bp = Blueprint("products", __name__, url_prefix="/products")
 ADJUSTMENT_REASONS = ("Damaged", "Expired", "Lost", "Stock count correction", "Returned", "Other")
@@ -108,6 +109,9 @@ def edit(product_id):
 @login_required
 def detail(product_id):
     b, product = current_business(), owned_product(product_id)
+    return _adjustment_form(b, product, issue_token(current_user.id, b.id, "adjustment"))
+
+def _adjustment_form(b, product, token, status=200):
     movements = StockMovement.query.filter_by(business_id=b.id, product_id=product.id).order_by(
         StockMovement.occurred_at.desc(), StockMovement.id.desc()).paginate(
         page=request.args.get("page", 1, type=int), per_page=25, error_out=False)
@@ -117,48 +121,70 @@ def detail(product_id):
     last_restock = db.session.query(func.max(Restock.received_at)).filter(
         Restock.business_id == b.id, Restock.product_id == product.id).scalar()
     return render_template("products/detail.html", business=b, product=product,
-        movements=movements, sold=sold, last_restock=last_restock, reasons=ADJUSTMENT_REASONS)
+        movements=movements, sold=sold, last_restock=last_restock, reasons=ADJUSTMENT_REASONS, submission_token=token), status
 
 @products_bp.post("/<int:product_id>/adjust")
 @login_required
 def adjust(product_id):
     b, product = current_business(), owned_product(product_id)
-    # Lock/read the actual pre-adjustment stock before generating transition alerts.
-    product = Product.query.filter_by(id=product.id, business_id=b.id).with_for_update().populate_existing().one()
+    token = request.form.get("submission_token", "")
     try:
         magnitude = int(request.form.get("quantity", ""))
         direction = request.form.get("direction")
         reason = request.form.get("reason")
-        when = datetime.strptime(request.form["date"], "%Y-%m-%d") if request.form.get("date") else datetime.utcnow()
+        date = request.form.get("date", "")
+        when = datetime.strptime(date, "%Y-%m-%d") if date else None
         if magnitude < 1 or direction not in ("increase", "decrease") or reason not in ADJUSTMENT_REASONS:
             raise ValueError
     except ValueError:
         flash("Choose a valid amount, direction, reason and date.", "error")
-        return redirect(url_for("products.detail", product_id=product.id))
-    delta = magnitude if direction == "increase" else -magnitude
-    if product.stock_quantity + delta < 0:
-        flash(f"Only {product.stock_quantity} units are currently available.", "error")
-        return redirect(url_for("products.detail", product_id=product.id))
-    condition = [Product.id == product.id, Product.business_id == b.id]
-    if delta < 0:
-        condition.append(Product.stock_quantity >= -delta)
-    result = db.session.execute(update(Product).where(*condition)
-        .values(stock_quantity=Product.stock_quantity + delta,
-                updated_at=datetime.utcnow()).execution_options(synchronize_session=False))
-    if result.rowcount != 1:
+        return _adjustment_form(b, product, token)
+    note = request.form.get("note", "").strip()[:500]
+    payload = dict(product_id=product.id, quantity=magnitude, direction=direction,
+                   reason=reason, date=when.strftime("%Y-%m-%d") if when else None, note=note)
+    try:
+        receipt, replay = claim(token, current_user.id, b.id, "adjustment", payload)
+        if replay:
+            reference = receipt.result_reference
+            movement = StockMovement.query.filter_by(id=int(reference.split(":")[1]),
+                business_id=b.id, product_id=product.id, kind="adjustment").first()
+            if movement is None:
+                raise SubmissionConflict("Original adjustment is unavailable.")
+            db.session.rollback()
+            flash("This stock adjustment was already recorded. No stock changed again.", "success")
+            return redirect(url_for("products.detail", product_id=product_id))
+        product = Product.query.filter_by(id=product_id, business_id=b.id).with_for_update().populate_existing().one()
+        delta = magnitude if direction == "increase" else -magnitude
+        before = product.stock_quantity
+        if before + delta < 0:
+            db.session.rollback()
+            flash(f"Only {before} units are currently available.", "error")
+            return _adjustment_form(b, product, token)
+        condition = [Product.id == product.id, Product.business_id == b.id]
+        if delta < 0:
+            condition.append(Product.stock_quantity >= -delta)
+        result = db.session.execute(update(Product).where(*condition)
+            .values(stock_quantity=Product.stock_quantity + delta, updated_at=datetime.utcnow())
+            .execution_options(synchronize_session=False))
+        if result.rowcount != 1:
+            raise SubmissionConflict("Stock changed while recording the adjustment.")
+        movement = StockMovement(business_id=b.id, product_id=product.id, kind="adjustment",
+            quantity_change=delta, reason=reason, note=note, occurred_at=when or datetime.utcnow())
+        db.session.add(movement)
+        db.session.flush()
+        from app.notifications.service import stock_transition
+        stock_transition(product, before, before + delta, f'adjustment:{movement.id}')
+        complete(receipt, f"movement:{movement.id}")
+        db.session.commit()
+    except SubmissionError as error:
         db.session.rollback()
-        flash("Stock changed while recording the adjustment. Please try again.", "error")
-        return redirect(url_for("products.detail", product_id=product.id))
-    movement = StockMovement(business_id=b.id, product_id=product.id,
-        kind="adjustment", quantity_change=delta, reason=reason,
-        note=request.form.get("note", "").strip()[:500], occurred_at=when)
-    db.session.add(movement)
-    db.session.flush()
-    from app.notifications.service import stock_transition
-    stock_transition(product, product.stock_quantity, product.stock_quantity + delta, f'adjustment:{movement.id}')
-    db.session.commit()
+        flash("Submission could not be accepted. Check stock history before refreshing the form or submitting again.", "error")
+        return _adjustment_form(b, product, token, 409 if isinstance(error, SubmissionConflict) else 400)
+    except Exception:
+        db.session.rollback()
+        raise
     flash("Stock adjustment recorded.", "success")
-    return redirect(url_for("products.detail", product_id=product.id))
+    return redirect(url_for("products.detail", product_id=product_id))
 
 @products_bp.post("/<int:product_id>/delete")
 @login_required

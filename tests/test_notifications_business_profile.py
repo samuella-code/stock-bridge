@@ -1,3 +1,4 @@
+from tests.operation_submission_helpers import with_operation_token
 from tests.restock_submission_helpers import with_restock_token
 from tests.sales_submission_helpers import with_sale_token
 """Disposable fixtures only. No SMTP, provider payments or hosted DB writes."""
@@ -126,7 +127,7 @@ def test_transition_rules(app, before, after, minimum, expected):
 def test_adjustment_alert_and_history(app, quantity, kind):
     client, _, _ = setup(app)
     p = product(client)
-    client.post(f'/products/{p.id}/adjust', data={'quantity': str(quantity), 'direction': 'decrease', 'reason': 'Damaged'})
+    client.post(f'/products/{p.id}/adjust', data=with_operation_token(client, f'/products/{p.id}/adjust', {'quantity': str(quantity), 'direction': 'decrease', 'reason': 'Damaged'}))
     assert count(kind) == 1
     assert StockMovement.query.filter_by(kind='adjustment').one().quantity_change == -quantity
 

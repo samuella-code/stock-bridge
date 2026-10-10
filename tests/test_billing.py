@@ -1,3 +1,4 @@
+from tests.operation_submission_helpers import with_operation_token
 from tests.restock_submission_helpers import with_restock_token
 from tests.sales_submission_helpers import with_sale_token
 """Subscription acceptance tests: disposable database, mocked provider, no live charges."""
@@ -363,7 +364,7 @@ def test_new_entitlements_preserve_complete_business_workflow(client):
     client.post('/sales/',data=with_sale_token(client, {'product_id':str(p.id),'quantity':'3','unit_price':'350','payment_method':'Cash'}))
     client.post('/restocking/receive',data=with_restock_token(client, {'product_id':str(p.id),'quantity':'20','unit_cost':'280'}))
     client.post('/sales/',data=with_sale_token(client, {'product_id':str(p.id),'quantity':'5','unit_price':'350','payment_method':'Cash'}))
-    client.post('/expenses/',data={'description':'Delivery','category':'Transportation','amount':'1500'})
+    client.post('/expenses/',data=with_operation_token(client, '/expenses/', {'description':'Delivery','category':'Transportation','amount':'1500'}))
     db.session.refresh(p)
     assert p.stock_quantity==32 and Sale.query.count()==2 and SaleItem.query.count()==2
     assert Restock.query.one().unit_cost==280 and Expense.query.one().amount==1500

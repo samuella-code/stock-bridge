@@ -92,3 +92,27 @@ with the batch identifier before the shared commit. Failures roll back all write
 without retry. Apply and verify migration 0017 under separate approval BEFORE
 deploying this workflow. Actual PostgreSQL concurrency remains pending; no hosted
 resources were used.
+
+## Inventory adjustments and expenses (Phase 5D.4)
+
+The product detail adjustment form and `/expenses/` creation form issue separate
+signed operation-scoped tokens. Validation redisplays submitted values and the
+same token. Claims precede stock mutations/expense insertion, and receipts commit
+with stock movements, threshold notifications/outbox jobs or the expense audit.
+Replays use the original business-scoped movement/expense reference and never
+apply mutations or resolve blank date defaults again. A blank date is canonical
+`null`; explicit dates, trimmed effective notes, reasons/categories and product
+identifiers remain part of intent. Adjustment quantities normalize to integers;
+expense amounts normalize equivalent decimal spelling without rounding user
+intent. Existing expense precision/validation behavior is preserved.
+
+Expired tokens require checking the relevant history before refreshing; no
+automatic financial retry occurs. New tokens allow legitimate identical entries.
+No other adjustment or expense creation endpoints exist; product opening stock,
+expense voiding, and sale/restock movements remain separate existing workflows.
+
+**Hosted deployment dependency:** apply and verify `0017_transaction_submission`
+through a separately authorized migration process before deploying these routes.
+The staging migration-skip guard is unchanged. PostgreSQL concurrent claim
+verification remains pending on an isolated test database; SQLite regressions
+are not evidence of PostgreSQL concurrency execution.

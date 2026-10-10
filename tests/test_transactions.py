@@ -1,3 +1,4 @@
+from tests.operation_submission_helpers import with_operation_token
 from tests.restock_submission_helpers import with_restock_token
 from tests.sales_submission_helpers import with_sale_token
 import pytest
@@ -50,7 +51,7 @@ def test_sale_reduces_and_delete_restores_stock(client):
 
 def test_expense_and_dashboard(client):
     seed(client)
-    client.post("/expenses/", data={"description":"Transport", "amount":"2500"})
+    client.post("/expenses/", data=with_operation_token(client, "/expenses/", {"description":"Transport", "amount":"2500"}))
     with client.application.app_context():
         assert Expense.query.one().amount == Decimal("2500.00")
     assert b"2,500" in client.get("/dashboard").data
