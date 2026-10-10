@@ -43,6 +43,21 @@ def validate_network(evidence):
                 low,high=map(int,port.split('-'));relevant |= low<=5432<=high
             elif not port.isdigit():reject('firewall port requires manual review')
         if not relevant:continue
+        # A specific package SID is an exclusion only for a runtime-verified
+        # unpackaged, non-AppContainer listener. Unknown evidence never excludes.
+        package=rule.get('package')
+        if package not in (None, '', 'Any'):
+            if not isinstance(package,str) or not re.fullmatch(r'S-1-15-2-(?:[0-9]+-){6}[0-9]+',package):
+                reject('unsupported firewall package restriction')
+            if any(int(part)>4294967295 for part in package.split('-')[4:]):
+                reject('unsupported firewall package restriction')
+            identity=evidence.get('listener_package_identity',{})
+            if (not isinstance(identity,dict) or identity.get('method')!='win32-process-and-token'
+                    or identity.get('status')!='unpackaged-non-appcontainer'
+                    or type(identity.get('pid')) is not int
+                    or identity['pid']!=evidence.get('listener_pid')):
+                reject('listener package identity not independently verified')
+            continue
         remote=rule.get('remote',[])
         if not remote:reject('firewall remote address unavailable')
         for address in remote:
@@ -136,7 +151,7 @@ WINDOWS_FAILURE_CODES = {
     'service-query', 'service-not-running', 'listener-query', 'listener-ambiguous',
     'listener-process', 'service-process', 'firewall-profiles', 'firewall-rules',
     'firewall-port-filter', 'firewall-application-filter', 'firewall-address-filter',
-    'evidence-serialization',
+    'evidence-serialization', 'listener-package-query',
 }
 
 

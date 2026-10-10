@@ -233,3 +233,54 @@ def test_irrelevant_rules_need_no_remote_address_query(rule):
 def test_relevant_rule_still_requires_remote_evidence():
     evidence=firewall_snapshot();evidence['inbound_allow_rules']=[dict(protocol='TCP',program='Any',ports=['5432'],remote=[])]
     with pytest.raises(UnsafeTestDatabase,match='remote address unavailable'):validate_os(evidence)
+
+
+PACKAGE_SID = 'S-1-15-2-1-2-3-4-5-6-7'
+
+
+def package_snapshot():
+    evidence=firewall_snapshot()
+    evidence['listener_package_identity']=dict(method='win32-process-and-token',
+        status='unpackaged-non-appcontainer',pid=evidence['listener_pid'])
+    evidence['inbound_allow_rules']=[dict(protocol='Any',ports=['Any'],program='Any',
+        remote=['Any'],package=PACKAGE_SID)]
+    return evidence
+
+
+def test_specific_package_excludes_verified_unpacked_listener():
+    assert validate_os(package_snapshot())
+
+
+@pytest.mark.parametrize('package',[None,'','Any','S-1-15-2-1','S-1-5-18','*',
+    ['S-1-15-2-1-2-3-4-5-6-7'],'S-1-15-2-4294967296-2-3-4-5-6-7'])
+def test_package_field_is_not_automatic_exclusion(package):
+    evidence=package_snapshot();evidence['inbound_allow_rules'][0]['package']=package
+    with pytest.raises(UnsafeTestDatabase):validate_os(evidence)
+
+
+@pytest.mark.parametrize('identity',[None,{},dict(method='manual',status='unpackaged-non-appcontainer',pid=7516),
+    dict(method='win32-process-and-token',status='packaged',pid=7516),
+    dict(method='win32-process-and-token',status='appcontainer',pid=7516),
+    dict(method='win32-process-and-token',status='unpackaged-non-appcontainer',pid=3524),
+    dict(method='win32-process-and-token',status='unpackaged-non-appcontainer',pid='7516')])
+def test_package_requires_independent_listener_evidence(identity):
+    evidence=package_snapshot();evidence['listener_package_identity']=identity
+    with pytest.raises(UnsafeTestDatabase,match='not independently verified'):validate_os(evidence)
+
+
+def test_package_exclusion_does_not_hide_another_unrestricted_rule():
+    evidence=package_snapshot()
+    rule=deepcopy(evidence['inbound_allow_rules'][0]);rule.pop('package')
+    evidence['inbound_allow_rules'].append(rule)
+    with pytest.raises(UnsafeTestDatabase):validate_os(evidence)
+
+
+def test_package_exclusion_preserves_profile_requirement():
+    evidence=package_snapshot();evidence['firewall_profiles']=[]
+    with pytest.raises(UnsafeTestDatabase):validate_os(evidence)
+
+
+def test_package_diagnostic_does_not_echo_untrusted_metadata():
+    evidence=package_snapshot();evidence['inbound_allow_rules'][0]['package']='synthetic-secret-credential'
+    with pytest.raises(UnsafeTestDatabase) as error:validate_os(evidence)
+    assert 'synthetic-secret-credential' not in str(error.value)
