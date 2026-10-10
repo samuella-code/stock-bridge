@@ -115,6 +115,7 @@
 .customer-app .page-total{font-size:26px}
 .customer-app .basket-search{width:100%}
 .customer-app .basket-line{grid-template-columns:repeat(2,minmax(0,1fr));background:#fbfcfc;padding:16px;gap:14px}
+.customer-app .basket-line legend{float:left;grid-column:1/-1;width:100%;padding:0;min-width:0;box-sizing:border-box}
 .customer-app .basket-line .line-total{font-size:18px;align-self:center;grid-column:1}
 .customer-app .basket-line .secondary-btn{grid-column:2;justify-self:end}
 .customer-app .basket-total{display:block;font:700 23px Manrope,sans-serif;padding:16px;border-radius:10px;background:#eaf5ef;color:#154d43;margin:12px 0}
@@ -279,6 +280,8 @@
 .customer-app .period-picker button{grid-column:1/-1}
 .customer-app .inventory-toolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));padding:14px}
 .customer-app .inventory-toolbar label:first-child{grid-column:1/-1}
+.customer-app .inventory-toolbar .catalogue-sort{grid-column:1/-1}
+.customer-app .inventory-toolbar .catalogue-sort select{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
 .customer-app .inventory-toolbar button{grid-column:1/-1}
 .customer-app .metric-card{padding:14px}
 .customer-app .metric-card strong{font-size:clamp(20px,5.8vw,27px)}
