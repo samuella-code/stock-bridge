@@ -320,3 +320,11 @@
 .customer-app .daily-revenue{margin:16px 0 0}
 .customer-app .daily-revenue > div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;padding:6px 0;border-bottom:1px solid var(--line)}
 .customer-app .daily-revenue dd{margin:0;overflow-wrap:anywhere}
+
+/* Compact chart dates keep seven labels readable on narrow phones. */
+.customer-app .real-chart small{white-space:nowrap;overflow-wrap:normal}
+.customer-app .real-chart .chart-label-mobile{display:none}
+@media(max-width:600px){
+  .customer-app .real-chart .chart-label-desktop{display:none}
+  .customer-app .real-chart .chart-label-mobile{display:block}
+}

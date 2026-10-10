@@ -86,3 +86,24 @@ def test_chart_dates_preserve_totals_and_heights(as_string):
     assert chart[3] == {'date': day, 'label': 'Sun', 'total': 2300.0, 'height': 100}
     assert sum(row['total'] for row in chart) == 2300
     assert all(row['height'] == 3 for i, row in enumerate(chart) if i != 3)
+
+
+def test_compact_phone_chart_labels_preserve_desktop_and_accessible_dates():
+    html = render(revenue=2300)
+    assert html.count('class="chart-label-desktop"') == 7
+    assert html.count('class="chart-label-mobile"') == 7
+    for day in range(1, 8):
+        assert f'<small class="chart-label-mobile">{day:02d}</small>' in html
+    assert '<small class="chart-label-desktop">Sun</small>' in html
+    assert '<time datetime="2026-10-04">04 Oct 2026</time></dt><dd>₦2,300.00</dd>' in html
+    assert '<div class="empty-chart" aria-hidden="true">' in html
+
+
+def test_chart_label_css_scopes_phone_switch_and_prevents_wrapping():
+    css = (ROOT / 'app/static/css/customer.css').read_text()
+    assert '.customer-app .real-chart small{white-space:nowrap;overflow-wrap:normal}' in css
+    assert '.customer-app .real-chart .chart-label-mobile{display:none}' in css
+    assert """@media(max-width:600px){
+  .customer-app .real-chart .chart-label-desktop{display:none}
+  .customer-app .real-chart .chart-label-mobile{display:block}
+}""" in css
