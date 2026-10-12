@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from app import db
 from app.models import Product, Sale, SaleItem, StockMovement
 from app.admin.routes import log
-from app.transaction_submissions import issue_token, validate_token, claim, complete, SubmissionError, SubmissionConflict
+from app.transaction_submissions import issue_token, validate_token, claim, complete, SubmissionError, SubmissionConflict, SubmissionIncomplete
 
 sales_bp = Blueprint("sales", __name__, url_prefix="/sales")
 PAYMENT_METHODS = ("Cash", "Bank Transfer", "POS", "Other")
@@ -78,6 +78,10 @@ def index():
                   'date': request.form.get('sold_at', '') or None, 'note': note}
         try:
             receipt, replay = claim(token, current_user.id, b.id, 'sale', intent)
+        except SubmissionIncomplete:
+            db.session.rollback()
+            flash('This submission has no confirmed completed result. Check sales history before submitting again.', 'error')
+            return show_form(409)
         except SubmissionConflict:
             db.session.rollback()
             flash('This submission was already used with different contents. Check sales history.', 'error')

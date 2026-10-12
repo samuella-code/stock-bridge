@@ -7,7 +7,7 @@ from sqlalchemy import func
 from app import db
 from app.models import Expense
 from app.admin.routes import log
-from app.transaction_submissions import issue_token, claim, complete, SubmissionError, SubmissionConflict
+from app.transaction_submissions import issue_token, claim, complete, SubmissionError, SubmissionConflict, SubmissionIncomplete
 
 expenses_bp = Blueprint("expenses", __name__, url_prefix="/expenses")
 CATEGORIES = ("Transportation", "Electricity", "Rent", "Packaging", "Wages",
@@ -53,6 +53,14 @@ def index():
             log("EXPENSE_CREATED", f"Expense {row.id} created.", actor=current_user, business_id=b.id)
             complete(receipt, f"expense:{row.id}")
             db.session.commit()
+        except SubmissionIncomplete:
+            db.session.rollback()
+            flash("This submission has no confirmed completed result. Check expense history before submitting again.", "error")
+            return _expense_form(b, token, 409)
+        except SubmissionConflict:
+            db.session.rollback()
+            flash("This submission was already used with different contents, or its original expense is unavailable. Check expense history.", "error")
+            return _expense_form(b, token, 409)
         except SubmissionError as error:
             db.session.rollback()
             flash("Submission could not be accepted. Check expense history before refreshing the form or submitting again.", "error")

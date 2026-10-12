@@ -8,7 +8,7 @@ from sqlalchemy import func, update
 from app import db
 from app.models import Product, Sale, SaleItem, StockMovement, Restock
 from app.admin.routes import log
-from app.transaction_submissions import issue_token, validate_token, claim, complete, SubmissionError, SubmissionConflict
+from app.transaction_submissions import issue_token, validate_token, claim, complete, SubmissionError, SubmissionConflict, SubmissionIncomplete
 
 restocking_bp = Blueprint("restocking", __name__, url_prefix="/restocking")
 
@@ -129,6 +129,10 @@ def receive():
             return redirect(url_for('restocking.index'))
         products = {p.id: p for p in Product.query.filter(Product.business_id == b.id,
             Product.active.is_(True), Product.id.in_(seen)).order_by(Product.id).with_for_update().populate_existing().all()}
+    except SubmissionIncomplete:
+        db.session.rollback()
+        flash('This submission has no confirmed completed result. Check restocking history before submitting again.', 'error')
+        return show_form(409)
     except SubmissionConflict:
         db.session.rollback()
         flash('This submission was already used with different contents. Check restocking history.', 'error')

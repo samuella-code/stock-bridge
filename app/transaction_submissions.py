@@ -24,6 +24,11 @@ class SubmissionConflict(SubmissionError):
     pass
 
 
+class SubmissionIncomplete(SubmissionConflict):
+    """An existing receipt has no committed result; never apply mutations."""
+    pass
+
+
 def scope(user_id, business_id, operation):
     if type(user_id) is not int or type(business_id) is not int or operation not in OPERATIONS:
         raise SubmissionError('Invalid submission scope.')
@@ -80,15 +85,18 @@ def claim(token, user_id, business_id, operation, payload):
         raise SubmissionError('Unsupported submission database.')
     statement = insert(TransactionSubmission).values(**binding, payload_hash=digest, created_at=datetime.utcnow())
     statement = statement.on_conflict_do_nothing(index_elements=['business_id', 'user_id', 'operation', 'key'])
-    result = db.session.execute(statement)
+    inserted_id = db.session.execute(
+        statement.returning(TransactionSubmission.id)).scalar_one_or_none()
     receipt = TransactionSubmission.query.filter_by(**binding).populate_existing().one()
     if receipt.payload_hash != digest:
         raise SubmissionConflict('Submission key was already used with different contents.')
-    if result.rowcount == 1:
+    if inserted_id is not None:
+        if inserted_id != receipt.id:
+            raise SubmissionError('Inserted submission identity mismatch.')
         db.session.info.setdefault(TRACKING, set()).add(receipt.id)
         return receipt, False
     if receipt.completed_at is None or not receipt.result_reference:
-        raise SubmissionConflict('Submission has no completed result; manual review required.')
+        raise SubmissionIncomplete('Submission has no completed result; manual review required.')
     return receipt, True
 
 

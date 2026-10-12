@@ -145,3 +145,82 @@ def test_additive_migration_schema_compiles_for_postgresql():
     sql = str(CreateTable(captured[0]).compile(dialect=postgresql.dialect()))
     assert 'uq_transaction_submission_scope' in sql and 'FOREIGN KEY' in sql
     with pytest.raises(RuntimeError): migration.downgrade()
+
+
+@pytest.mark.parametrize('operation', ['sale', 'restock', 'expense'])
+def test_insert_returning_ignores_unknown_rowcount(client, monkeypatch, operation):
+    uid, bid = context(client)
+    token = issue_token(uid, bid, operation)
+    session = db.session()
+    execute = session.execute
+
+    class UnknownRowcount:
+        @property
+        def rowcount(self):
+            raise AssertionError('INSERT rowcount must not determine claim ownership')
+
+        def __init__(self, result):
+            self.result = result
+
+        def scalar_one_or_none(self):
+            return self.result.scalar_one_or_none()
+
+    def wrapped(statement, *args, **kwargs):
+        result = execute(statement, *args, **kwargs)
+        if getattr(statement, 'is_insert', False):
+            assert statement._returning
+            return UnknownRowcount(result)
+        return result
+
+    monkeypatch.setattr(session, 'execute', wrapped)
+    receipt, replay = claim(token, uid, bid, operation, {'quantity': 1})
+    assert not replay
+    complete(receipt, 'original:1')
+    db.session.commit()
+    receipt, replay = claim(token, uid, bid, operation, {'quantity': 1})
+    assert replay and receipt.result_reference == 'original:1'
+    db.session.rollback()
+    with pytest.raises(SubmissionConflict):
+        claim(token, uid, bid, operation, {'quantity': 2})
+    db.session.rollback()
+
+
+def test_incomplete_receipt_has_distinct_classification(client):
+    from app.transaction_submissions import SubmissionIncomplete, payload_hash
+    uid, bid = context(client)
+    token = issue_token(uid, bid, 'expense')
+    binding = validate_token(token, uid, bid, 'expense')
+    # Synthetic pre-existing incomplete receipt, not a normal application commit.
+    db.session.add(TransactionSubmission(**binding, payload_hash=payload_hash({'amount': '1'})))
+    db.session.commit()
+    with pytest.raises(SubmissionIncomplete):
+        claim(token, uid, bid, 'expense', {'amount': '1'})
+    db.session.rollback()
+    with pytest.raises(SubmissionConflict) as caught:
+        claim(token, uid, bid, 'expense', {'amount': '2'})
+    assert not isinstance(caught.value, SubmissionIncomplete)
+    db.session.rollback()
+
+
+@pytest.mark.parametrize('operation,path,module', [
+    ('sale', '/sales/', 'app.sales.routes'),
+    ('restock', '/restocking/receive', 'app.restocking.routes'),
+    ('expense', '/expenses/', 'app.expenses.routes'),
+])
+def test_incomplete_claim_is_not_reported_as_changed_payload(client, operation, path, module):
+    from app.transaction_submissions import SubmissionIncomplete
+    from app.models import Sale, Restock, Expense, StockMovement
+    uid, bid = context(client)
+    pid = add(client, 'Synthetic product', 10)
+    data = dict(submission_token=issue_token(uid, bid, operation),
+                product_id=str(pid), quantity='1', unit_price='1.00', unit_cost='1.00',
+                description='Synthetic expense', amount='1.00', category='Transportation')
+    with patch(module + '.claim', side_effect=SubmissionIncomplete('Incomplete receipt')):
+        response = client.post(path, data=data)
+    assert response.status_code == 409
+    assert b'no confirmed completed result' in response.data
+    assert b'already used with different contents' not in response.data
+    assert Sale.query.count() == Restock.query.count() == Expense.query.count() == 0
+    assert TransactionSubmission.query.count() == 0
+    assert StockMovement.query.filter(StockMovement.kind != 'opening').count() == 0
+    assert db.session.get(Product, pid).stock_quantity == 10
