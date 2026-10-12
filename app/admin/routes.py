@@ -6,7 +6,7 @@ from datetime import date, datetime, time as dt_time, timedelta
 from functools import wraps
 from flask import Blueprint, abort, current_app, flash, has_request_context, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_user, logout_user
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, func, or_, update
 from sqlalchemy.orm import joinedload, selectinload
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
@@ -311,6 +311,47 @@ def user_detail(user_id):
         AuditLog.business_id==business.id if business else False)).order_by(AuditLog.created_at.desc()).limit(10).all()
     return render_template("admin/user_detail.html",user=user,business=business,metrics=metrics,payments=payments,activity=activity)
 
+def change_suspension(record, *, target_type, description, business_id):
+    """Compare and set status in the same transaction as its audit event.
+
+    PostgreSQL rechecks the UPDATE predicate after a competing writer commits.
+    Only the winner can create an audit event or send a notification.
+    """
+    desired = request.form.get("desired_state")
+    expected = request.form.get("expected_state")
+    if desired not in {"suspend", "reactivate"} or expected not in {"active", "suspended"}:
+        abort(400, description="Invalid status request. Refresh this page.")
+    if (desired == "suspend") != (expected == "active"):
+        abort(409, description="Status request conflicts. Refresh this page.")
+    model = type(record)
+    predicate = model.suspended_at.is_(None)
+    if expected == "suspended":
+        try:
+            stamp = datetime.fromisoformat(request.form.get("expected_suspended_at", ""))
+        except ValueError:
+            abort(400, description="Invalid status request. Refresh this page.")
+        predicate = model.suspended_at == stamp
+    reason = request.form.get("reason", "").strip()
+    if len(reason) > 300:
+        abort(400, description="Use a reason of at most 300 characters.")
+    try:
+        claimed = db.session.execute(update(model).where(model.id == record.id, predicate)
+            .values(suspended_at=datetime.utcnow() if desired == "suspend" else None)
+            .returning(model.id), execution_options={"synchronize_session": False}).scalar_one_or_none()
+        if claimed is None:
+            db.session.rollback()
+            abort(409, description="Status changed or request already applied. Refresh this page.")
+        action = target_type.upper() + ("_SUSPENDED" if desired == "suspend" else "_REACTIVATED")
+        log(action, description + reason, actor=current_user, business_id=business_id,
+            target_type=target_type, target_id=record.id)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+    db.session.refresh(record)
+    return desired == "reactivate"
+
+
 @admin_bp.post("/users/<int:user_id>/suspension")
 @admin_required
 def suspend_user(user_id):
@@ -324,13 +365,9 @@ def suspend_user(user_id):
     if not reason:
         flash("Enter a reason for this action.","error")
         return redirect(url_for("admin.user_detail",user_id=user_id))
-    user.suspended_at=None if user.suspended_at else datetime.utcnow()
-    log("USER_REACTIVATED" if user.suspended_at is None else "USER_SUSPENDED",
-        f"Account {user.email}: {reason}",actor=current_user,
-        business_id=user.businesses[0].id if user.businesses else None,
-        target_type="user",target_id=user.id)
-    db.session.commit()
-    safely_send(send_account_status_email,user,active=user.suspended_at is None)
+    active=change_suspension(user, target_type="user", description=f"Account {user.email}: ",
+        business_id=user.businesses[0].id if user.businesses else None)
+    safely_send(send_account_status_email,user,active=active)
     return redirect(url_for("admin.user_detail",user_id=user_id))
 
 @admin_bp.get("/businesses")
@@ -369,12 +406,8 @@ def suspend_business(business_id):
     if not reason:
         flash("Enter a reason for this action.","error")
         return redirect(url_for("admin.business_detail",business_id=b.id))
-    b.suspended_at=None if b.suspended_at else datetime.utcnow()
-    log("BUSINESS_REACTIVATED" if b.suspended_at is None else "BUSINESS_SUSPENDED",
-        f"Business {b.id}: {reason}",actor=current_user,business_id=b.id,
-        target_type="business",target_id=b.id)
-    db.session.commit()
-    safely_send(send_account_status_email,b.owner,active=b.suspended_at is None,business=b)
+    active=change_suspension(b, target_type="business", description=f"Business {b.id}: ", business_id=b.id)
+    safely_send(send_account_status_email,b.owner,active=active,business=b)
     return redirect(url_for("admin.business_detail",business_id=b.id))
 
 @admin_bp.get("/payments")

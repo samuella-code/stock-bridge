@@ -170,7 +170,7 @@ def test_normal_user_cannot_self_promote_or_access_admin_api(client):
 def test_suspension_is_audited_and_blocks_business_features(client):
     _,user_id,bid=seed(client)
     admin_login(client)
-    response=client.post(f"/admin/users/{user_id}/suspension",data={"reason":"Fraud review","confirm":"on"})
+    response=client.post(f"/admin/users/{user_id}/suspension",data={"reason":"Fraud review","confirm":"on","desired_state":"suspend","expected_state":"active"})
     assert response.status_code==302
     with client.application.app_context():
         assert db.session.get(User,user_id).suspended_at is not None
@@ -179,10 +179,12 @@ def test_suspension_is_audited_and_blocks_business_features(client):
     login=client.post("/auth/login",data={"email":"owner@example.com","password":"customer-password123"})
     assert login.status_code==403
     admin_login(client)
-    client.post(f"/admin/users/{user_id}/suspension",data={"reason":"Review complete","confirm":"on"})
-    client.post(f"/admin/businesses/{bid}/suspension",data={"reason":"Compliance check","confirm":"on"})
+    with client.application.app_context():
+        stamp=db.session.get(User,user_id).suspended_at.isoformat()
+    client.post(f"/admin/users/{user_id}/suspension",data={"reason":"Review complete","confirm":"on","desired_state":"reactivate","expected_state":"suspended","expected_suspended_at":stamp})
+    client.post(f"/admin/businesses/{bid}/suspension",data={"reason":"Compliance check","confirm":"on","desired_state":"suspend","expected_state":"active"})
     client.post("/admin/logout")
-    assert client.post("/auth/login",data={"email":"owner@example.com","password":"customer-password123"}).status_code==403
+    assert client.post("/auth/login",data={"email":"owner@example.com","password":"customer-password123"}).status_code==302
     # Already signed-in users are blocked on their next protected request.
     with client.application.app_context():
         db.session.get(Business,bid).suspended_at=None
@@ -191,7 +193,7 @@ def test_suspension_is_audited_and_blocks_business_features(client):
     with client.application.app_context():
         db.session.get(Business,bid).suspended_at=datetime.utcnow()
         db.session.commit()
-    assert client.get("/products/").status_code==403
+    assert client.get("/products/").headers["Location"].endswith("/businesses/")
 
 def test_admin_login_throttle_and_no_secret_leaks(client):
     seed(client)

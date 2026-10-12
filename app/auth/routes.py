@@ -88,7 +88,7 @@ def login():
             flash("Email or password is incorrect.", "error")
             return render_template("auth/login.html")
 
-        if user.role != "user" or user.suspended_at or any(b.suspended_at for b in user.businesses):
+        if user.role != "user" or user.suspended_at:
             flash("This account cannot sign in here. Contact support if access is suspended.", "error")
             return render_template("auth/login.html"), 403
         session.pop("admin_session", None)

@@ -98,7 +98,7 @@ def create_app(test_config=None):
                     return redirect(url_for("admin.index" if session.get("admin_session") else "admin.login"))
                 if request.blueprint not in {"admin", "admin_api"} and request.endpoint not in {"health", "static", "auth.logout"}:
                     abort(403)
-            elif current_user.suspended_at or any(b.suspended_at for b in current_user.businesses):
+            elif current_user.suspended_at:
                 if request.endpoint not in {"auth.logout", "static"} and not (request.endpoint in {"admin.login", "admin.forgot_password", "admin.reset_password"} and current_user.admin_enabled and not current_user.suspended_at):
                     return render_template("admin/suspended.html"), 403
         verified_areas = {"main", "products", "sales", "expenses", "restocking", "profile", "businesses", "notifications"}
