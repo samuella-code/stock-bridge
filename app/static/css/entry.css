@@ -82,3 +82,10 @@
 .auth-product-demo .demo-table>div{padding-top:12px;padding-bottom:12px}
 @media(max-width:768px){.journey-preview [data-journey-panel],.journey-preview .marketing-preview{height:450px;min-height:450px}.auth-product-demo .demo-table>div{padding-top:8px;padding-bottom:8px}}
 @media(max-width:430px){.entry-hero h1{font-size:34px}}
+
+/* Keep the connection above both example businesses at every viewport. */
+.business-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;min-width:0}
+.business-pair>.pair-connection{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr);align-items:center;gap:16px;border:0;padding:0;color:#285534}
+.pair-connection>span{height:2px;background:#aac990}
+.pair-connection svg{display:block;width:24px;height:24px}
+.business-pair>div:not(.pair-connection){border:0;padding:0;min-width:0;overflow-wrap:anywhere}

@@ -32,3 +32,9 @@ def subscriptions():
 @legal_bp.get("/contact")
 def contact():
     return page("contact")
+
+
+@legal_bp.get("/help")
+def help_centre():
+    """Public, read-only guides; no business lookup or transaction action."""
+    return render_template("help/index.html")

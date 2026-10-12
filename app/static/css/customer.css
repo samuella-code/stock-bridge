@@ -331,3 +331,7 @@
   .customer-app .real-chart .chart-label-desktop{display:none}
   .customer-app .real-chart .chart-label-mobile{display:block}
 }
+
+.sb-icon{display:inline-block;vertical-align:middle;flex:none;width:20px;height:20px}
+.nav-icon{display:inline-flex;align-items:center;justify-content:center;flex:none}
+.setup-mark{display:inline-flex;align-items:center;justify-content:center}

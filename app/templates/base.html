@@ -15,11 +15,11 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/billing.css') }}">
 <link rel="stylesheet" href="{{url_for('static',filename='css/catalogue.css',v='catalogue-20260930')}}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/businesses.css') }}">
-{% if current_user.is_authenticated %}<link rel="stylesheet" href="{{ url_for('static', filename='css/customer.css', v='responsive-22460dd-2') }}"><link rel="stylesheet" href="{{ url_for('static', filename='css/activity.css', v='activity-10') }}">{% endif %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/entry.css', v='entry-7.3') }}">
+{% if current_user.is_authenticated %}<link rel="stylesheet" href="{{ url_for('static', filename='css/customer.css', v='phase7-icons-1') }}"><link rel="stylesheet" href="{{ url_for('static', filename='css/activity.css', v='activity-10') }}">{% endif %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/entry.css', v='entry-phase7-1') }}">
 {% block extra_styles %}{% endblock %}
 </head>
-{% from 'components/business_avatar.html' import business_avatar %}
+{% from 'components/business_avatar.html' import business_avatar %}{% from 'components/icons.html' import icon %}
 <body{% if current_user.is_authenticated %} class="customer-app"{% endif %}>
     {% if current_user.is_authenticated %}<a class="skip-link" href="#main-content">Skip to content</a>{% endif %}
     <div class="app-shell">
@@ -50,6 +50,7 @@
                 {{ nav_link('My Businesses', url_for('businesses.index'), request.blueprint == 'businesses', '◫') }}
                 {{ nav_link('Billing & Plan', url_for('subscriptions.index'), request.blueprint == 'subscriptions' or request.blueprint == 'payments', '◇') }}
                 {{ nav_link('Profile & settings', url_for('profile.index'), request.blueprint == 'profile', '○') }}
+                {{ nav_link('Help Centre', url_for('legal.help_centre'), request.endpoint == 'legal.help_centre', 'help') }}
             </nav>
 
             <div class="sidebar-footer">
@@ -71,7 +72,7 @@
         <main id="main-content" tabindex="-1" class="main-panel {% if not current_user.is_authenticated %}auth-panel{% endif %}">
             {% if current_user.is_authenticated %}
             <header class="topbar">
-                <button class="menu-btn" id="menuButton" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">☰</button>
+                <button class="menu-btn" id="menuButton" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">{{ icon('menu') }}</button>
                 <div class="topbar-copy">
                     <h1>{% block page_title %}Dashboard{% endblock %}</h1>
                 </div>
@@ -79,11 +80,11 @@
                     {% if business_selection_required|default(false) %}
                     <a class="active-business-label needs-choice" href="{{ url_for('businesses.index') }}">Choose your active business</a>
                     {% elif config.SUBSCRIPTIONS_ENABLED and business_switch_ids|default([])|length > 1 %}
-                    <details class="business-switcher"><summary aria-label="Active business: {{ subscription_business.name }}. Switch business"><span class="business-caption">Working in</span><strong>{{ business_avatar(subscription_business) }} {{ subscription_business.name }}</strong><span aria-hidden="true">⌄</span></summary>
+                    <details class="business-switcher"><summary aria-label="Active business: {{ subscription_business.name }}. Switch business"><span class="business-caption">Working in</span><strong>{{ business_avatar(subscription_business) }} {{ subscription_business.name }}</strong><span aria-hidden="true">{{ icon('down') }}</span></summary>
                         <div class="business-dropdown">
                             <p class="dropdown-caption">Switch business</p>
                             {% for choice in business_choices %}{% if choice.id in business_switch_ids %}
-                            <form method="POST" action="{{ url_for('businesses.switch', business_id=choice.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" {% if subscription_business.id == choice.id %}aria-current="true"{% endif %}><span aria-hidden="true">{{ '✓' if subscription_business.id == choice.id else '◦' }}</span> {{ choice.name }}</button></form>
+                            <form method="POST" action="{{ url_for('businesses.switch', business_id=choice.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" {% if subscription_business.id == choice.id %}aria-current="true"{% endif %}><span aria-hidden="true">{{ icon('check' if subscription_business.id == choice.id else 'circle') }}</span> {{ choice.name }}</button></form>
                             {% endif %}{% endfor %}
                             <a href="{{ url_for('businesses.index') }}">Manage Businesses</a>
                             {% if business_can_add %}<a href="{{ url_for('businesses.create') }}">Add Business</a>{% endif %}
@@ -122,7 +123,7 @@
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 {% if current_user.is_authenticated %}<form hidden data-email-dispatch action="{{ url_for('notifications.email_dispatch') }}"><input name="csrf_token" value="{{ csrf_token() }}"></form><script src="{{ url_for('static', filename='js/activity.js') }}" defer></script><script src="{{ url_for('static', filename='js/business-image.js') }}" defer></script>{% endif %}
-{% if current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/customer.js', v='responsive-22460dd-2') }}" defer></script>{% endif %}
+{% if current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/customer.js', v='phase7-icons-1') }}" defer></script>{% endif %}
 {% if current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/onboarding.js', v='guidance-6.1') }}" defer></script>{% endif %}
 {% if not current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/public.js', v='entry-7') }}" defer></script>{% endif %}
 {% block scripts %}{% endblock %}

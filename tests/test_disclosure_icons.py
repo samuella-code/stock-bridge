@@ -22,6 +22,7 @@ def test_faq_and_sales_help_use_css_triangles_not_font_glyphs():
 
 def test_sales_help_preserves_native_disclosure_and_accessible_text():
     env = Environment(loader=FileSystemLoader(ROOT / 'app/templates'), autoescape=True)
+    env.globals['url_for'] = lambda endpoint: '/help'
     html = env.from_string("{% from 'components/ui.html' import help_panel %}{% call help_panel('Sales') %}<p>Help</p>{% endcall %}").render()
     assert '<details class="context-help"><summary>Learn about Sales</summary>' in html
     assert '<p>Help</p>' in html

@@ -10,9 +10,9 @@ def test_sidebar_arrows_are_fixed_svg_and_keep_accessible_navigation():
     env = Environment(loader=FileSystemLoader(ROOT / 'app/templates'), autoescape=True)
     for label, href, glyph in [('Sales', '/sales/', '↗'), ('Restocking', '/restocking/', '↻')]:
         html = env.from_string("{% from 'components/ui.html' import nav_link %}{{ nav_link(label, href, true, glyph) }}").render(label=label, href=href, glyph=glyph)
-        assert '<svg width="17" height="17" viewBox="0 0 24 24"' in html
+        assert '<svg class="sb-icon" width="20" height="20" viewBox="0 0 24 24"' in html
         assert 'stroke="currentColor"' in html
-        assert 'focusable="false" aria-hidden="true"' in html
+        assert 'aria-hidden="true" focusable="false"' in html
         assert f'href="{href}"' in html and 'aria-current="page"' in html
         assert f'<span>{label}</span>' in html
         assert glyph not in html

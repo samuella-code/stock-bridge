@@ -1,3 +1,4 @@
+{% from 'components/icons.html' import icon %}
 {% if setup.show_welcome and business.has_write_access %}
 <section class="panel-card setup-welcome" aria-labelledby="setup-welcome-title" data-welcome-key="stockbridge:welcome:v1:{{ current_user.id }}:{{ business.id }}">
   <h3 id="setup-welcome-title">Welcome to StockBridge</h3>
@@ -11,9 +12,9 @@
   <summary>Get started with StockBridge <span>{{ setup.completed }} of 3 setup actions completed</span></summary>
   <p class="muted">Setup for {{ business.name }}. Progress comes from this business’s records, across all dates.</p>
   <ul class="setup-steps">{% for step in setup.steps %}
-    <li data-setup-step="{{ step.key }}" data-complete="{{ 'true' if step.complete else 'false' }}"><span class="setup-mark" aria-hidden="true">{{ '✓' if step.complete else '○' }}</span><div><strong>{{ step.title }}</strong><small>{{ 'Completed' if step.complete else 'Not yet completed' }} · {{ step.description }}</small>{% if not step.complete and business.has_write_access %}<a href="{{ url_for(step.endpoint) }}">{{ step.title }}</a>{% endif %}</div></li>
+    <li data-setup-step="{{ step.key }}" data-complete="{{ 'true' if step.complete else 'false' }}"><span class="setup-mark" aria-hidden="true">{{ icon('check' if step.complete else 'circle') }}</span><div><strong>{{ step.title }}</strong><small>{{ 'Completed' if step.complete else 'Not yet completed' }} · {{ step.description }}</small>{% if not step.complete and business.has_write_access %}<a href="{{ url_for(step.endpoint) }}">{{ step.title }}</a>{% endif %}</div></li>
   {% endfor %}</ul>
-  <p class="setup-report"><a href="{{ url_for('main.reports') }}">Explore your reports</a> — see how sales, product costs and expenses connect.</p>
+  <p class="muted">Record sales and expenses only when they happen in your business. These are recommendations, not a requirement to create practice transactions.</p><p><a href="{{ url_for('products.index', view='inventory') }}">Review your inventory</a> · <a href="{{ url_for('legal.help_centre') }}">Open the Help Centre</a></p><p class="setup-report"><a href="{{ url_for('main.reports') }}">Explore your reports</a> — see how sales, product costs and expenses connect.</p>
   {% if not business.has_write_access %}<p>Your records are available to view. <a href="{{ url_for('subscriptions.index') }}">View plans</a> to record new activity.</p>{% endif %}
 </details>
 {% endif %}

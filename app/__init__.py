@@ -109,7 +109,10 @@ def create_app(test_config=None):
             if not current_user.email_verified_at:
                 flash("Verify your email to access StockBridge.", "warning")
                 return redirect(url_for("auth.verification_pending"))
-        if app.config.get("SUBSCRIPTIONS_ENABLED") and current_user.is_authenticated and current_user.email_verified_at:
+        # Public Help Centre must not start or commit an automatic trial.
+        if (request.endpoint != "legal.help_centre"
+                and app.config.get("SUBSCRIPTIONS_ENABLED")
+                and current_user.is_authenticated and current_user.email_verified_at):
             from app.subscriptions.entitlements import start_trial
             if start_trial(current_user):
                 db.session.commit()
