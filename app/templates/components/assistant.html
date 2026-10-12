@@ -1,0 +1,16 @@
+{% from 'components/icons.html' import icon %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/assistant.css', v='assistant-1') }}">
+<div class="sb-assistant" data-assistant hidden>
+  <button type="button" class="sb-assistant-launcher" aria-controls="sb-assistant-panel" aria-expanded="false" aria-label="Open StockBridge Assistant">{{ icon('help') }} <span>Help</span></button>
+  <section id="sb-assistant-panel" class="sb-assistant-panel" role="region" aria-labelledby="sb-assistant-title" hidden>
+    <header><div><h2 id="sb-assistant-title">StockBridge Assistant</h2><p>Automated guided help</p></div><div class="sb-assistant-controls"><button type="button" data-assistant-minimize aria-label="Minimize assistant">−</button><button type="button" data-assistant-close aria-label="Close assistant">×</button></div></header>
+    <p class="sb-assistant-disclosure">Predefined answers, not generative AI. Please do not share passwords, payment details or private business information.</p>
+    <div class="sb-assistant-history" tabindex="0" aria-label="Conversation"></div>
+    <div class="sb-assistant-suggestions" aria-label="Suggested questions"></div>
+    <div class="sb-assistant-compose"><label for="sb-assistant-question">Ask about StockBridge</label><div><input id="sb-assistant-question" type="text" maxlength="300" autocomplete="off" placeholder="How do I record a sale?"><button type="button" data-assistant-send>Send</button></div></div>
+    <footer><button type="button" data-assistant-clear>Clear conversation</button><a href="{{ url_for('legal.help_centre') }}">Help Centre</a></footer>
+    <span class="sb-assistant-status" role="status" aria-live="polite" aria-atomic="true"></span>
+  </section>
+  <script type="application/json" data-assistant-config>{{ {'subscriptions': config.SUBSCRIPTIONS_ENABLED|default(false), 'provider': config.BILLING_PROVIDER_ENABLED|default(false), 'scope': 'customer' if current_user.is_authenticated else 'public', 'links': {'help': url_for('legal.help_centre'), 'signup': url_for('auth.signup'), 'login': url_for('auth.login'), 'verify': url_for('auth.verification_pending'), 'reset': url_for('auth.forgot_password'), 'plans': url_for('subscriptions.index'), 'products': url_for('products.index'), 'inventory': url_for('products.index', view='inventory'), 'sales': url_for('sales.index'), 'restocking': url_for('restocking.index'), 'expenses': url_for('expenses.index'), 'reports': url_for('main.reports'), 'dashboard': url_for('main.dashboard'), 'businesses': url_for('businesses.index'), 'notifications': url_for('notifications.index')}}|tojson }}</script>
+</div>
+<script src="{{ url_for('static', filename='js/assistant.js', v='assistant-1') }}" defer></script>

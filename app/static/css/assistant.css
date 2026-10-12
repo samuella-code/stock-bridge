@@ -1,0 +1,31 @@
+/* Isolated guided-help presentation; never changes business form controls. */
+.sb-assistant{position:fixed;right:max(12px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom));z-index:18;font:14px/1.5 Arial,sans-serif;color:#173d35}
+.sb-assistant [hidden],.sb-assistant[hidden]{display:none!important}
+.sb-assistant *{box-sizing:border-box}
+.sb-assistant button,.sb-assistant a,.sb-assistant input{font:inherit}
+.sb-assistant button{min-height:44px;border:1px solid #b9cec5;border-radius:9px;background:#fff;color:#173d35;padding:8px 12px;cursor:pointer}
+.sb-assistant a{color:#155c47;text-decoration:underline;min-height:44px;display:inline-flex;align-items:center}
+.sb-assistant :focus-visible{outline:3px solid #19846b;outline-offset:3px}
+.sb-assistant .sb-assistant-launcher{display:flex;align-items:center;gap:8px;background:#173d35;color:#fff;border:0;box-shadow:0 4px 16px #173d3526}
+.sb-assistant-panel{width:min(380px,calc(100vw - 24px));max-height:min(650px,calc(var(--assistant-viewport-height,100dvh) - 24px));display:flex;flex-direction:column;background:#fff;border:1px solid #b9cec5;border-radius:14px;box-shadow:0 8px 30px #173d3526;overflow:hidden}
+.sb-assistant-panel header{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:12px;background:#edf5ef;flex:none}
+.sb-assistant h2{font:700 17px/1.3 Arial,sans-serif;margin:0;color:#173d35}
+.sb-assistant header p{margin:2px 0;font-size:12px}
+.sb-assistant-controls{display:flex;gap:4px}.sb-assistant-controls button{width:44px;padding:0;font-size:22px}
+.sb-assistant-disclosure{margin:0;padding:8px 12px;font-size:12px;flex:none}
+.sb-assistant-history{min-height:60px;overflow-y:auto;padding:0 12px;overscroll-behavior:contain;flex:1}
+.sb-assistant-message{padding:10px;border-radius:10px;background:#f0f6f2;margin:8px 0;overflow-wrap:anywhere}
+.sb-assistant-message p{margin:0}.sb-assistant-message[data-speaker=user]{background:#e3eee9;margin-left:20px}
+.sb-assistant-suggestions{display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;max-height:110px;overflow:auto;flex:none}
+.sb-assistant-suggestions button{font-size:12px;text-align:left}
+.sb-assistant-compose{padding:8px 12px;flex:none}.sb-assistant-compose label{display:block;font-weight:700;margin-bottom:4px}
+.sb-assistant-compose>div{display:flex;gap:6px}.sb-assistant-compose input{min-width:0;width:100%;min-height:44px;border:1px solid #b9cec5;border-radius:8px;padding:8px;font-size:16px}
+.sb-assistant-panel footer{display:flex;justify-content:space-between;gap:8px;padding:0 12px 8px;flex:none}
+.sb-assistant-status{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%)}
+body.navigation-open .sb-assistant{visibility:hidden}
+body.sb-assistant-enabled{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
+@media(max-width:600px){.sb-assistant-panel{width:calc(100vw - 24px)}.sb-assistant[data-field-focus] .sb-assistant-launcher{display:none}}
+@media(prefers-reduced-motion:reduce){.sb-assistant *{scroll-behavior:auto;animation:none;transition:none}}
+
+.sb-assistant[data-compact-height] .sb-assistant-suggestions,.sb-assistant[data-compact-height] .sb-assistant-disclosure{display:none}
+.sb-assistant[data-compact-height] .sb-assistant-history{min-height:0}
