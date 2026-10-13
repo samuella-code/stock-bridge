@@ -33,7 +33,7 @@ def product_data(form, editing=False):
                 raise ValueError
             data[field] = value
         except (InvalidOperation, ValueError):
-            errors.append(f"{field.replace('_',' ').title()} must be a valid amount with at most two decimal places.")
+            errors.append(f"{'Cost Price' if field == 'buying_price' else 'Selling Price'} must be a valid non-negative amount with at most two decimal places.")
     fields = [('minimum_stock_level',0),('supplier_lead_time',2),('safety_stock',0)]
     if not editing:
         fields.append(('stock_quantity',0))
@@ -44,7 +44,7 @@ def product_data(form, editing=False):
                 raise ValueError
             data[field] = value
         except (ValueError, TypeError):
-            errors.append(f"{field.replace('_',' ').title()} must be a whole number from 0 to 2147483647.")
+            errors.append(f"{'Opening Quantity' if field == 'stock_quantity' else field.replace('_',' ').title()} must be a non-negative whole number within the supported range.")
     return data, errors
 
 def duplicate_errors(bid, data, excluding=None):
@@ -192,9 +192,21 @@ def grid_to_rows(grid):
     # Backward compatibility: discard this optional column from older templates.
     # Never validate, save or overwrite retained legacy identifier values.
     lookup['barcode'] = None
+    lookup.update({'product':'name', 'item name':'name', 'quantity':'stock_quantity',
+                   'buying price':'buying_price'})
+    from itertools import chain
+    headerless = len(headers) == 1 and headers[0].lower() not in lookup
+    if headerless:
+        if headers[0].lower() in {'price', 'cost', 'name', 'qty', 'item'}:
+            raise ValueError('Ambiguous column heading. Use Product Name, Opening Quantity, Cost Price or Selling Price.')
+        iterator = chain([headers], iterator)
+        headers = ['Product Name']
     if not headers or len(set(h.lower() for h in headers)) != len(headers) or any(h.lower() not in lookup for h in headers):
         raise ValueError('Use the StockBridge template column names; duplicate or unknown headers are not allowed.')
     fields = [lookup[h.lower()] for h in headers]
+    mapped = [field for field in fields if field is not None]
+    if len(mapped) != len(set(mapped)):
+        raise ValueError('Multiple headings map to the same field. Use one column per product field.')
     if 'name' not in fields:
         raise ValueError('The Product Name column is required.')
     rows = []
@@ -207,7 +219,7 @@ def grid_to_rows(grid):
             continue
         if len(cells) > len(fields) and any(str(v or '').strip() for v in cells[len(fields):]):
             raise ValueError('A row has extra columns. Check the template and CSV separators.')
-        raw = {'_row': physical_rows + 1}
+        raw = {'_row': physical_rows if headerless else physical_rows + 1}
         for field, value in zip(fields, cells):
             if field is None:
                 continue
@@ -221,3 +233,32 @@ def grid_to_rows(grid):
     if not rows:
         raise ValueError('No products found. Fill in the template before uploading.')
     return rows
+
+
+def preview_details(rows, issues, matches):
+    """Presentation metadata only; signed raw intent and validation stay authoritative."""
+    errors_by_row = {item['row']: item['errors'] for item in issues}
+    details = []
+    counts = {'Ready': 0, 'Needs Review': 0, 'Invalid': 0}
+    for index, raw in enumerate(rows):
+        data, _ = product_data(raw)
+        row_errors = errors_by_row.get(raw.get('_row', index + 2), [])
+        defaults = {field: data.get(field, '') for field in HEADERS.values()
+                    if raw.get(field) is None or str(raw.get(field)).strip() == ''}
+        warnings = []
+        if data.get('stock_quantity') == 0:
+            warnings.append('Opening Quantity is zero. This product starts with no stock.')
+        if data.get('selling_price') == 0:
+            warnings.append('Selling Price is zero. Review before importing.')
+        if matches[index]:
+            warnings.append('Choose explicitly how to handle the possible existing product.')
+        state = 'Invalid' if row_errors else ('Needs Review' if warnings else 'Ready')
+        counts[state] += 1
+        field_errors = {}
+        for label, field in HEADERS.items():
+            field_errors[field] = [error for error in row_errors
+                if error.lower().startswith(label.lower()) or
+                (field == 'sku' and 'SKU' in error)]
+        details.append({'state':state, 'defaults':defaults, 'warnings':warnings,
+                        'errors':field_errors, 'row_errors':row_errors})
+    return {'row_details':details, 'state_counts':counts}

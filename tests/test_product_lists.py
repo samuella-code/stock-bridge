@@ -112,9 +112,9 @@ def test_existing_name_create_as_new_and_sku_conflict(client):
     client.post('/products/new',data={'name':'Milk','sku':'MILK'})
     response=paste(client,'Product Name\tSKU\nMilk\tMILK')
     assert b'Duplicate SKU' in response.data
-    failed=edit(client,response,[{'name':'Milk','sku':'milk'}])
+    failed=edit(client,response,[{'name':'Milk','sku':'milk','action':'new'}])
     assert failed.status_code==400 and Product.query.count()==1
-    assert edit(client,failed,[{'name':'Milk','sku':'NEW'}]).status_code==302
+    assert edit(client,failed,[{'name':'Milk','sku':'NEW','action':'new'}]).status_code==302
     assert Product.query.count()==2
 
 

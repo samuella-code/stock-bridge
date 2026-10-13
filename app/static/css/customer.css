@@ -335,3 +335,11 @@
 .sb-icon{display:inline-block;vertical-align:middle;flex:none;width:20px;height:20px}
 .nav-icon{display:inline-flex;align-items:center;justify-content:center;flex:none}
 .setup-mark{display:inline-flex;align-items:center;justify-content:center}
+
+.import-methods{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem}
+.import-methods>label{display:inline-flex;align-items:center;min-height:44px;padding:.7rem;cursor:pointer}
+.import-methods>.import-method-panel{display:none;width:100%;min-width:0}
+#import-spreadsheet:checked~.spreadsheet-panel,#import-paste:checked~.paste-panel,#import-text:checked~.text-panel{display:flex;flex-direction:column}
+.import-methods>input:focus-visible+label{outline:3px solid #18734c;outline-offset:2px}
+.import-field-error{color:#9b2525;font-size:.9rem}
+.import-row-state{font-weight:700}

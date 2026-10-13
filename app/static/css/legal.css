@@ -6,3 +6,9 @@
 @media(max-width:480px){.policy-header{padding:18px 16px;gap:16px}.policy-account-nav{gap:12px;font-size:.85rem}.legal-public .primary-btn{padding:10px 12px;min-height:44px}.legal-public .entry-brand{font-size:1rem}.legal-public .policy-article{padding:24px 18px}.legal-public .policy-draft{padding:18px}.policy-navigation .policy-links a{font-size:.85rem;padding:10px 12px}.support-categories{grid-template-columns:1fr}.legal-public .policy-page{padding:28px 16px 40px}.policy-footer .policy-links{gap:8px 18px}.policy-account-nav>a:not(.primary-btn){padding:12px 0}.policy-intro h1{font-size:2rem}}
 
 .legal-public .policy-site-nav a,.legal-public .policy-account-nav>a,.legal-public .policy-links a{min-height:44px;display:inline-flex;align-items:center}
+
+/* Help topics stay compact without changing legal policy navigation. */
+.help-public .policy-navigation .policy-links{display:flex;flex-direction:row;flex-wrap:wrap;gap:.5rem;min-width:0}
+.help-public .policy-navigation .policy-links a{display:block;padding:.6rem .8rem;border:1px solid #c9dfd4;border-radius:.6rem;max-width:100%;overflow-wrap:anywhere;text-decoration:none}
+.help-public .policy-navigation .policy-links a:hover{background:#e5f2eb}
+.help-public .policy-navigation .policy-links a:focus-visible{outline:3px solid #18734c;outline-offset:3px}

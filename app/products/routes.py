@@ -259,7 +259,9 @@ def import_template():
     import csv, io
     from app.products.catalogue import HEADERS
     buffer = io.StringIO()
-    csv.writer(buffer).writerow([h + (' *' if h == 'Product Name' else '') for h in HEADERS])
+    writer = csv.writer(buffer)
+    writer.writerow([h + (' *' if h == 'Product Name' else '') for h in HEADERS])
+    writer.writerow(['Example product — replace this row', 'Groceries', 'unit', 10, 100, 150, 2, 'EXAMPLE001', 'Replace this example with your own product.'])
     return send_file(io.BytesIO(buffer.getvalue().encode('utf-8-sig')), mimetype='text/csv',
                      as_attachment=True, download_name='stockbridge-products.csv')
 
@@ -270,7 +272,7 @@ def import_signer():
 @products_bp.route('/import', methods=['GET','POST'])
 @login_required
 def import_products():
-    from app.products.catalogue import HEADERS, read_spreadsheet, validate_rows, save_batch
+    from app.products.catalogue import HEADERS, read_spreadsheet, validate_rows, save_batch, preview_details
     from app.models import AuditLog
     from app.products.product_lists import parse_product_list, read_text_file, existing_matches
     from itsdangerous import BadSignature, SignatureExpired
@@ -295,8 +297,28 @@ def import_products():
                 flash('This import was already completed. No products were added again.', 'success')
                 return redirect(url_for('products.index'))
             rows = payload['rows']
+            original_matches = existing_matches(b.id, rows)
+            if request.form.get('edited') != 'yes' and any(original_matches):
+                raise ValueError('Possible existing products require an explicit review choice. Preview the list again.')
             skipped, existing = payload.get('skipped', 0), payload.get('existing', 0)
             if request.form.get('edited') == 'yes':
+                proposed = [{**original, **{field:request.form.get(f'rows.{index}.{field}', original.get(field, ''))
+                    for field in HEADERS.values()}} for index, original in enumerate(rows)]
+                proposed_matches = existing_matches(b.id, proposed)
+                pending = [{'row':row.get('_row', index + 2),
+                    'errors':['Product Name: choose an action for the possible existing product.']}
+                    for index, row in enumerate(proposed)
+                    if ((original_matches[index] or proposed_matches[index])
+                        and not request.form.get(f'rows.{index}.action'))
+                    or (proposed_matches[index] and not original_matches[index]
+                        and request.form.get(f'rows.{index}.action', 'new') == 'new')]
+                if pending:
+                    revised = import_signer().dumps({**payload, 'rows':proposed})
+                    if len(revised) > 450000:
+                        raise ValueError('This preview is too large. Use a smaller batch.')
+                    return render_template('products/import_preview.html', business=b, rows=proposed,
+                        issues=pending, preview=revised, fields=HEADERS, matches=proposed_matches,
+                        **preview_details(proposed, pending, proposed_matches)), 400
                 reviewed = []
                 selected_ids = set()
                 for index in range(len(rows)):
@@ -327,7 +349,7 @@ def import_products():
                         existing += 1
                         continue
                     if action != 'new':
-                        abort(400)
+                        raise ValueError('Choose how to handle every possible existing product before importing.')
                     reviewed.append({**{field:request.form.get(prefix + field, '') for field in HEADERS.values()},
                                      '_row':original.get('_row', index + 1)})
                 rows = reviewed
@@ -339,7 +361,8 @@ def import_products():
                     raise ValueError('This preview is too large. Use a smaller batch.')
                 return render_template('products/import_preview.html', business=b, rows=rows, issues=issues,
                     ready=len(rows)-len(issues), preview=revised_token,
-                    fields=HEADERS, matches=existing_matches(b.id, rows)), 400
+                    fields=HEADERS, matches=existing_matches(b.id, rows),
+                    **preview_details(rows, issues, existing_matches(b.id, rows))), 400
             saved = save_batch(b.id, rows, current_user.id, receipt='Import ' + payload['nonce'])
             flash(f'Products imported successfully: {saved} products created; {skipped} rows skipped; {existing} existing products selected.'
                   if saved else f'No products added. This import is completed; {skipped} rows skipped; {existing} existing products selected.', 'success')
@@ -364,7 +387,8 @@ def import_products():
         if len(token) > 450000:
             raise ValueError('This preview is too large. Split the list into smaller batches.')
         return render_template('products/import_preview.html', business=b, rows=rows, issues=issues,
-            ready=len(rows)-len(issues), preview=token, fields=HEADERS, matches=existing_matches(b.id, rows))
+            ready=len(rows)-len(issues), preview=token, fields=HEADERS, matches=existing_matches(b.id, rows),
+                    **preview_details(rows, issues, existing_matches(b.id, rows)))
     except (BadSignature, SignatureExpired):
         flash('This preview expired or was changed. Import the product list again.', 'error')
     except (ValueError, IntegrityError) as error:

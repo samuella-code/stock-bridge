@@ -9,7 +9,8 @@ from app.products.catalogue import HEADERS, MAX_ROWS, MAX_UPLOAD
 
 ALIASES = {label.lower(): field for label, field in HEADERS.items()}
 ALIASES.update({'name': 'name', 'quantity': 'stock_quantity', 'opening qty': 'stock_quantity',
-                'cost': 'buying_price', 'selling': 'selling_price'})
+                'cost': 'buying_price', 'selling': 'selling_price',
+                'product':'name', 'item name':'name', 'buying price':'buying_price'})
 POSITIONAL = ['name', 'stock_quantity', 'buying_price', 'selling_price']
 
 
@@ -43,7 +44,7 @@ def parse_product_list(text):
         except csv.Error:
             cells = [line.strip()]
         headers = [cell.strip().lower().removesuffix(' *') for cell in cells]
-        if not rows and fields is None and 'product name' in headers:
+        if not rows and fields is None and any(h in {'product name','product','item name'} for h in headers):
             if any(h not in ALIASES for h in headers) or len(set(ALIASES[h] for h in headers)) != len(headers):
                 raise ValueError('The text header has unknown or duplicate columns. Use the template column names.')
             fields, delimiter = [ALIASES[h] for h in headers], candidate

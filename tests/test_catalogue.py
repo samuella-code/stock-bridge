@@ -206,7 +206,7 @@ def test_xlsx_import_and_formula_rejection(client):
     assert Product.query.count()==1
 
 @pytest.mark.parametrize('filename,blob', [('products.xls',b'old format'),('products.xlsx',b'not zip'),
-    ('products.csv',b'Product Name\n=HYPERLINK("bad")'),('products.csv',b'Unknown\nThing'),
+    ('products.csv',b'Product Name\n=HYPERLINK("bad")'),('products.csv',b'Product Name,Unknown\nThing,Other'),
     ('products.csv',b'Product Name,Product Name\nA,A'),('products.csv',b'x'* (2*1024*1024+1))])
 def test_bad_uploads(client,filename,blob):
     response=client.post('/products/import',data={'spreadsheet':(io.BytesIO(blob),filename)})
