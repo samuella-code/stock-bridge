@@ -15,3 +15,8 @@
 .sale-actions form{max-width:260px;min-width:0;white-space:normal}
 .sale-actions input{max-width:100%;min-width:0}
 .sale-actions [hidden],#sale-form [hidden]{display:none!important}
+
+.sale-actions summary{list-style:none;display:inline-flex;align-items:center;justify-content:center;min-width:44px;font-size:1.5rem}
+.sale-actions summary::-webkit-details-marker{display:none}
+#sale-form .basket-browse summary{cursor:pointer;min-height:44px;padding:10px}
+#sale-form .basket-browse-results{display:grid;gap:6px}

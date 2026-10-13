@@ -8,10 +8,11 @@ def test_sales_controls_and_date_guidance(client):
     owner(client)
     add(client,'Rice',5)
     html=client.get('/sales/').data
-    for text in [b'Browse products',b'Shows up to 15',b'No products selected',b'0 products selected',b'Leave Date blank',b'UTC',b'submission_token']:
+    for text in [b'Browse Products',b'Shows up to 15',b'No products selected',b'0 products selected',b'Leave Date blank',b'UTC',b'submission_token']:
         assert text in html
     restock=client.get('/restocking/').data
-    assert b'sale-product-picker' not in restock and b'basket-empty' not in restock
+    assert b'sale-product-picker' not in restock and b'basket-empty' in restock
+    assert b'restock-review' in restock
 
 
 def test_actions_hide_void_form_and_preserve_reason(client):
@@ -52,5 +53,5 @@ def test_sales_styles_are_scoped_and_touch_accessible():
     assert '#sale-form' in css and '.sale-actions' in css
     assert 'min-height:44px' in css and 'min-width:0' in css and ':focus-visible' in css
     template=(root/'app/templates/sales/index.html').read_text()
-    assert "filename='css/sales.css',v='sales-ux-1'" in template
+    assert "filename='css/sales.css',v='sales-ux-2'" in template
     assert 'aria-controls="void-sale-' in template

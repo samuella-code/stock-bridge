@@ -1,0 +1,13 @@
+#restock-form{min-width:0}
+#restock-form .basket-line{padding:12px;gap:10px;min-width:0}
+#restock-form .basket-line input{width:100%;min-width:0}
+#restock-form .stock-warning,#restock-form .expected-stock{grid-column:1/-1;overflow-wrap:anywhere}
+#restock-form .stock-warning{color:#992828;font-weight:600}
+#restock-form .basket-total{display:block;font-size:clamp(1.3rem,3vw,1.8rem);overflow-wrap:anywhere}
+#restock-form .restock-review{background:#eef6f1;padding:12px;border-radius:8px}
+#restock-form .basket-browse summary,.restock-receipt summary{cursor:pointer;min-height:44px;padding:10px}
+#restock-form .basket-browse-results{display:grid;gap:6px}
+#restock-form [hidden]{display:none!important}
+.restock-receipt{border-bottom:1px solid #d9e5dd;padding:8px 0;min-width:0}
+.restock-receipt p{overflow-wrap:anywhere}
+.restock-receipt summary:focus-visible,#restock-form summary:focus-visible{outline:3px solid #18734c;outline-offset:2px}

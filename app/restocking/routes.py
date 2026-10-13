@@ -42,8 +42,8 @@ def index():
     return render_restock(b, issue_token(current_user.id, b.id, 'restock'))
 
 def render_restock(b, token, status=200):
-    restocks = Restock.query.filter_by(business_id=b.id).order_by(Restock.received_at.desc(), Restock.id.desc()).paginate(
-        page=request.args.get("page", 1, type=int), per_page=20, error_out=False)
+    from app.restocking.history import receipt_history
+    restocks = receipt_history(b.id, request.args.get("page", 1, type=int))
     from app.products.catalogue import search_products
     term = request.args.get('q', '').strip()[:100]
     product_page = search_products(b.id, term).order_by(Product.stock_quantity - Product.minimum_stock_level, Product.id).paginate(

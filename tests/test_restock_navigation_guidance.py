@@ -5,8 +5,8 @@ from tests.test_catalogue_navigation_ux import render
 
 def restock(args=None):
     return render('restocking/index.html', args, restocks=SimpleNamespace(items=[SimpleNamespace(
-        received_at=__import__('datetime').datetime(2026, 10, 1), product=SimpleNamespace(name='Coke'),
-        quantity=2, unit_cost=3, supplier=None)], has_prev=True, has_next=True, prev_num=2, next_num=4, page=3, pages=5),
+        received_at=__import__('datetime').datetime(2026, 10, 1), reference='batch:fixture', item_count=1, total=6,
+        items=[SimpleNamespace(product=SimpleNamespace(name='Coke'),quantity=2,unit_cost=3,supplier=None,note=None)])], has_prev=True, has_next=True, prev_num=2, next_num=4, page=3, pages=5),
         product_page=SimpleNamespace(has_prev=True, has_next=True, prev_num=6, next_num=8, page=7, pages=9),
         query='Coke', recommendations=[], selected=None)
 
