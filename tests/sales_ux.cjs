@@ -1,0 +1,31 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),{JSDOM}=require('jsdom');
+let assertions=0;function check(value){assert.ok(value);assertions++;}
+(async()=>{
+ const dom=new JSDOM(`<form><input name="submission_token" value="original"><div class="basket" data-mode="sale" data-lookup="/products/lookup"><input class="basket-search"><button type="button" class="sale-product-picker">Browse products</button><div class="basket-results"></div><p class="basket-message"></p><p class="basket-empty">Empty</p><p class="basket-count"></p><div class="basket-lines"></div><strong class="basket-total"></strong></div><button type="submit">Complete</button></form>`,{runScripts:'outside-only'});
+ const win=dom.window,doc=win.document;
+ const products=[{id:1,name:'Rice',stock:5,unit:'bag',price:'500',cost:'300'},{id:2,name:'Water',stock:3,unit:'bottle',price:'200',cost:'100'},{id:3,name:'Empty',stock:0,unit:'unit',price:'100',cost:'50'}];
+ let requests=[];win.fetch=async url=>{requests.push(url);return {ok:true,json:async()=>({products})};};
+ win.eval(fs.readFileSync('app/static/js/basket.js','utf8'));
+ const browse=doc.querySelector('.sale-product-picker'),results=doc.querySelector('.basket-results');
+ browse.click();await new Promise(resolve=>setTimeout(resolve,0));
+ check(requests[0]==='/products/lookup?q=');check(results.children.length===3);check(results.children[2].disabled);
+ results.children[0].click();check(doc.activeElement===doc.querySelector('.basket-search'));check(doc.querySelector('.basket-count').textContent==='1 products selected');check(doc.querySelector('.basket-empty').hidden);
+ browse.click();await new Promise(resolve=>setTimeout(resolve,0));results.children[1].click();
+ check(doc.querySelector('.basket-count').textContent==='2 products selected');check(doc.querySelector('.basket-total').textContent.includes('700.00'));
+ const quantity=doc.querySelector('[name=quantity]'),submit=doc.querySelector('button[type=submit]');
+ quantity.value='6';quantity.dispatchEvent(new win.Event('input',{bubbles:true}));check(submit.disabled);check(!doc.querySelector('.stock-warning').hidden);check(quantity.getAttribute('aria-invalid')==='true');
+ check(!doc.querySelector('form').dispatchEvent(new win.Event('submit',{cancelable:true})));check(doc.querySelector('[name=submission_token]').value==='original');
+ win.dispatchEvent(new win.Event('pageshow'));check(submit.disabled);
+ quantity.value='2';quantity.dispatchEvent(new win.Event('input',{bubbles:true}));check(!submit.disabled);check(doc.querySelector('.stock-warning').hidden);check(doc.querySelector('.basket-total').textContent.includes('1,200.00'));
+ const price=doc.querySelector('.line-price');price.value='-1';price.dispatchEvent(new win.Event('input',{bubbles:true}));check(submit.disabled);check(doc.querySelector('.stock-warning').textContent.includes('unit price'));price.value='500';price.dispatchEvent(new win.Event('input',{bubbles:true}));check(!submit.disabled);
+ doc.querySelectorAll('.basket-line button')[1].click();check(doc.querySelector('.basket-count').textContent==='1 products selected');
+ doc.querySelector('.basket-line button').click();check(!doc.querySelector('.basket-empty').hidden);check(doc.querySelector('.basket-total').textContent.includes('0.00'));dom.window.close();
+ const menu=new JSDOM(`<details class="sale-actions"><summary>Actions</summary><button data-sale-details>View</button><div id="sale-details-1" hidden>Details</div><button data-void-open>Void</button><form hidden><input name="reason" required><button data-void-cancel type="button">Cancel</button></form></details>`,{runScripts:'outside-only'});
+ menu.window.eval(fs.readFileSync('app/static/js/sales-actions.js','utf8'));
+ const d=menu.window.document,a=d.querySelector('details'),form=d.querySelector('form');a.open=true;
+ d.querySelector('[data-sale-details]').click();check(!d.querySelector('[id^=sale-details]').hidden);check(form.hidden);
+ d.querySelector('[data-void-open]').click();check(!form.hidden);check(d.activeElement===d.querySelector('[name=reason]'));check(d.querySelector('[id^=sale-details]').hidden);
+ d.querySelector('[data-void-cancel]').click();check(form.hidden);check(!a.open);check(d.activeElement===d.querySelector('summary'));
+ a.open=true;d.querySelector('[data-void-open]').click();a.dispatchEvent(new menu.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));check(form.hidden);check(!a.open);menu.window.close();
+ console.log(`PASS: ${assertions} Sales UX assertions`);
+})().catch(error=>{console.error(error);process.exitCode=1;});

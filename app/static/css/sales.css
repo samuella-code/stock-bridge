@@ -1,0 +1,17 @@
+
+/* Sales-only refinements; restocking keeps its existing basket layout. */
+#sale-form{min-width:0}
+#sale-form .basket-line{padding:12px;gap:10px;min-width:0}
+#sale-form .basket-line legend{overflow-wrap:anywhere}
+#sale-form .basket-line input{width:100%;min-width:0}
+#sale-form .stock-warning{grid-column:1/-1;color:#992828;font-weight:600}
+#sale-form .basket-total{display:block;font-size:clamp(1.3rem,3vw,1.8rem);overflow-wrap:anywhere}
+#sale-form .basket-count{font-weight:600}
+#sale-form .basket-empty{padding:12px;background:#eef6f1;border-radius:8px}
+.sale-actions{min-width:0;max-width:100%}
+.sale-actions summary{cursor:pointer;min-height:44px;padding:10px;white-space:nowrap}
+.sale-actions summary:focus-visible,.sale-actions button:focus-visible{outline:3px solid #18734c;outline-offset:2px}
+.sale-actions button{min-height:44px}
+.sale-actions form{max-width:260px;min-width:0;white-space:normal}
+.sale-actions input{max-width:100%;min-width:0}
+.sale-actions [hidden],#sale-form [hidden]{display:none!important}
