@@ -15,8 +15,9 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/billing.css') }}">
 <link rel="stylesheet" href="{{url_for('static',filename='css/catalogue.css',v='catalogue-20260930')}}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/businesses.css') }}">
-{% if current_user.is_authenticated %}<link rel="stylesheet" href="{{ url_for('static', filename='css/customer.css', v='phase7-icons-1') }}"><link rel="stylesheet" href="{{ url_for('static', filename='css/activity.css', v='activity-10') }}">{% endif %}
+{% if current_user.is_authenticated %}<link rel="stylesheet" href="{{ url_for('static', filename='css/customer.css', v='phase7cd-mobile-1') }}"><link rel="stylesheet" href="{{ url_for('static', filename='css/activity.css', v='activity-10') }}">{% endif %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/entry.css', v='entry-phase7-1') }}">
+{% if onboarding_tour is defined and onboarding_tour.eligible %}<link rel="stylesheet" href="{{url_for('static',filename='css/tour.css')}}">{% endif %}
 {% block extra_styles %}{% endblock %}
 </head>
 {% from 'components/business_avatar.html' import business_avatar %}{% from 'components/icons.html' import icon %}
@@ -126,6 +127,7 @@
 {% if current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/customer.js', v='phase7-icons-1') }}" defer></script>{% endif %}
 {% if current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/onboarding.js', v='guidance-6.1') }}" defer></script>{% endif %}
 {% if not current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/public.js', v='entry-7') }}" defer></script>{% endif %}
+{% if onboarding_tour is defined and onboarding_tour.eligible %}{% include 'components/tour.html' %}<script src="{{url_for('static',filename='js/tour.js')}}" defer></script>{% endif %}
 {% block scripts %}{% endblock %}
 {% if request.blueprint != 'admin' and request.endpoint not in ['auth.social_finish', 'auth.social_callback', 'auth.apple_complete'] %}{% include 'components/assistant.html' %}{% endif %}
 </body>

@@ -343,3 +343,13 @@
 .import-methods>input:focus-visible+label{outline:3px solid #18734c;outline-offset:2px}
 .import-field-error{color:#9b2525;font-size:.9rem}
 .import-row-state{font-weight:700}
+
+/* Customer mobile sizing: retain complete content and local table scrolling. */
+@media(max-width:820px){
+.customer-app .topbar-copy,.customer-app .business-switcher strong,.customer-app .metric-card,.customer-app .mini-stat{min-width:0;overflow-wrap:anywhere}
+.customer-app .table-wrap{max-width:100%;min-width:0;overflow-x:auto;overscroll-behavior-x:contain}
+.customer-app .responsive-table td form,.customer-app .responsive-table td input{max-width:100%;min-width:0;box-sizing:border-box}
+.customer-app .panel-card form input,.customer-app .panel-card form select,.customer-app .panel-card form textarea{min-width:0;max-width:100%;box-sizing:border-box}
+.customer-app .basket-browse summary,.customer-app .basket-line button{min-height:44px}
+.customer-app .basket-total,.customer-app .restock-review,.customer-app .basket-message{overflow-wrap:anywhere}
+}

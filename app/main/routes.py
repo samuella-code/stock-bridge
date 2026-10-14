@@ -1,7 +1,7 @@
 from app.subscriptions.entitlements import selected_business
 from datetime import datetime, time, timedelta
 from decimal import Decimal
-from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for, jsonify, abort
 from flask_login import current_user, login_required
 from sqlalchemy import func, case, distinct
 from app import db
@@ -102,9 +102,11 @@ def index():
 @login_required
 def dashboard():
     b = selected_business(current_user)
+    from app.main.tour import tour_state
+    tour = tour_state(current_user)
     if not b.has_write_access and not current_app.config.get("SUBSCRIPTIONS_ENABLED"):
         return render_template("dashboard_preview.html", business=b,
-            lifetime_price=current_app.config["LIFETIME_PRICE_NAIRA"])
+            lifetime_price=current_app.config["LIFETIME_PRICE_NAIRA"], onboarding_tour=tour)
     try:
         period, start, end = period_dates(request.args)
     except (ValueError, KeyError):
@@ -121,7 +123,7 @@ def dashboard():
     ).group_by(func.date(Sale.sold_at)).all()
     chart = sales_chart(per_day, week_start)
     return render_template("dashboard.html", business=b, metrics=metrics,
-        setup=setup_progress(b),
+        setup=setup_progress(b), onboarding_tour=tour,
         low_stock_products=low, chart=chart, period=period,
         recent_transactions=recent_activity(b), top=top_products(b, start, end))
 
@@ -146,3 +148,29 @@ def reports():
     return render_template("reports.html", business=b, metrics=metrics, period=period,
         start=start, end=end-timedelta(days=1), slow=slow,
         by_units=top_products(b, start, end), by_revenue=top_products(b, start, end, "revenue"))
+
+
+@main_bp.post('/onboarding/tour')
+@login_required
+def onboarding_tour_state():
+    from app.main.tour import record_tour
+    data = request.get_json(silent=True)
+    if (not isinstance(data, dict) or set(data) != {'action','step','version'}
+            or type(data['action']) is not str
+            or data['action'] not in {'start','progress','skip','finish'}
+            or type(data['step']) is not int or not 0 <= data['step'] < 7
+            or type(data['version']) is not int or data['version'] < 0):
+        abort(400)
+    try:
+        state = record_tour(current_user, data['action'], data['step'], data['version'])
+        db.session.commit()
+        return jsonify(state)
+    except PermissionError:
+        db.session.rollback()
+        abort(403)
+    except ValueError as error:
+        db.session.rollback()
+        return jsonify(error=str(error)), 409
+    except Exception:
+        db.session.rollback()
+        raise
