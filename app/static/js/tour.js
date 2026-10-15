@@ -21,11 +21,32 @@
   }
   title.focus();
  }
+ class TourError extends Error {}
+ function validState(value){return value&&typeof value.eligible==='boolean'&&(!value.eligible||
+  (typeof value.started==='boolean'&&Number.isInteger(value.step)&&value.step>=0&&value.step<7&&Number.isInteger(value.version)&&value.version>=0));}
+ function responseError(response){
+  if(response.redirected||response.status===401)return 'Your session may have expired. Sign in again before continuing the tour.';
+  if(response.status===400||response.status===403)return 'The request was not accepted. Refresh the dashboard to renew your session before continuing.';
+  return 'The server could not save tour progress. Try again later; your progress has not been confirmed.';
+ }
+ async function synchronize(){
+  const response=await fetch(dialog.dataset.endpoint,{method:'GET',credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}});
+  if(!response.ok||response.redirected)throw new TourError('Could not retrieve current tour progress. '+responseError(response));
+  const latest=await response.json();if(!validState(latest))throw new TourError('Current tour progress could not be verified. Refresh the dashboard.');
+  if(!latest.eligible){
+   if(['CUSTOMER_TOUR_FINISHED','CUSTOMER_TOUR_SKIPPED'].includes(latest.status)){state=latest;exit();return;}
+   throw new TourError('The tour is currently unavailable. Refresh the dashboard to check your account.');
+  }
+  state=latest;error.textContent='Your tour progress was updated elsewhere. Continue from the current step.';
+ }
  async function save(action,step){if(busy)return;busy=true;Object.values(controls).forEach(button=>button.disabled=true);error.textContent='';
   try{
-   const response=await fetch(dialog.dataset.endpoint,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRFToken':document.querySelector('meta[name=csrf-token]').content},body:JSON.stringify({action,step,version:state.version})});
-   if(!response.ok)throw Error();state=await response.json();if(!state.eligible){exit();return;}
-  }catch(_){error.textContent='Could not save tour progress. Try again, or close this window and refresh the dashboard.';}
+   const response=await fetch(dialog.dataset.endpoint,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRFToken':document.querySelector('meta[name=csrf-token]').content},body:JSON.stringify({action,step,version:state.version})});
+   if(response.status===409){await synchronize();return;}
+   if(!response.ok||response.redirected)throw new TourError(responseError(response));
+   const latest=await response.json();if(!validState(latest))throw new TourError('The server response could not be verified. Refresh the dashboard before continuing.');
+   state=latest;if(!state.eligible){exit();return;}
+  }catch(failure){error.textContent=failure instanceof TourError?failure.message:'Could not save or retrieve tour progress. Check your connection and try again; the latest state has not been confirmed.';}
   finally{busy=false;Object.values(controls).forEach(button=>button.disabled=false);if(dialog.open)draw();}
  }
  controls.start.onclick=()=>save('start',0);controls.next.onclick=()=>save('progress',state.step+1);controls.back.onclick=()=>save('progress',state.step-1);controls.skip.onclick=()=>save('skip',state.step);controls.finish.onclick=()=>save('finish',6);

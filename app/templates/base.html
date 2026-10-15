@@ -127,7 +127,7 @@
 {% if current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/customer.js', v='phase7-icons-1') }}" defer></script>{% endif %}
 {% if current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/onboarding.js', v='guidance-6.1') }}" defer></script>{% endif %}
 {% if not current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/public.js', v='entry-7') }}" defer></script>{% endif %}
-{% if onboarding_tour is defined and onboarding_tour.eligible %}{% include 'components/tour.html' %}<script src="{{url_for('static',filename='js/tour.js')}}" defer></script>{% endif %}
+{% if onboarding_tour is defined and onboarding_tour.eligible %}{% include 'components/tour.html' %}<script src="{{url_for('static',filename='js/tour.js',v='sync-1')}}" defer></script>{% endif %}
 {% block scripts %}{% endblock %}
 {% if request.blueprint != 'admin' and request.endpoint not in ['auth.social_finish', 'auth.social_callback', 'auth.apple_complete'] %}{% include 'components/assistant.html' %}{% endif %}
 </body>

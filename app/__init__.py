@@ -109,8 +109,8 @@ def create_app(test_config=None):
             if not current_user.email_verified_at:
                 flash("Verify your email to access StockBridge.", "warning")
                 return redirect(url_for("auth.verification_pending"))
-        # Public Help Centre must not start or commit an automatic trial.
-        if (request.endpoint != "legal.help_centre"
+        # Read-only help and tour-state retrieval must not start or commit a trial.
+        if (request.endpoint not in {"legal.help_centre", "main.onboarding_tour_current"}
                 and app.config.get("SUBSCRIPTIONS_ENABLED")
                 and current_user.is_authenticated and current_user.email_verified_at):
             from app.subscriptions.entitlements import start_trial

@@ -150,6 +150,16 @@ def reports():
         by_units=top_products(b, start, end), by_revenue=top_products(b, start, end, "revenue"))
 
 
+@main_bp.get('/onboarding/tour')
+@login_required
+def onboarding_tour_current():
+    """Read only the authenticated account's state; never cache across devices."""
+    from app.main.tour import tour_state
+    response = jsonify(tour_state(current_user))
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
 @main_bp.post('/onboarding/tour')
 @login_required
 def onboarding_tour_state():

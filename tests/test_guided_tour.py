@@ -109,3 +109,43 @@ def test_mobile_rules_and_reference_label():
     assert 'min-height:44px' in css and 'prefers-reduced-motion' in css
     source=(root/'app/templates/restocking/index.html').read_text()
     assert "Restock Reference: {{receipt.reference.split(':',1)[1]}}" in source
+
+
+@pytest.mark.parametrize('terminal',[None,'skip','finish'])
+def test_two_devices_retrieve_authoritative_state(app,terminal):
+    user,_=seed();first=app.test_client();second=app.test_client()
+    login(first,user);login(second,user)
+    initial=post(first,'start',0).json
+    latest=post(first,'progress',1,initial['version']).json
+    if terminal=='finish':
+        for step in range(2,7): latest=post(first,'progress',step,latest['version']).json
+    if terminal: latest=post(first,terminal,latest['step'],latest['version']).json
+    count=AuditLog.query.count()
+    assert post(second,'progress',1,initial['version']).status_code==409
+    response=second.get('/onboarding/tour')
+    assert response.status_code==200 and response.json==latest
+    assert response.headers['Cache-Control']=='no-store'
+    assert AuditLog.query.count()==count
+    if not terminal:
+        assert post(second,'progress',2,latest['version']).status_code==200
+
+
+def test_state_read_authentication_and_account_isolation(app,monkeypatch):
+    user,_=seed();client=app.test_client()
+    assert client.get('/onboarding/tour').status_code==302
+    login(client,user);post(client,'skip',0)
+    other,_=seed(email='state-other@example.invalid');second=app.test_client();login(second,other)
+    def forbidden(): raise AssertionError('GET must not commit')
+    monkeypatch.setattr(db.session,'commit',forbidden)
+    response=second.get('/onboarding/tour?user_id='+str(user.id))
+    assert response.status_code==200 and response.json['eligible']
+    assert response.json['version']==0
+
+
+def test_state_read_never_starts_trial(app,monkeypatch):
+    user,_=seed();client=app.test_client();login(client,user)
+    app.config['SUBSCRIPTIONS_ENABLED']=True
+    def forbidden(*args): raise AssertionError('Read-only retrieval must not start trial or commit')
+    monkeypatch.setattr('app.subscriptions.entitlements.start_trial',forbidden)
+    monkeypatch.setattr(db.session,'commit',forbidden)
+    assert client.get('/onboarding/tour').status_code==200
