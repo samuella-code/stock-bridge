@@ -83,8 +83,11 @@ def fail(provider, message='Sign-in could not be verified. Please try again or u
 
 
 def allowed(user):
-    return user.role == 'user' and not user.admin_enabled and not user.suspended_at and not any(b.suspended_at for b in user.businesses)
-
+    return (
+        user.role == 'user'
+        and not user.admin_enabled
+        and not user.suspended_at
+    )
 
 def sign_in(user):
     if not allowed(user):

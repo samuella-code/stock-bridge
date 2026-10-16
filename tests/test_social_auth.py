@@ -310,7 +310,7 @@ def test_apple_relay_and_untrusted_raw_user_name(app,oidc,monkeypatch):
     assert User.query.one().full_name=='Chosen Name'
 
 
-@pytest.mark.parametrize('restriction',['admin','admin_enabled','suspended','suspended_business'])
+@pytest.mark.parametrize('restriction',['admin','admin_enabled','suspended'])
 def test_social_cannot_bypass_account_restrictions(app,oidc,monkeypatch,restriction):
     from datetime import datetime
     user,shops=seed(email='social@example.invalid')
@@ -428,3 +428,47 @@ def test_finish_proof_expiry_and_new_workspace_conflict_rollback(app,oidc,monkey
     monkeypatch.setattr(db.session,'flush',original)
     assert response.location.endswith('/auth/login')
     assert User.query.count()==Business.query.count()==SocialIdentity.query.count()==0
+
+def test_social_login_with_one_suspended_and_one_active_business(app, oidc, monkeypatch):
+    from datetime import datetime
+
+    user, shops = seed(
+        kind='plus',
+        businesses=2,
+        email='social@example.invalid'
+    )
+
+    shops[0].suspended_at = datetime.utcnow()
+    user.set_password('existing-strong-password')
+    db.session.commit()
+
+    client = app.test_client()
+    params = start(client, 'google')
+    exchange(oidc, monkeypatch, 'google', params)
+
+    response = callback(client, 'google', params)
+
+    assert response.status_code == 302
+    assert response.location.endswith('/auth/social/finish')
+
+    response = client.get('/auth/social/finish')
+    assert response.status_code == 200
+
+    response = client.post(
+        '/auth/social/finish',
+        data={'password': 'existing-strong-password'}
+    )
+
+    assert response.status_code == 302
+    assert response.location.endswith('/dashboard')
+    response = client.get('/dashboard')
+    assert response.status_code == 200
+
+    with client.session_transaction() as sess:
+        assert sess['active_business_id'] == shops[1].id
+
+    response = client.get(f'/businesses/{shops[0].id}/profile')
+    assert response.status_code == 403
+
+    response = client.get(f'/businesses/{shops[1].id}/profile')
+    assert response.status_code == 200
