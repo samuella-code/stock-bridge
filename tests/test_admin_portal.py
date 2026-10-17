@@ -1,9 +1,13 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 import time
 import pytest
 from app import create_app, db
-from app.models import AdminPasswordReset, AuditLog, Business, User, Payment
+from app.models import (
+    AdminPasswordReset, AuditLog, Business,
+    User, Payment, Product, Sale, Restock, Expense,
+    RecurringSubscription,
+)
 
 @pytest.fixture
 def client():
@@ -444,3 +448,213 @@ def test_security_migration_preserves_dual_role_and_audit_data(tmp_path):
         assert owner.admin_enabled and owner.admin_auth_version==0
         assert AuditLog.query.one().description=="Granted"
         assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()=="0012_product_catalogue"
+
+def test_admin_customer_detail_shows_all_businesses(client):
+    _, customer_id, _ = seed(client)
+
+    with client.application.app_context():
+        second_business = Business(
+            user_id=customer_id,
+            name="Second Shop",
+            subscription_plan="lifetime",
+            subscription_status="active",
+        )
+        db.session.add(second_business)
+        db.session.commit()
+
+    admin_login(client)
+
+    response = client.get(f"/admin/users/{customer_id}")
+
+    assert response.status_code == 200
+    assert b"Shop" in response.data
+    assert b"Second Shop" in response.data
+
+
+def test_admin_customer_detail_aggregates_all_business_metrics(client):
+    admin_id, customer_id, first_business_id = seed(client)
+
+    with client.application.app_context():
+        second = Business(
+            user_id=customer_id,
+            name="Second Shop",
+            suspended_at=datetime.utcnow(),
+        )
+
+        other_customer = User(
+            full_name="Other Customer",
+            email="other-customer@example.com",
+        )
+        other_customer.set_password("other-customer-password123")
+
+        db.session.add_all([second, other_customer])
+        db.session.flush()
+
+        other_business = Business(
+            user_id=other_customer.id,
+            name="Other Customer Shop",
+        )
+        db.session.add(other_business)
+        db.session.flush()
+
+        for business_id in (
+            first_business_id,
+            second.id,
+            other_business.id,
+        ):
+            product = Product(
+                business_id=business_id,
+                name=f"Product {business_id}",
+                stock_quantity=5,
+            )
+            db.session.add(product)
+            db.session.flush()
+
+            db.session.add_all([
+                Sale(
+                    business_id=business_id,
+                    product_id=product.id,
+                    quantity=1,
+                    unit_price=350,
+                    unit_cost=250,
+                ),
+                Restock(
+                    business_id=business_id,
+                    product_id=product.id,
+                    quantity=1,
+                    unit_cost=250,
+                ),
+                Expense(
+                    business_id=business_id,
+                    description="Transport",
+                    amount=100,
+                ),
+            ])
+
+        db.session.commit()
+
+    admin_login(client)
+
+    response = client.get(f"/admin/users/{customer_id}")
+
+    assert response.status_code == 200
+
+    for label in ("Products", "Sales", "Restocks", "Expenses"):
+        assert re.search(
+            rf"<span>{label}</span>\s*<strong>2</strong>",
+            response.get_data(as_text=True),
+        )
+
+
+def test_admin_customer_detail_shows_activity_from_all_businesses(client):
+    admin_id, customer_id, first_business_id = seed(client)
+
+    with client.application.app_context():
+        second = Business(
+            user_id=customer_id,
+            name="Second Shop",
+            suspended_at=datetime.utcnow(),
+        )
+        db.session.add(second)
+        db.session.flush()
+
+        db.session.add_all([
+            AuditLog(
+                actor_id=admin_id,
+                business_id=first_business_id,
+                action="FIRST_SHOP_EVENT",
+                description="First shop activity",
+            ),
+            AuditLog(
+                actor_id=admin_id,
+                business_id=second.id,
+                action="SECOND_SHOP_EVENT",
+                description="Second shop activity",
+            ),
+            AuditLog(
+                actor_id=admin_id,
+                action="CUSTOMER_ACCOUNT_EVENT",
+                description="Customer account activity",
+                target_type="user",
+                target_id=customer_id,
+            ),
+            AuditLog(
+                actor_id=admin_id,
+                action="UNRELATED_EVENT",
+                description="Unrelated customer activity",
+            ),
+        ])
+        db.session.commit()
+
+    admin_login(client)
+
+    response = client.get(f"/admin/users/{customer_id}")
+
+    assert response.status_code == 200
+
+    html = response.get_data(as_text=True)
+
+    assert "First shop activity" in html
+    assert "Second shop activity" in html
+    assert "Customer account activity" in html
+    assert "Unrelated customer activity" not in html
+
+
+def test_admin_customer_paid_unpaid_filters(client):
+    _, customer_id, business_id = seed(client)
+
+    with client.application.app_context():
+        now = datetime.utcnow()
+
+        # Customer with an active Basic subscription
+        db.session.add(RecurringSubscription(
+            user_id=customer_id,
+            business_id=business_id,
+            plan_code="basic",
+            billing_interval="monthly",
+            amount_kobo=300000,
+            provider_plan_code="PLN_basic_test",
+            status="active",
+            current_period_start=now - timedelta(days=1),
+            current_period_end=now + timedelta(days=30),
+        ))
+
+        # A second business must not duplicate the customer
+        db.session.add(Business(
+            user_id=customer_id,
+            name="Second Shop",
+        ))
+
+        # Customer without paid access
+        unpaid = User(
+            full_name="Unpaid Customer",
+            email="unpaid-filter@example.com",
+        )
+        unpaid.set_password("unpaid-password123")
+        db.session.add(unpaid)
+        db.session.flush()
+
+        db.session.add(Business(
+            user_id=unpaid.id,
+            name="Unpaid Shop",
+        ))
+
+        db.session.commit()
+
+    admin_login(client)
+
+    paid_response = client.get("/admin/users?status=paid")
+    unpaid_response = client.get("/admin/users?status=unpaid")
+
+    assert paid_response.status_code == 200
+    assert unpaid_response.status_code == 200
+
+    paid_html = paid_response.get_data(as_text=True)
+    unpaid_html = unpaid_response.get_data(as_text=True)
+
+    assert "owner@example.com" in paid_html
+    assert paid_html.count("owner@example.com") == 1
+    assert "unpaid-filter@example.com" not in paid_html
+
+    assert "unpaid-filter@example.com" in unpaid_html
+    assert "owner@example.com" not in unpaid_html

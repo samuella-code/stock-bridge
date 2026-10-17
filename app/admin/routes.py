@@ -10,8 +10,11 @@ from sqlalchemy import and_, func, or_, update
 from sqlalchemy.orm import joinedload, selectinload
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
-from app.models import (AdminLoginAttempt, AdminPasswordReset, AuditLog, Business, Expense,
-                        Payment, Product, Restock, Sale, User)
+from app.models import (
+    AccountBilling, AdminLoginAttempt, AdminPasswordReset, AuditLog,
+    Business, Expense, Payment, Product, RecurringSubscription,
+    Restock, Sale, User,
+)
 from app.email_service import _send_email, safely_send, send_account_status_email, send_access_receipt_once
 from app.admin.security import valid_admin_password
 from app.payments.service import PaystackError, verify_transaction
@@ -292,8 +295,33 @@ def users():
         User.businesses.any(Business.name.ilike(f"%{q}%"))))
     if status=="suspended": query=query.filter(User.suspended_at.isnot(None))
     elif status=="active": query=query.filter(User.suspended_at.is_(None))
-    elif status=="paid": query=query.join(Business).filter(Business.subscription_plan=="lifetime",Business.subscription_status=="active")
-    elif status=="unpaid": query=query.join(Business).filter(Business.subscription_status!="active")
+    elif status in ("paid", "unpaid"):
+        now = datetime.utcnow()
+
+        legacy_accounts = db.session.query(AccountBilling.user_id).filter(
+            AccountBilling.legacy_granted_at.isnot(None),
+            AccountBilling.legacy_payment_id.isnot(None),
+        )
+
+        current_subscriptions = db.session.query(
+            RecurringSubscription.user_id
+        ).filter(
+            RecurringSubscription.current_period_start <= now,
+            RecurringSubscription.current_period_end > now,
+            RecurringSubscription.status.in_(
+                ("active", "past_due", "cancel_at_period_end", "cancelled")
+            ),
+        )
+
+        has_paid_access = or_(
+            User.id.in_(legacy_accounts),
+            User.id.in_(current_subscriptions),
+        )
+
+        if status == "paid":
+            query = query.filter(has_paid_access)
+        else:
+            query = query.filter(~has_paid_access)
     rows=query.order_by(User.created_at.desc()).paginate(page=request.args.get("page",1,type=int),per_page=25,error_out=False)
     return render_template("admin/users.html",rows=rows,q=q,status=status)
 
@@ -301,16 +329,37 @@ def users():
 @admin_required
 def user_detail(user_id):
     user=customer_query().filter(User.id==user_id).first_or_404()
-    business=user.businesses[0] if user.businesses else None
-    metrics={"products":Product.query.filter_by(business_id=business.id).count() if business else 0,
-        "sales":Sale.query.filter_by(business_id=business.id).count() if business else 0,
-        "restocks":Restock.query.filter_by(business_id=business.id).count() if business else 0,
-        "expenses":Expense.query.filter_by(business_id=business.id).count() if business else 0}
-    payments=Payment.query.filter(func.lower(Payment.customer_email)==user.email.lower()).order_by(Payment.created_at.desc()).limit(10).all()
-    activity=AuditLog.query.filter(or_(and_(AuditLog.target_type=="user",AuditLog.target_id==user.id),
-        AuditLog.business_id==business.id if business else False)).order_by(AuditLog.created_at.desc()).limit(10).all()
-    return render_template("admin/user_detail.html",user=user,business=business,metrics=metrics,payments=payments,activity=activity)
+    businesses = sorted(user.businesses, key=lambda b: b.id)
+    business = businesses[0] if businesses else None
+    business_ids = [b.id for b in businesses]
 
+    metrics = {
+        "products": Product.query.filter(Product.business_id.in_(business_ids)).count(),
+        "sales": Sale.query.filter(Sale.business_id.in_(business_ids)).count(),
+        "restocks": Restock.query.filter(Restock.business_id.in_(business_ids)).count(),
+        "expenses": Expense.query.filter(Expense.business_id.in_(business_ids)).count(),
+    }
+    payments=Payment.query.filter(func.lower(Payment.customer_email)==user.email.lower()).order_by(Payment.created_at.desc()).limit(10).all()
+    activity = AuditLog.query.filter(
+        or_(
+            and_(
+                AuditLog.target_type == "user",
+                AuditLog.target_id == user.id,
+            ),
+            AuditLog.business_id.in_(business_ids),
+        )
+    ).order_by(
+        AuditLog.created_at.desc()
+    ).limit(10).all()
+    return render_template(
+        "admin/user_detail.html",
+        user=user,
+        business=business,
+        businesses=businesses,
+        metrics=metrics,
+        payments=payments,
+        activity=activity,
+    )
 def change_suspension(record, *, target_type, description, business_id):
     """Compare and set status in the same transaction as its audit event.
 
