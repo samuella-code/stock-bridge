@@ -901,3 +901,46 @@ def test_admin_business_listing_excludes_admin_owned_businesses(client):
     assert b"Shop" in response.data
     assert b"Admin Private Business" not in response.data
     assert b"Dual Admin Business" not in response.data
+
+def test_admin_business_detail_excludes_admin_owned_businesses(client):
+    admin_id, _, customer_business_id = seed(client)
+
+    with client.application.app_context():
+        admin_business = Business(
+            user_id=admin_id,
+            name="Admin Private Business",
+        )
+        dual_admin = User(
+            full_name="Dual Role Admin",
+            email="dual-detail@example.com",
+            role="user",
+            admin_enabled=True,
+        )
+        dual_admin.set_password("test-password123")
+
+        db.session.add_all([admin_business, dual_admin])
+        db.session.flush()
+
+        dual_business = Business(
+            user_id=dual_admin.id,
+            name="Dual Admin Private Business",
+        )
+        db.session.add(dual_business)
+        db.session.commit()
+
+        admin_business_id = admin_business.id
+        dual_business_id = dual_business.id
+
+    admin_login(client)
+
+    assert client.get(
+        f"/admin/businesses/{customer_business_id}"
+    ).status_code == 200
+
+    assert client.get(
+        f"/admin/businesses/{admin_business_id}"
+    ).status_code == 404
+
+    assert client.get(
+        f"/admin/businesses/{dual_business_id}"
+    ).status_code == 404

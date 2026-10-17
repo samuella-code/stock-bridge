@@ -431,9 +431,9 @@ def businesses():
 @admin_bp.get("/businesses/<int:business_id>")
 @admin_required
 def business_detail(business_id):
-    b = db.session.get(Business, business_id)
-    if not b:
-        abort(404)
+    b = customer_business_query().filter(
+        Business.id == business_id
+    ).first_or_404()
 
     metrics = {
         "products": Product.query.filter_by(business_id=b.id).count(),
