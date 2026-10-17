@@ -790,3 +790,114 @@ def test_admin_business_detail_shows_restricted_for_expired_subscription(client)
     assert "Account billing" in html
     assert re.search(r"Business write access:\s*Restricted", html)
     assert "No currently qualifying subscription." in html
+
+def test_admin_business_listing_searches_business_and_owner(client):
+    _, customer_id, _ = seed(client)
+
+    with client.application.app_context():
+        other_owner = User(
+            full_name="Ada Johnson",
+            email="ada@example.com",
+            role="user",
+        )
+        other_owner.set_password("test-password123")
+        db.session.add(other_owner)
+        db.session.flush()
+
+        db.session.add(
+            Business(
+                user_id=other_owner.id,
+                name="Golden Fabrics",
+            )
+        )
+        db.session.commit()
+
+    admin_login(client)
+
+    for search in ("Golden", "ada@example.com", "Ada Johnson"):
+        response = client.get("/admin/businesses", query_string={"q": search})
+        assert response.status_code == 200
+        assert b"Golden Fabrics" in response.data
+        assert b"Shop" not in response.data
+
+    response = client.get("/admin/businesses", query_string={"q": "Shop"})
+    assert response.status_code == 200
+    assert b"Shop" in response.data
+    assert b"Golden Fabrics" not in response.data
+
+
+def test_admin_business_listing_pagination_preserves_search(client):
+    _, customer_id, _ = seed(client)
+
+    with client.application.app_context():
+        db.session.add_all([
+            Business(
+                user_id=customer_id,
+                name=f"Market Store {number:02d}",
+            )
+            for number in range(30)
+        ])
+        db.session.commit()
+
+    admin_login(client)
+
+    response = client.get(
+        "/admin/businesses",
+        query_string={"q": "Market Store", "page": 1},
+    )
+
+    assert response.status_code == 200
+    assert b"Page 1 of 2" in response.data
+    assert b"Next" in response.data
+    assert b"q=Market" in response.data
+
+    response = client.get(
+        "/admin/businesses",
+        query_string={"q": "Market Store", "page": 2},
+    )
+
+    assert response.status_code == 200
+    assert b"Page 2 of 2" in response.data
+    assert b"Previous" in response.data
+
+    # All 30 matching businesses should be distributed across two pages.
+    assert len(re.findall(rb'Market Store \d{2}</a>', response.data)) == 5
+
+
+def test_admin_business_listing_excludes_admin_owned_businesses(client):
+    admin_id, _, _ = seed(client)
+
+    with client.application.app_context():
+        db.session.add(
+            Business(
+                user_id=admin_id,
+                name="Admin Private Business",
+            )
+        )
+
+        dual_admin = User(
+            full_name="Dual Role Admin",
+            email="dual-admin@example.com",
+            role="user",
+            admin_enabled=True,
+        )
+        dual_admin.set_password("test-password123")
+        db.session.add(dual_admin)
+        db.session.flush()
+
+        db.session.add(
+            Business(
+                user_id=dual_admin.id,
+                name="Dual Admin Business",
+            )
+        )
+        db.session.commit()
+
+    admin_login(client)
+
+    response = client.get("/admin/businesses")
+
+    assert response.status_code == 200
+    assert b"Shop" in response.data
+    assert b"Admin Private Business" not in response.data
+    assert b"Dual Admin Business" not in response.data
