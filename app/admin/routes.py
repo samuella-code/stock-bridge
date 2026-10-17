@@ -431,15 +431,52 @@ def businesses():
 @admin_bp.get("/businesses/<int:business_id>")
 @admin_required
 def business_detail(business_id):
-    b=db.session.get(Business,business_id)
-    if not b: abort(404)
-    metrics={"products":Product.query.filter_by(business_id=b.id).count(),
-        "sales":Sale.query.filter_by(business_id=b.id).count(),
-        "restocks":Restock.query.filter_by(business_id=b.id).count(),
-        "expenses":Expense.query.filter_by(business_id=b.id).count()}
-    payments=Payment.query.filter_by(business_id=b.id).order_by(Payment.created_at.desc()).limit(5).all()
-    activity=AuditLog.query.filter_by(business_id=b.id).order_by(AuditLog.created_at.desc()).limit(8).all()
-    return render_template("admin/business_detail.html",business=b,metrics=metrics,payments=payments,activity=activity)
+    b = db.session.get(Business, business_id)
+    if not b:
+        abort(404)
+
+    metrics = {
+        "products": Product.query.filter_by(business_id=b.id).count(),
+        "sales": Sale.query.filter_by(business_id=b.id).count(),
+        "restocks": Restock.query.filter_by(business_id=b.id).count(),
+        "expenses": Expense.query.filter_by(business_id=b.id).count(),
+    }
+
+    payments = (
+        Payment.query.filter_by(business_id=b.id)
+        .order_by(Payment.created_at.desc())
+        .limit(5)
+        .all()
+    )
+
+    activity = (
+        AuditLog.query.filter_by(business_id=b.id)
+        .order_by(AuditLog.created_at.desc())
+        .limit(8)
+        .all()
+    )
+
+    from app.subscriptions.entitlements import effective_access, access_label
+
+    if current_app.config.get("SUBSCRIPTIONS_ENABLED"):
+        owner_access = effective_access(b.owner)
+        business_access = effective_access(b.owner, business=b)
+        owner_billing_label = access_label(b.owner)
+    else:
+        owner_access = None
+        business_access = None
+        owner_billing_label = "Subscriptions disabled"
+
+    return render_template(
+        "admin/business_detail.html",
+        business=b,
+        metrics=metrics,
+        payments=payments,
+        activity=activity,
+        owner_access=owner_access,
+        business_access=business_access,
+        owner_billing_label=owner_billing_label,
+    )
 
 @admin_bp.post("/businesses/<int:business_id>/suspension")
 @admin_required

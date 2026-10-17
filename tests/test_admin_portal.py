@@ -658,3 +658,135 @@ def test_admin_customer_paid_unpaid_filters(client):
 
     assert "unpaid-filter@example.com" in unpaid_html
     assert "owner@example.com" not in unpaid_html
+
+def test_admin_business_detail_separates_account_billing_and_business_payments(client):
+    _, user_id, first_business_id = seed(client)
+
+    with client.application.app_context():
+        second_business = Business(
+            user_id=user_id,
+            name="Second Shop",
+        )
+        db.session.add(second_business)
+        db.session.flush()
+
+        second_business_id = second_business.id
+        now = datetime.utcnow()
+
+        subscription = RecurringSubscription(
+            user_id=user_id,
+            business_id=first_business_id,
+            plan_code="plus",
+            billing_interval="monthly",
+            amount_kobo=500000,
+            provider_plan_code="PLN_test_plus",
+            status="active",
+            current_period_start=now - timedelta(days=1),
+            current_period_end=now + timedelta(days=29),
+        )
+        db.session.add(subscription)
+        db.session.flush()
+
+        payment = Payment(
+            user_id=user_id,
+            subscription_id=subscription.id,
+            business_id=first_business_id,
+            customer_email="owner@example.com",
+            reference="SB-PLUS-ACCOUNT-TEST",
+            product="subscription",
+            plan_code="plus",
+            billing_interval="monthly",
+            amount_kobo=500000,
+            status="success",
+        )
+        db.session.add(payment)
+        db.session.commit()
+
+    client.application.config["SUBSCRIPTIONS_ENABLED"] = True
+
+    from app.subscriptions.entitlements import access_label
+    client.application.jinja_env.globals["billing_access_label"] = access_label
+    admin_login(client)
+
+    response = client.get(
+        f"/admin/businesses/{second_business_id}"
+    )
+
+    assert response.status_code == 200
+
+    html = response.get_data(as_text=True)
+
+    assert "StockBridge Plus" in html
+    assert "Business write access" in html
+    assert "Account billing" in html
+    assert "Business-linked payments" in html
+
+    # A payment linked to another business must not appear
+    # in this business-specific payment history.
+    assert "SB-PLUS-ACCOUNT-TEST" not in html
+
+
+def test_admin_business_detail_shows_restricted_for_suspended_business(client):
+    _, user_id, business_id = seed(client)
+
+    with client.application.app_context():
+        business = db.session.get(Business, business_id)
+        business.suspended_at = datetime.utcnow()
+        db.session.commit()
+
+    client.application.config["SUBSCRIPTIONS_ENABLED"] = True
+
+    from app.subscriptions.entitlements import access_label
+    client.application.jinja_env.globals["billing_access_label"] = access_label
+
+    admin_login(client)
+
+    response = client.get(f"/admin/businesses/{business_id}")
+
+    assert response.status_code == 200
+
+    html = response.get_data(as_text=True)
+
+    assert re.search(r"Business write access:\s*Restricted", html)
+    assert "Business status:" in html
+    assert "Suspended" in html
+    assert "Account billing" in html
+
+
+def test_admin_business_detail_shows_restricted_for_expired_subscription(client):
+    from app.models import AccountBilling
+
+    _, user_id, business_id = seed(client)
+    with client.application.app_context():
+        user = db.session.get(User, user_id)
+
+        # Ensure the account is past its trial period.
+        user.created_at = datetime.utcnow() - timedelta(days=60)
+
+        billing = AccountBilling.query.filter_by(user_id=user_id).first()
+        if billing:
+            billing.trial_ends_at = datetime.utcnow() - timedelta(days=30)
+            billing.legacy_lifetime = False
+
+        business = db.session.get(Business, business_id)
+        business.subscription_plan = "basic"
+        business.subscription_status = "expired"
+
+        db.session.commit()
+
+    client.application.config["SUBSCRIPTIONS_ENABLED"] = True
+
+    from app.subscriptions.entitlements import access_label
+    client.application.jinja_env.globals["billing_access_label"] = access_label
+
+    admin_login(client)
+
+    response = client.get(f"/admin/businesses/{business_id}")
+
+    assert response.status_code == 200
+
+    html = response.get_data(as_text=True)
+
+    assert "Account billing" in html
+    assert re.search(r"Business write access:\s*Restricted", html)
+    assert "No currently qualifying subscription." in html

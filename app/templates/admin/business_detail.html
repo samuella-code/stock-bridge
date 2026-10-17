@@ -1,3 +1,214 @@
-{% extends "admin/base.html" %}{% block content %}<a href="{{url_for('admin.businesses')}}">← Businesses</a><h1>{{business.name}}</h1><div class="admin-card"><p>Owner: {{business.owner.full_name}} ({{business.owner.email}})</p><p>Access: {{billing_access_label(business.owner) if config.SUBSCRIPTIONS_ENABLED else ('Active' if business.has_write_access else 'Inactive')}}</p><p>Account: {{'Suspended' if business.suspended_at else 'Active'}}</p><p>Created: {{business.created_at.strftime('%d %b %Y')}}</p></div><div class="admin-cards">{% for label,value in metrics.items() %}<article><span>{{label|title}}</span><strong>{{value}}</strong></article>{% endfor %}</div>
-<section class="admin-card"><h2>Recent payments</h2>{% for payment in payments %}<p>{{payment.created_at.strftime('%d %b %Y')}} · {% if payment.product == 'lifetime' %}<a href="{{url_for('admin.payment_detail',payment_id=payment.id)}}">{{payment.reference}}</a>{% else %}{{ payment.reference }} · {{ payment.plan_code|title }} {{ payment.billing_interval }}{% endif %} · {{payment.status}}</p>{% else %}<p>No linked payments.</p>{% endfor %}</section><section class="admin-card"><h2>Business activity</h2>{% for row in activity %}<p>{{row.created_at.strftime('%d %b %Y %H:%M')}} UTC · {{row.action.replace('_',' ')|title}} · {{row.description}}</p>{% else %}<p>No activity recorded.</p>{% endfor %}</section>
-{% if business.owner.role=='user' and not business.owner.admin_enabled %}<form method="post" action="{{url_for('admin.suspend_business',business_id=business.id)}}" class="admin-card"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><input type="hidden" name="desired_state" value="{{ 'reactivate' if business.suspended_at else 'suspend' }}"><input type="hidden" name="expected_state" value="{{ 'suspended' if business.suspended_at else 'active' }}"><input type="hidden" name="expected_suspended_at" value="{{ business.suspended_at.isoformat() if business.suspended_at else '' }}"><h2>{{'Reactivate business' if business.suspended_at else 'Suspend business'}}</h2><label>Reason for {{'reactivation' if business.suspended_at else 'suspension'}}<input name="reason" required maxlength="300"></label><label class="confirmation"><input type="checkbox" name="confirm" required>Confirm you want to {{'reactivate' if business.suspended_at else 'suspend'}} {{business.name}}.</label><button class="{{'' if business.suspended_at else 'danger-action'}}">{{'Reactivate business' if business.suspended_at else 'Suspend business'}}</button></form>{% endif %}{% endblock %}
+
+{% extends "admin/base.html" %}
+
+{% block content %}
+
+<a href="{{ url_for('admin.businesses') }}">← Businesses</a>
+
+<h1>{{ business.name }}</h1>
+
+<!-- Business overview -->
+<section class="admin-card">
+    <h2>Business overview</h2>
+
+    <p>
+        Owner: {{ business.owner.full_name }}
+        ({{ business.owner.email }})
+    </p>
+
+    <p>
+        Business status:
+        {{ 'Suspended' if business.suspended_at else 'Active' }}
+    </p>
+
+    <p>
+        Created:
+        {{ business.created_at.strftime('%d %b %Y') }}
+    </p>
+
+    <p>
+        Business write access:
+        {% if config.SUBSCRIPTIONS_ENABLED %}
+            {{ 'Allowed' if business_access.can_write else 'Restricted' }}
+        {% else %}
+            {{ 'Allowed' if business.has_write_access else 'Restricted' }}
+        {% endif %}
+    </p>
+</section>
+
+<!-- Account billing -->
+<section class="admin-card">
+    <h2>Account billing</h2>
+
+    <p>Owner's plan: {{ owner_billing_label }}</p>
+
+    {% if config.SUBSCRIPTIONS_ENABLED %}
+
+        {% if owner_access.subscription %}
+            <p>
+                Subscription status:
+                {{ owner_access.subscription.status | replace('_', ' ') | title }}
+            </p>
+
+            <p>
+                Billing interval:
+                {{ owner_access.subscription.billing_interval | title }}
+            </p>
+
+            <p>
+                Current period ends:
+                {% if owner_access.subscription.current_period_end %}
+                    {{ owner_access.subscription.current_period_end.strftime('%d %b %Y') }}
+                {% else %}
+                    Not available
+                {% endif %}
+            </p>
+
+            <p>
+                Next renewal:
+                {% if owner_access.subscription.next_renewal_at %}
+                    {{ owner_access.subscription.next_renewal_at.strftime('%d %b %Y') }}
+                {% else %}
+                    Not scheduled
+                {% endif %}
+            </p>
+
+        {% elif owner_access.legacy %}
+            <p>Access type: Existing lifetime entitlement</p>
+
+        {% elif owner_access.kind == 'trial' %}
+            <p>
+                Trial days remaining:
+                {{ owner_access.trial_days_remaining }}
+            </p>
+
+        {% else %}
+            <p>No currently qualifying subscription.</p>
+        {% endif %}
+
+    {% else %}
+        <p>Subscription billing is disabled.</p>
+    {% endif %}
+</section>
+
+<!-- Business metrics -->
+<div class="admin-cards">
+    {% for label, value in metrics.items() %}
+        <article>
+            <span>{{ label | title }}</span>
+            <strong>{{ value }}</strong>
+        </article>
+    {% endfor %}
+</div>
+
+<!-- Payments -->
+<section class="admin-card">
+    <h2>Business-linked payments</h2>
+
+    <p>
+        Only payments explicitly linked to this business are shown here.
+    </p>
+
+    {% for payment in payments %}
+        <p>
+            {{ payment.created_at.strftime('%d %b %Y') }} ·
+
+            {% if payment.product == 'lifetime' %}
+                <a href="{{ url_for('admin.payment_detail', payment_id=payment.id) }}">
+                    {{ payment.reference }}
+                </a>
+            {% else %}
+                {{ payment.reference }} ·
+                {{ payment.plan_code | title if payment.plan_code else 'Subscription' }}
+                {{ payment.billing_interval or '' }}
+            {% endif %}
+
+            · {{ payment.status }}
+        </p>
+    {% else %}
+        <p>No linked payments.</p>
+    {% endfor %}
+</section>
+
+<!-- Activity -->
+<section class="admin-card">
+    <h2>Business activity</h2>
+
+    {% for row in activity %}
+        <p>
+            {{ row.created_at.strftime('%d %b %Y %H:%M') }} UTC ·
+            {{ row.action.replace('_', ' ') | title }} ·
+            {{ row.description }}
+        </p>
+    {% else %}
+        <p>No activity recorded.</p>
+    {% endfor %}
+</section>
+
+<!-- Business suspension/reactivation -->
+{% if business.owner.role == 'user' and not business.owner.admin_enabled %}
+
+<form
+    method="post"
+    action="{{ url_for('admin.suspend_business', business_id=business.id) }}"
+    class="admin-card"
+>
+    <input
+        type="hidden"
+        name="csrf_token"
+        value="{{ csrf_token() }}"
+    >
+
+    <input
+        type="hidden"
+        name="desired_state"
+        value="{{ 'reactivate' if business.suspended_at else 'suspend' }}"
+    >
+
+    <input
+        type="hidden"
+        name="expected_state"
+        value="{{ 'suspended' if business.suspended_at else 'active' }}"
+    >
+
+    <input
+        type="hidden"
+        name="expected_suspended_at"
+        value="{{ business.suspended_at.isoformat() if business.suspended_at else '' }}"
+    >
+
+    <h2>
+        {{ 'Reactivate business' if business.suspended_at else 'Suspend business' }}
+    </h2>
+
+    <label>
+        Reason for
+        {{ 'reactivation' if business.suspended_at else 'suspension' }}
+
+        <input
+            name="reason"
+            required
+            maxlength="300"
+        >
+    </label>
+
+    <label class="confirmation">
+        <input
+            type="checkbox"
+            name="confirm"
+            required
+        >
+
+        Confirm you want to
+        {{ 'reactivate' if business.suspended_at else 'suspend' }}
+        {{ business.name }}.
+    </label>
+
+    <button class="{{ '' if business.suspended_at else 'danger-action' }}">
+        {{ 'Reactivate business' if business.suspended_at else 'Suspend business' }}
+    </button>
+</form>
+
+{% endif %}
+
+{% endblock %}
