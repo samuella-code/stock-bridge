@@ -26,7 +26,10 @@ def validated_test_url(environ):
     except Exception:
         reject()
     mode = environ.get('STOCKBRIDGE_TEST_POSTGRES_MODE', 'disposable-instance')
-    if mode not in ('disposable-instance', 'existing-local-service'):
+    if mode not in ('disposable-instance', 'existing-local-service', 'ubuntu-isolated-cluster'):
+        reject()
+    ubuntu = mode == 'ubuntu-isolated-cluster'
+    if ubuntu and environ.get('STOCKBRIDGE_TEST_POSTGRES_UBUNTU_ACK') != '16/stockbridge-test:55432:loopback-only':
         reject()
     existing = mode == 'existing-local-service'
     if existing and environ.get('STOCKBRIDGE_TEST_POSTGRES_SERVICE_ACK') != 'postgresql-x64-17:stockbridge_disposable_test:stockbridge_test_user':
@@ -42,6 +45,7 @@ def validated_test_url(environ):
             or url.port is None or not 1024 <= url.port <= 65535
             or (existing and (url.host != '127.0.0.1' or url.port != 5432))
             or (not existing and url.port == 5432)
+            or (ubuntu and (url.host != '127.0.0.1' or url.port != 55432))
             or url.database != expected_database
             or url.username != expected_user
             or not url.password or url.query):
