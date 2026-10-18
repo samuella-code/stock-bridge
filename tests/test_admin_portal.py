@@ -944,3 +944,370 @@ def test_admin_business_detail_excludes_admin_owned_businesses(client):
     assert client.get(
         f"/admin/businesses/{dual_business_id}"
     ).status_code == 404
+
+def test_admin_reports_business_statistics_exclude_admin_owned_businesses(client):
+    admin_id, customer_id, _ = seed(client)
+
+    with client.application.app_context():
+        dual_admin = User(
+            full_name="Dual Admin",
+            email="dual-reports@example.com",
+            role="user",
+            admin_enabled=True,
+        )
+        dual_admin.set_password("test-password123")
+        db.session.add(dual_admin)
+        db.session.flush()
+
+        db.session.add_all([
+            Business(
+                user_id=customer_id,
+                name="Suspended Customer Shop",
+                suspended_at=datetime.utcnow(),
+            ),
+            Business(
+                user_id=admin_id,
+                name="Admin Private Shop",
+            ),
+            Business(
+                user_id=dual_admin.id,
+                name="Dual Admin Shop",
+            ),
+        ])
+        db.session.commit()
+
+    admin_login(client)
+
+    response = client.get("/admin/reports?period=today")
+
+    assert response.status_code == 200
+
+    html = response.get_data(as_text=True)
+
+    assert re.search(r"New businesses</span>\s*<strong>2</strong>", html)
+    assert re.search(r"Total businesses</span>\s*<strong>2</strong>", html)
+    assert re.search(r"Unsuspended businesses</span>\s*<strong>1</strong>", html)
+    assert re.search(r"Suspended businesses</span>\s*<strong>1</strong>", html)
+
+def test_admin_reports_business_date_boundaries(client):
+    _, customer_id, business_id = seed(client)
+
+    with client.application.app_context():
+        # Move the original seeded business outside the report period.
+        original = db.session.get(Business, business_id)
+        original.created_at = datetime(2026, 9, 30, 23, 59, 59)
+
+        db.session.add_all([
+            Business(
+                user_id=customer_id,
+                name="Start Boundary Shop",
+                created_at=datetime(2026, 10, 1, 0, 0, 0),
+            ),
+            Business(
+                user_id=customer_id,
+                name="End Day Shop",
+                created_at=datetime(2026, 10, 7, 23, 59, 59),
+            ),
+            Business(
+                user_id=customer_id,
+                name="Outside Boundary Shop",
+                created_at=datetime(2026, 10, 8, 0, 0, 0),
+            ),
+        ])
+        db.session.commit()
+
+    admin_login(client)
+
+    response = client.get(
+        "/admin/reports",
+        query_string={
+            "period": "custom",
+            "start": "2026-10-01",
+            "end": "2026-10-07",
+        },
+    )
+
+    assert response.status_code == 200
+
+    html = response.get_data(as_text=True)
+
+    assert re.search(
+        r"New businesses</span>\s*<strong>2</strong>",
+        html,
+    )
+
+    # Total businesses is a live count, not limited to the date range.
+    assert re.search(
+        r"Total businesses</span>\s*<strong>4</strong>",
+        html,
+    )
+
+def test_admin_reports_subscription_revenue_separate_from_lifetime(client):
+    _, customer_id, business_id = seed(client)
+
+    with client.application.app_context():
+        now = datetime.utcnow()
+
+        subscription = RecurringSubscription(
+            user_id=customer_id,
+            business_id=business_id,
+            plan_code="plus",
+            billing_interval="monthly",
+            amount_kobo=500000,
+            provider_plan_code="PLN_report_test",
+            status="active",
+        )
+        db.session.add(subscription)
+        db.session.flush()
+
+        db.session.add_all([
+            Payment(
+                user_id=customer_id,
+                subscription_id=subscription.id,
+                business_id=business_id,
+                customer_email="owner@example.com",
+                reference="REPORT-SUB-PAID",
+                product="subscription",
+                amount_kobo=500000,
+                status="success",
+                paid_at=now,
+            ),
+            Payment(
+                user_id=customer_id,
+                subscription_id=subscription.id,
+                business_id=business_id,
+                customer_email="owner@example.com",
+                reference="REPORT-SUB-UNVERIFIED",
+                product="subscription",
+                amount_kobo=500000,
+                status="success",
+                paid_at=None,
+            ),
+            Payment(
+                user_id=customer_id,
+                business_id=business_id,
+                customer_email="owner@example.com",
+                reference="REPORT-LIFETIME-PAID",
+                product="lifetime",
+                provider="paystack",
+                currency="NGN",
+                amount_kobo=300000,
+                status="success",
+                paid_at=now,
+            ),
+        ])
+        db.session.commit()
+
+    admin_login(client)
+
+    response = client.get("/admin/reports?period=today")
+    assert response.status_code == 200
+
+    html = response.get_data(as_text=True)
+
+    assert re.search(
+        r"Verified access payments</span>\s*<strong>1</strong>",
+        html,
+    )
+    assert re.search(
+        r"Verified access revenue</span>\s*<strong>[^<]*3,000\.00</strong>",
+        html,
+    )
+    assert re.search(
+        r"Verified subscription payments</span>\s*<strong>1</strong>",
+        html,
+    )
+    assert re.search(
+        r"Subscription revenue</span>\s*<strong>[^<]*5,000\.00</strong>",
+        html,
+    )
+
+def test_admin_reports_exclude_admin_subscription_payments(client):
+    admin_id, customer_id, business_id = seed(client)
+
+    with client.application.app_context():
+        now = datetime.utcnow()
+
+        admin_business = Business(
+            user_id=admin_id,
+            name="Admin Revenue Shop",
+        )
+        db.session.add(admin_business)
+        db.session.flush()
+
+        for user_id, shop_id, email, reference in [
+            (customer_id, business_id, "owner@example.com", "REPORT-CUSTOMER"),
+            (admin_id, admin_business.id, "admin@example.com", "REPORT-ADMIN"),
+        ]:
+            subscription = RecurringSubscription(
+                user_id=user_id,
+                business_id=shop_id,
+                plan_code="plus",
+                billing_interval="monthly",
+                amount_kobo=500000,
+                provider_plan_code="PLN_" + reference,
+                status="active",
+            )
+            db.session.add(subscription)
+            db.session.flush()
+
+            db.session.add(Payment(
+                user_id=user_id,
+                subscription_id=subscription.id,
+                business_id=shop_id,
+                customer_email=email,
+                reference=reference,
+                product="subscription",
+                provider="paystack",
+                currency="NGN",
+                amount_kobo=500000,
+                status="success",
+                paid_at=now,
+            ))
+
+        db.session.commit()
+
+    admin_login(client)
+
+    response = client.get("/admin/reports?period=today")
+    assert response.status_code == 200
+
+    html = response.get_data(as_text=True)
+
+    assert re.search(
+        r"Verified subscription payments</span>\s*<strong>1</strong>",
+        html,
+    )
+    assert re.search(
+        r"Subscription revenue</span>\s*<strong>[^<]*5,000\.00</strong>",
+        html,
+    )
+
+def test_admin_reports_exclude_mismatched_subscription_payments(client):
+    _, customer_id, business_id = seed(client)
+
+    with client.application.app_context():
+        other = User(
+            full_name="Other Customer",
+            email="other-reports@example.com",
+        )
+        other.set_password("test-password123")
+        db.session.add(other)
+        db.session.flush()
+
+        other_business = Business(
+            user_id=other.id,
+            name="Other Customer Shop",
+        )
+        db.session.add(other_business)
+        db.session.flush()
+
+        subscription = RecurringSubscription(
+            user_id=customer_id,
+            business_id=business_id,
+            plan_code="plus",
+            billing_interval="monthly",
+            amount_kobo=500000,
+            provider_plan_code="PLN_ownership_test",
+            status="active",
+        )
+        db.session.add(subscription)
+        db.session.flush()
+
+        now = datetime.utcnow()
+
+        for reference, user_id, shop_id, email in [
+            ("OWN-VALID", customer_id, business_id, "owner@example.com"),
+            ("OWN-WRONG-USER", other.id, business_id, "other-reports@example.com"),
+            ("OWN-WRONG-BUSINESS", customer_id, other_business.id, "owner@example.com"),
+            ("OWN-WRONG-EMAIL", customer_id, business_id, "wrong@example.com"),
+        ]:
+            db.session.add(Payment(
+                user_id=user_id,
+                subscription_id=subscription.id,
+                business_id=shop_id,
+                customer_email=email,
+                reference=reference,
+                product="subscription",
+                provider="paystack",
+                currency="NGN",
+                amount_kobo=500000,
+                status="success",
+                paid_at=now,
+            ))
+
+        db.session.commit()
+
+    admin_login(client)
+
+    response = client.get("/admin/reports?period=today")
+    assert response.status_code == 200
+
+    html = response.get_data(as_text=True)
+
+    assert re.search(
+        r"Verified subscription payments</span>\s*<strong>1</strong>",
+        html,
+    )
+    assert re.search(
+        r"Subscription revenue</span>\s*<strong>[^<]*5,000\.00</strong>",
+        html,
+    )
+
+def test_admin_reports_subscription_revenue_not_duplicated_across_businesses(client):
+    _, customer_id, first_business_id = seed(client)
+
+    with client.application.app_context():
+        second_business = Business(
+            user_id=customer_id,
+            name="Second Customer Shop",
+        )
+        db.session.add(second_business)
+        db.session.flush()
+
+        subscription = RecurringSubscription(
+            user_id=customer_id,
+            business_id=first_business_id,
+            plan_code="plus",
+            billing_interval="monthly",
+            amount_kobo=500000,
+            provider_plan_code="PLN_multi_business_report",
+            status="active",
+        )
+        db.session.add(subscription)
+        db.session.flush()
+
+        db.session.add(Payment(
+            user_id=customer_id,
+            subscription_id=subscription.id,
+            business_id=first_business_id,
+            customer_email="owner@example.com",
+            reference="REPORT-MULTI-BUSINESS",
+            product="subscription",
+            provider="paystack",
+            currency="NGN",
+            amount_kobo=500000,
+            status="success",
+            paid_at=datetime.utcnow(),
+        ))
+        db.session.commit()
+
+    admin_login(client)
+
+    response = client.get("/admin/reports?period=today")
+    assert response.status_code == 200
+
+    html = response.get_data(as_text=True)
+
+    assert re.search(
+        r"Verified subscription payments</span>\s*<strong>1</strong>",
+        html,
+    )
+    assert re.search(
+        r"Subscription revenue</span>\s*<strong>[^<]*5,000\.00</strong>",
+        html,
+    )
+    assert re.search(
+        r"Total businesses</span>\s*<strong>2</strong>",
+        html,
+    )
