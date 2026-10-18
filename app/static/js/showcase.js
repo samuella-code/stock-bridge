@@ -5,10 +5,22 @@
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   const compact = window.matchMedia('(max-width: 768px)');
   const panels = [...root.querySelectorAll('[data-showcase-panel]')];
-  const steps = [...root.querySelectorAll('[data-showcase-step]')];
   const play = root.querySelector('[data-showcase-play]');
   const caption = root.querySelector('[data-showcase-caption]');
   const announcement = root.querySelector('[data-showcase-announcement]');
+  const indicatorRow = root.querySelector('[data-showcase-indicators]');
+  const indicators = panels.map((panel, i) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.setAttribute('aria-label', `Slide ${i + 1}: ${panel.querySelector('h3').textContent}`);
+    button.setAttribute('aria-pressed', 'false');
+    button.addEventListener('click', () => {
+      nextDelay = manualDelay; show(i, true); sync();
+    });
+    indicatorRow.appendChild(button);
+    return button;
+  });
+  indicatorRow.hidden = false;
   const interval = 4500, manualDelay = 7000;
   let index = 0, timer = null, inView = true, hovered = false, focused = false;
   let nextDelay = interval;
@@ -31,7 +43,7 @@
   function show(next, manual = false) {
     index = next;
     panels.forEach((panel, i) => { panel.hidden = i !== index; });
-    steps.forEach((step, i) => step.setAttribute('aria-pressed', String(i === index)));
+    indicators.forEach((button, i) => button.setAttribute('aria-pressed', String(i === index)));
     root.querySelectorAll('[data-showcase-side]').forEach((item, i) => {
       item.setAttribute('data-active', String(i === [0, 1, 3, 2, 4, 5, 6][index]));
     });
@@ -46,9 +58,6 @@
     caption.textContent = `${String(index + 1).padStart(2, '0')} / ${String(panels.length).padStart(2, '0')} · ${panel.querySelector('h3').textContent}`;
     if (manual) announcement.textContent = `Step ${index + 1} of ${panels.length}: ${panel.querySelector('h3').textContent}`;
   }
-  steps.forEach((step, i) => step.addEventListener('click', () => {
-    nextDelay = manualDelay; show(i, true); sync();
-  }));
   play.addEventListener('click', () => {
     if (reduced.matches) return;
     playing = !playing;

@@ -45,8 +45,8 @@
   <div class="showcase-floating" aria-hidden="true"><div><span>Today’s Sales</span><strong data-showcase-sales>₦0</strong></div><div><span data-showcase-profit-label>Net profit</span><strong data-showcase-profit>₦0</strong></div><div><span>Current stock</span><strong data-showcase-stock>100</strong></div></div>
   <div class="showcase-context"><span>Low Stock <strong>0 products</strong></span><span>Expenses <strong data-showcase-expenses>₦0</strong></span></div><p class="showcase-disclaimer">Example figures · real StockBridge workflows, illustrated.</p>
   <div class="showcase-controls" data-showcase-controls hidden>
-    <div class="showcase-steps" role="group" aria-label="Choose a workflow step">{% for label in ['Dashboard','Products','Record Sale','Inventory Update','Restocking','Expenses','Reports'] %}<button type="button" data-showcase-step="{{ loop.index0 }}" aria-pressed="{{ 'true' if loop.first else 'false' }}" aria-label="Step {{ loop.index }}: {{ label }}"><span aria-hidden="true">0{{ loop.index }}</span>{{ label }}</button>{% endfor %}</div>
-    <div class="showcase-playback"><span data-showcase-caption>01 / 07 · Dashboard</span><button type="button" data-showcase-play>Pause showcase</button></div>
+    <div class="showcase-indicators" data-showcase-indicators role="group" aria-label="Choose a preview slide"></div>
+    <div class="showcase-playback"><span class="sr-only" data-showcase-caption>01 / 07 · Dashboard</span><button type="button" data-showcase-play>Pause showcase</button></div>
   </div>
   <span class="sr-only" data-showcase-announcement role="status" aria-live="polite"></span>
 </section>
