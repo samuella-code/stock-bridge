@@ -12,11 +12,12 @@ function mount({reduced=false,observer=true,auth=true,profit=true,journey=true}=
  const counts=[150000,80000,70000,25000,45000].map((value,i)=>{const e=element();e.dataset={count:String(value),prefix:[1,3].includes(i)?'− ':''};return e;});
  const rows=counts.map(e=>{const row=element();row.querySelector=()=>e;return row;});
  const skip=element(),story=element();story.querySelectorAll=()=>rows;story.querySelector=()=>skip;
- const authSteps=Array.from({length:4},element),authPanels=Array.from({length:4},element),play=element(),controls=element();
- const demo=element();demo.querySelectorAll=s=>s.includes('step')?authSteps:authPanels;demo.querySelector=s=>s.includes('controls')?controls:play;
+ const authSteps=[],authPanels=Array.from({length:4},element),play=element(),controls=element();
+ const indicatorRow=element();indicatorRow.appendChild=b=>authSteps.push(b);authPanels.forEach((p,i)=>p.querySelector=()=>({textContent:['Dashboard','Inventory','Record Sale','Reports'][i]}));
+ const demo=element();demo.querySelectorAll=s=>s.includes('step')?authSteps:authPanels;demo.querySelector=s=>s.includes('indicators')?indicatorRow:s.includes('controls')?controls:play;
  const media=element();media.matches=reduced;
  const timers=new Map(),frames=new Map(),observers=[];let id=0,clock=0;
- const document=element();document.hidden=false;document.querySelector=s=>s.includes('journey')?(journey?journeyRoot:null):s.includes('profit')?(profit?story:null):(auth?demo:null);
+ const document=element();document.createElement=()=>element();document.hidden=false;document.querySelector=s=>s.includes('journey')?(journey?journeyRoot:null):s.includes('profit')?(profit?story:null):(auth?demo:null);
  const window={matchMedia:()=>media,setTimeout(fn,delay){timers.set(++id,{fn,delay});return id;},clearTimeout(k){timers.delete(k);},requestAnimationFrame(fn){frames.set(++id,fn);return id;},cancelAnimationFrame(k){frames.delete(k);}};
  if(observer)window.IntersectionObserver=class{constructor(fn){this.fn=fn;this.disconnected=false;observers.push(this);}observe(){}disconnect(){this.disconnected=true;}};
  vm.runInNewContext(fs.readFileSync('app/static/js/marketing.js','utf8'),{window,document,performance:{now:()=>clock}});
@@ -25,6 +26,9 @@ function mount({reduced=false,observer=true,auth=true,profit=true,journey=true}=
  return {steps,panels,counts,rows,skip,story,authSteps,authPanels,play,controls,demo,media,timers,frames,observers,document,tick,frame};
 }
 let s=mount({profit:false});
+equal(s.authSteps.length,s.authPanels.length);equal(s.authSteps[0].attrs['aria-label'],'Slide 1: Dashboard');equal(s.authSteps[0].textContent,'');
+s.tick();equal(s.authSteps[1].attrs['aria-pressed'],'true');
+s=mount({profit:false});
 s.steps.forEach((step,i)=>{equal(step.disabled,false);step.handlers.click();equal(s.panels.filter(p=>!p.hidden).length,1);equal(s.panels[i].hidden,false);equal(step.attrs['aria-pressed'],'true');});
 equal(s.timers.size,1);equal([...s.timers.values()][0].delay,5500);
 for(let i=0;i<8;i++)s.tick();equal(s.authPanels[0].hidden,false);equal(s.play.textContent,'Pause preview');

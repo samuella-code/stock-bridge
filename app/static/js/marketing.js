@@ -56,7 +56,14 @@
   const demo = document.querySelector('[data-auth-demo]');
   if (!demo) return;
   const panels = [...demo.querySelectorAll('[data-auth-panel]')];
-  const steps = [...demo.querySelectorAll('[data-auth-step]')];
+  const indicatorRow = demo.querySelector('[data-auth-indicators]');
+  const steps = panels.map((panel, i) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.setAttribute('aria-label', `Slide ${i + 1}: ${panel.querySelector('h3').textContent}`);
+    indicatorRow.appendChild(button);
+    return button;
+  });
   const play = demo.querySelector('[data-auth-play]');
   let index = 0, timer = null, inView = true, interacting = false, playing = !reduced.matches, delay = 5500;
   const show = next => {
