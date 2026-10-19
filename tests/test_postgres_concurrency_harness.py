@@ -255,3 +255,137 @@ def test_post_scenario_never_inspects_after_surviving_worker(monkeypatch):
         local.setattr(threading,'enumerate',lambda:[SimpleNamespace(name='stockbridge-race-A',is_alive=lambda:True)])
         with pytest.raises(pytest.exit.Exception):next(generator)
     check.assert_not_called()
+
+
+@pytest.mark.parametrize('stage',[
+    'accept', 'receive', 'evidence-collection', 'instance-signature',
+    'backend-inspection', 'response-serialization', 'response-transmission',
+])
+@pytest.mark.parametrize('ordinal',[1,2])
+def test_helper_diagnostics_identify_request_and_stage(monkeypatch,stage,ordinal):
+    server,conn,path=mock_operator_session(monkeypatch,[evidence(),evidence()])
+    secret='synthetic-private-exception-message'
+    error=TimeoutError(secret)
+    backend=dict(pid=5001,parent_pid=5000,uid=110,executable=helper.collector.EXECUTABLE)
+    monkeypatch.setattr(helper.collector,'process_identity',MagicMock(return_value=backend))
+    monkeypatch.setattr(helper,'receive',MagicMock(side_effect=[
+        dict(nonce='a'*64,backend_pid=5001),dict(nonce='b'*64,backend_pid=5001)]))
+    def fail_on_selected(original):
+        calls=0
+        def wrapped(*args,**kwargs):
+            nonlocal calls
+            calls+=1
+            if calls==ordinal: raise error
+            return original(*args,**kwargs)
+        return wrapped
+    if stage=='accept': server.accept.side_effect=fail_on_selected(lambda:(conn,None))
+    elif stage=='receive':
+        monkeypatch.setattr(helper,'receive',fail_on_selected(lambda *a,**k:dict(nonce='a'*64,backend_pid=5001)))
+    elif stage=='evidence-collection':
+        monkeypatch.setattr(helper.collector,'collect',fail_on_selected(lambda **k:evidence()))
+    elif stage=='instance-signature':monkeypatch.setattr(helper,'instance_signature',fail_on_selected(helper.instance_signature))
+    elif stage=='backend-inspection':monkeypatch.setattr(helper.collector,'process_identity',fail_on_selected(lambda pid:backend))
+    elif stage=='response-serialization':monkeypatch.setattr(helper.json,'dumps',fail_on_selected(helper.json.dumps))
+    else:conn.sendall.side_effect=fail_on_selected(lambda payload:None)
+    with pytest.raises(EvidenceError) as caught:helper.serve(1000)
+    message=str(caught.value)
+    assert message==f'PostgreSQL preflight rejected: Ubuntu privileged helper failed: stage={stage} request={ordinal} category=timeout'
+    assert secret not in message and 'a'*64 not in message and 'b'*64 not in message
+    assert server.close.called and path.unlink.called
+    assert conn.sendall.call_count==(ordinal if stage=='response-transmission' else ordinal-1)
+
+
+@pytest.mark.parametrize('operation',['construct','bind','chmod','listen'])
+def test_helper_socket_setup_failures_are_sanitized(monkeypatch,operation):
+    server,conn,path=mock_operator_session(monkeypatch,[evidence()])
+    failure=PermissionError('private-path-and-credentials')
+    if operation=='construct':helper.socket.socket=MagicMock(side_effect=failure)
+    elif operation=='chmod':helper.os.chmod.side_effect=failure
+    else:getattr(server,operation).side_effect=failure
+    with pytest.raises(EvidenceError) as caught:helper.serve(1000)
+    assert str(caught.value)=='PostgreSQL preflight rejected: Ubuntu privileged helper failed: stage=socket-setup category=permission-denied'
+    assert not conn.sendall.called
+    if operation!='construct':assert server.close.called
+    if operation in ('chmod','listen'):assert path.unlink.called
+
+
+@pytest.mark.parametrize('error,category',[
+    (TimeoutError('private'),'timeout'),(PermissionError('private'),'permission-denied'),
+    (BrokenPipeError('private'),'peer-disconnected'),(ConnectionResetError('private'),'peer-disconnected'),
+    (ConnectionAbortedError('private'),'peer-disconnected'),(KeyError('private'),'missing-evidence'),
+    (ValueError('private'),'inspection-failed'),(TypeError('private'),'inspection-failed'),
+    (OSError('private'),'inspection-failed'),(EvidenceError('private'),'inspection-failed'),
+])
+def test_helper_diagnostic_categories_are_allowlisted(error,category):
+    assert helper.diagnostic_category(error)==category
+
+
+def test_helper_verifies_second_request_backend_and_serializes_response(monkeypatch):
+    import json
+    server,conn,path=mock_operator_session(monkeypatch,[evidence(),evidence()])
+    monkeypatch.setattr(helper,'receive',MagicMock(side_effect=[
+        dict(nonce='a'*64,backend_pid=None),dict(nonce='b'*64,backend_pid=5001)]))
+    backend=dict(pid=5001,parent_pid=5000,uid=110,executable=helper.collector.EXECUTABLE,start_ticks=123)
+    inspect=MagicMock(return_value=backend);monkeypatch.setattr(helper.collector,'process_identity',inspect)
+    helper.serve(1000)
+    inspect.assert_called_once_with(5001)
+    responses=[json.loads(call.args[0]) for call in conn.sendall.call_args_list]
+    assert responses[0]['backend'] is None and responses[1]['backend']==backend
+    assert responses[1]['nonce']=='b'*64
+    assert server.accept.call_count==2 and server.close.called and path.unlink.called
+
+
+@pytest.mark.parametrize('key,value',[('parent_pid',999),('uid',999),('executable','/unexpected')])
+def test_helper_backend_mismatch_remains_rejected(monkeypatch,key,value):
+    server,conn,path=mock_operator_session(monkeypatch,[evidence(),evidence()])
+    monkeypatch.setattr(helper,'receive',MagicMock(side_effect=[dict(nonce='a'*64,backend_pid=None),dict(nonce='b'*64,backend_pid=5001)]))
+    backend=dict(pid=5001,parent_pid=5000,uid=110,executable=helper.collector.EXECUTABLE)
+    backend[key]=value
+    monkeypatch.setattr(helper.collector,'process_identity',MagicMock(return_value=backend))
+    with pytest.raises(EvidenceError,match='^PostgreSQL preflight rejected: Ubuntu privileged helper backend outside isolated cluster$'):helper.serve(1000)
+    assert conn.sendall.call_count==1 and path.unlink.called
+
+
+def test_helper_missing_signature_evidence_is_classified(monkeypatch):
+    server,conn,path=mock_operator_session(monkeypatch,[{}])
+    with pytest.raises(EvidenceError,match='stage=instance-signature request=1 category=missing-evidence'):helper.serve(1000)
+    assert not conn.sendall.called and path.unlink.called
+
+
+@pytest.mark.parametrize('fail_fourth',[False,True])
+def test_helper_request_ordinals_reset_for_each_preflight_pair(monkeypatch,fail_fourth):
+    import inspect
+    server,conn,path=mock_operator_session(monkeypatch,[evidence() for _ in range(4)])
+    ordinals=[]
+    def receive(connection,deadline=None):
+        # Observe the server's assigned ordinal at the mocked request boundary.
+        frame=inspect.currentframe()
+        try: ordinals.append(frame.f_back.f_locals['request_ordinal'])
+        finally: del frame
+        if fail_fourth and len(ordinals)==4: raise TimeoutError('synthetic-private-message')
+        return dict(nonce='a'*64,backend_pid=None)
+    monkeypatch.setattr(helper,'receive',receive)
+    if fail_fourth:
+        with pytest.raises(EvidenceError) as caught:
+            helper.serve(1000,preflights=2,acknowledgment='approved-bounded-phase9a-evidence')
+        assert str(caught.value)=='PostgreSQL preflight rejected: Ubuntu privileged helper failed: stage=receive request=2 category=timeout'
+    else:
+        helper.serve(1000,preflights=2,acknowledgment='approved-bounded-phase9a-evidence')
+    assert ordinals==[1,2,1,2]
+    assert conn.sendall.call_count==(3 if fail_fourth else 4)
+    assert server.close.called and path.unlink.called
+
+
+@pytest.mark.parametrize('operation',['receive','collection','backend'])
+def test_existing_evidence_rejection_propagates_unchanged(monkeypatch,operation):
+    server,conn,path=mock_operator_session(monkeypatch,[evidence(),evidence()])
+    original=EvidenceError('PostgreSQL preflight rejected: Ubuntu synthetic security rejection')
+    if operation=='receive':monkeypatch.setattr(helper,'receive',MagicMock(side_effect=original))
+    elif operation=='collection':monkeypatch.setattr(helper.collector,'collect',MagicMock(side_effect=original))
+    else:
+        monkeypatch.setattr(helper,'receive',lambda *a,**k:dict(nonce='a'*64,backend_pid=5001))
+        monkeypatch.setattr(helper.collector,'process_identity',MagicMock(side_effect=original))
+    with pytest.raises(EvidenceError) as caught:helper.serve(1000)
+    assert caught.value is original
+    assert str(caught.value)=='PostgreSQL preflight rejected: Ubuntu synthetic security rejection'
+    assert not conn.sendall.called and server.close.called and path.unlink.called

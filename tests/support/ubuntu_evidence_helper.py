@@ -108,6 +108,22 @@ def instance_signature(evidence):
         'postgres_uid', 'process', 'commandline')), sockets
 
 
+def diagnostic_category(error):
+    """Classify without formatting exception messages or evidence."""
+    if isinstance(error, TimeoutError): return 'timeout'
+    if isinstance(error, PermissionError): return 'permission-denied'
+    if isinstance(error, (BrokenPipeError, ConnectionResetError, ConnectionAbortedError)):
+        return 'peer-disconnected'
+    if isinstance(error, KeyError): return 'missing-evidence'
+    return 'inspection-failed'
+
+
+def inspection_failure(stage, request_ordinal, error):
+    # stage and ordinal are assigned only by this module, never by a peer.
+    request = '' if request_ordinal is None else f' request={request_ordinal}'
+    reject(f'failed: stage={stage}{request} category={diagnostic_category(error)}')
+
+
 def serve(client_uid, *, preflights=1, seconds=BUDGET, acknowledgment=None):
     requests, seconds = session_policy(preflights, seconds, acknowledgment)
     # Never launch this from preflight. No interpreter/site-packages from a user venv.
@@ -120,23 +136,30 @@ def serve(client_uid, *, preflights=1, seconds=BUDGET, acknowledgment=None):
     for name in ('ubuntu_evidence_helper.py','ubuntu_os_evidence.py'): secure_path(own_dir/name,0)
     secure_parent()
     if SOCKET.exists() or SOCKET.is_symlink(): reject('socket already exists; operator review required')
-    server=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
+    server=None
     created=None
+    stage='socket-setup'
+    request_ordinal=None
     deadline=time.monotonic()+seconds
     baseline=None
     try:
+        server=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
         server.bind(str(SOCKET));created=SOCKET.lstat().st_ino
         os.chmod(SOCKET,0o666)  # Future explicitly approved helper node only; peer UID gates requests.
         server.listen(2)
         # Finite operator-approved capacity; never restart or extend automatically.
-        for _ in range(requests):
+        for request_index in range(requests):
+            request_ordinal=request_index % 2 + 1
+            stage='accept'
             if time.monotonic() >= deadline: reject('session expired')
             server.settimeout(max(.001,deadline-time.monotonic()))
             conn,_=server.accept()
             with conn:
+                stage='peer-authentication'
                 conn.settimeout(min(5,max(.001,deadline-time.monotonic())))
                 if peer_uid(conn)!=client_uid: reject('client identity mismatch')
                 if time.monotonic()>=deadline: reject('session expired')
+                stage='receive'
                 request=receive(conn, deadline)
                 if set(request)!={'nonce','backend_pid'} or not isinstance(request['nonce'],str) or len(request['nonce'])!=64:
                     reject('request shape invalid')
@@ -148,22 +171,29 @@ def serve(client_uid, *, preflights=1, seconds=BUDGET, acknowledgment=None):
                     remaining = deadline - time.monotonic()
                     if remaining <= 0: reject('session expired')
                     return collector.command(args, timeout=min(collector.TIMEOUT, remaining))
+                stage='evidence-collection'
                 evidence=collector.collect(command=bounded_command)
+                stage='instance-signature'
                 signature=instance_signature(evidence)
                 if baseline is not None and signature != baseline:
                     reject('cluster changed during operator session')
                 baseline=signature
+                stage='backend-inspection'
                 backend=collector.process_identity(pid) if pid is not None else None
                 if backend and (backend['parent_pid']!=evidence['process']['pid'] or backend['uid']!=evidence['postgres_uid'] or backend['executable']!=collector.EXECUTABLE):
                     reject('backend outside isolated cluster')
+                stage='response-serialization'
                 payload=json.dumps({'nonce':request['nonce'],'evidence':evidence,'backend':backend}).encode()+b'\n'
                 if len(payload)>MAX_BYTES or time.monotonic()>=deadline: reject('evidence budget exceeded')
+                stage='response-transmission'
                 conn.settimeout(max(.001, deadline-time.monotonic()))
                 conn.sendall(payload)
-    except collector.EvidenceError: raise
-    except (OSError,ValueError,KeyError): reject('bounded inspection failed')
+    except collector.EvidenceError:
+        raise
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        inspection_failure(stage, request_ordinal, error)
     finally:
-        server.close()
+        if server is not None: server.close()
         if created is not None:
             try:
                 node=SOCKET.lstat()
