@@ -154,6 +154,30 @@ def payment_issues_query():
         Payment.amount_kobo!=current_app.config["LIFETIME_PRICE_NAIRA"]*100,
         Payment.currency!="NGN", Payment.status=="failed"))
 
+def verified_subscription_payments_query():
+    return Payment.query.join(
+        RecurringSubscription,
+        Payment.subscription_id == RecurringSubscription.id,
+    ).join(
+        User,
+        Payment.user_id == User.id,
+    ).join(
+        Business,
+        Payment.business_id == Business.id,
+    ).filter(
+        User.role == "user",
+        User.admin_enabled.is_(False),
+        Business.user_id == User.id,
+        RecurringSubscription.user_id == User.id,
+        RecurringSubscription.business_id == Payment.business_id,
+        Payment.product == "subscription",
+        Payment.provider == "paystack",
+        Payment.currency == "NGN",
+        Payment.status == "success",
+        Payment.paid_at.isnot(None),
+        Payment.amount_kobo == RecurringSubscription.amount_kobo,
+        func.lower(Payment.customer_email) == func.lower(User.email),
+    )
 
 def report_period():
     period=request.args.get("period","30d")
@@ -431,15 +455,52 @@ def businesses():
 @admin_bp.get("/businesses/<int:business_id>")
 @admin_required
 def business_detail(business_id):
-    b=db.session.get(Business,business_id)
-    if not b: abort(404)
-    metrics={"products":Product.query.filter_by(business_id=b.id).count(),
-        "sales":Sale.query.filter_by(business_id=b.id).count(),
-        "restocks":Restock.query.filter_by(business_id=b.id).count(),
-        "expenses":Expense.query.filter_by(business_id=b.id).count()}
-    payments=Payment.query.filter_by(business_id=b.id).order_by(Payment.created_at.desc()).limit(5).all()
-    activity=AuditLog.query.filter_by(business_id=b.id).order_by(AuditLog.created_at.desc()).limit(8).all()
-    return render_template("admin/business_detail.html",business=b,metrics=metrics,payments=payments,activity=activity)
+    b = customer_business_query().filter(
+        Business.id == business_id
+    ).first_or_404()
+
+    metrics = {
+        "products": Product.query.filter_by(business_id=b.id).count(),
+        "sales": Sale.query.filter_by(business_id=b.id).count(),
+        "restocks": Restock.query.filter_by(business_id=b.id).count(),
+        "expenses": Expense.query.filter_by(business_id=b.id).count(),
+    }
+
+    payments = (
+        Payment.query.filter_by(business_id=b.id)
+        .order_by(Payment.created_at.desc())
+        .limit(5)
+        .all()
+    )
+
+    activity = (
+        AuditLog.query.filter_by(business_id=b.id)
+        .order_by(AuditLog.created_at.desc())
+        .limit(8)
+        .all()
+    )
+
+    from app.subscriptions.entitlements import effective_access, access_label
+
+    if current_app.config.get("SUBSCRIPTIONS_ENABLED"):
+        owner_access = effective_access(b.owner)
+        business_access = effective_access(b.owner, business=b)
+        owner_billing_label = access_label(b.owner)
+    else:
+        owner_access = None
+        business_access = None
+        owner_billing_label = "Subscriptions disabled"
+
+    return render_template(
+        "admin/business_detail.html",
+        business=b,
+        metrics=metrics,
+        payments=payments,
+        activity=activity,
+        owner_access=owner_access,
+        business_access=business_access,
+        owner_billing_label=owner_billing_label,
+    )
 
 @admin_bp.post("/businesses/<int:business_id>/suspension")
 @admin_required
@@ -565,6 +626,10 @@ def reports():
     except ValueError as error:
         return render_template("admin/reports.html",metrics=None,error=str(error),period="30d"),400
     verified=verified_payments_query().filter(Payment.paid_at>=start,Payment.paid_at<end)
+    subscription_verified = verified_subscription_payments_query().filter(
+    Payment.paid_at >= start,
+    Payment.paid_at < end,
+)
     metrics={
         "registrations":customer_query().filter(User.created_at>=start,User.created_at<end).count(),
         "verified_customers":customer_query().filter(User.email_verified_at>=start,User.email_verified_at<end).count(),
@@ -574,6 +639,21 @@ def reports():
         "failed":Payment.query.filter(Payment.product=="lifetime",Payment.status=="failed",Payment.created_at>=start,Payment.created_at<end).count(),
         "active_now":customer_query().filter(User.suspended_at.is_(None)).count(),
         "suspended_now":customer_query().filter(User.suspended_at.isnot(None)).count(),
+        "new_businesses": customer_business_query().filter(
+            Business.created_at >= start,
+            Business.created_at < end,
+        ).count(),
+        "total_businesses": customer_business_query().count(),
+        "unsuspended_businesses": customer_business_query().filter(
+            Business.suspended_at.is_(None)
+        ).count(),
+        "suspended_businesses": customer_business_query().filter(
+            Business.suspended_at.isnot(None)
+        ).count(),
+        "subscription_payments": subscription_verified.count(),
+        "subscription_revenue_kobo": subscription_verified.with_entities(
+            func.coalesce(func.sum(Payment.amount_kobo), 0)
+        ).scalar(),
     }
     return render_template("admin/reports.html",metrics=metrics,period=period,start=start.date(),end=(end-timedelta(microseconds=1)).date())
 
