@@ -3,7 +3,7 @@
 <a href="{{url_for('admin.payments')}}">← Subscription payments</a>
 <h1>Subscription payment</h1>
 <p>Read-only details. A payment status alone does not establish current subscription access.</p>
-<div class="admin-card detail-grid" style="overflow-wrap:anywhere">
+<div class="admin-card detail-grid">
   <p>Customer: <a href="{{url_for('admin.user_detail',user_id=owner.id)}}">{{owner.full_name}} ({{owner.email}})</a></p>
   <p>Payment email: {{payment.customer_email}}</p>
   <p>Business: {% if payment.business %}<a href="{{url_for('admin.business_detail',business_id=payment.business.id)}}">{{payment.business.name}}</a>{% else %}Unlinked{% endif %}</p>
