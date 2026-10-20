@@ -55,3 +55,46 @@ button:hover{background:#0e4d30}.filters input{flex:1;min-width:210px;max-width:
  .admin-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media(max-width:370px){.admin-header .brand small{display:none}.admin-cards{grid-template-columns:1fr}}
+
+/* Phase 8E: shared admin presentation, without changing customer styles. */
+.sr-only,.skip-link:not(:focus){position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.skip-link:focus{position:fixed;top:10px;left:10px;z-index:20;background:#fff;color:#145c39;padding:14px;border:2px solid #145c39;border-radius:8px}
+.admin-workspace main{min-width:0;overflow-wrap:anywhere}
+.admin-header{gap:16px;flex-wrap:wrap}.admin-header form{margin:0}.admin-identity{flex-wrap:wrap;min-width:0}
+.admin-nav a,.mobile-admin-menu a{min-height:44px;display:inline-flex;align-items:center;overflow-wrap:anywhere}
+.admin-nav a[aria-current="page"],.mobile-admin-menu a[aria-current="page"]{box-shadow:inset 0 -3px #176444}
+button,summary{min-height:44px}button{line-height:1.4}
+main>section{margin-block:24px}h2{font-size:clamp(19px,2.5vw,23px);line-height:1.3}
+.admin-cards{grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));align-items:stretch}
+.admin-cards article{margin:0;min-width:0;padding:18px}.admin-cards strong{font-variant-numeric:tabular-nums;font-size:clamp(21px,2.4vw,28px);line-height:1.25;overflow-wrap:anywhere}
+.admin-cards span{font-size:14px;line-height:1.5}.admin-card{min-width:0;overflow-wrap:anywhere}
+.detail-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));align-items:start}
+.detail-grid>*{min-width:0;margin-block:6px}.detail-grid ul{padding-left:20px}
+.filters{align-items:end;padding:16px;background:#fff;border:1px solid #dce7e2;border-radius:12px}
+.filters label{display:grid;gap:7px;font-size:14px;font-weight:650;min-width:0;flex:1 1 180px;margin:0}
+.filters input,.filters select{width:100%;min-width:0;max-width:none;background:#fff;color:#172c37}
+.filters button{flex:0 0 auto}.table-scroll{max-width:100%}
+.admin-table th{white-space:normal}.admin-table td{overflow-wrap:anywhere}.admin-table a{font-weight:650;text-underline-offset:3px}
+.status-badge{line-height:1.5;max-width:100%;white-space:normal}.empty-row td{padding:24px;color:#526673}
+.pager{flex-wrap:wrap;align-items:center}.pager a{display:inline-flex;align-items:center;min-height:44px;padding:8px 12px;background:#fff;border:1px solid #c9dcd1;border-radius:8px}
+.confirmation{align-items:center;min-height:44px;cursor:pointer}.confirmation input{width:20px;height:20px;flex:0 0 20px;margin:0;accent-color:#145c39}
+.admin-card input:not([type="hidden"]):not([type="checkbox"]){width:100%;min-width:0}
+@media(max-width:700px){
+ .admin-header .logout-button{min-height:44px}.mobile-admin-menu summary{display:flex;align-items:center;gap:10px}
+ .mobile-admin-menu a{display:flex;min-width:0}.filters{padding:12px}.filters label{flex-basis:100%}.filters button{width:100%}
+ .admin-table{width:100%}.admin-table thead{display:table-header-group;position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+ .admin-table tbody,.admin-table tr{min-width:0;width:100%}.admin-table td{display:grid;grid-template-columns:minmax(80px,.8fr) minmax(0,1.2fr);align-items:start;text-align:left}
+ .admin-table td::before{min-width:0}.admin-table td>*{min-width:0;max-width:100%}
+ .admin-table .empty-row td{display:block}.admin-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:380px){.admin-cards{grid-template-columns:1fr}.admin-identity{gap:5px}.admin-header{gap:10px}}
+:focus-visible{outline-color:#176444}.admin-header :focus-visible{outline-color:#9fd6b8}
+
+/* Keep existing admin authentication forms comfortable on narrow screens. */
+.admin-auth-page main,.auth-shell,.auth-form,.password-field{min-width:0;max-width:100%}
+.admin-auth-page .auth-intro,.admin-auth-page .login-box{overflow-wrap:anywhere}
+.auth-form input{min-width:0}.field-heading{flex-wrap:wrap}
+.password-toggle{top:2px;right:2px;height:44px;min-height:44px}
+
+/* The login card must not depend on the shared main container's width. */
+.admin-auth-page .admin-login-shell{width:100%;max-width:480px;margin-inline:auto}

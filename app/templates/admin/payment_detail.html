@@ -1,3 +1,21 @@
-{% extends "admin/base.html" %}{% block content %}<a href="{{url_for('admin.payments')}}">← Payments</a><h1>Payment {{payment.reference}}</h1><div class="admin-card detail-grid"><p>Status: <span class="status-badge {{'success' if payment.status=='success' else ('failed' if payment.status=='failed' else 'pending')}}">{{payment.status|title}}</span></p><p>Customer: {{payment.customer_email}}{% if owner and owner.role=='user' and not owner.admin_enabled %} · <a href="{{url_for('admin.user_detail',user_id=owner.id)}}">View customer</a>{% endif %}</p><p>Business: {% if payment.business %}<a href="{{url_for('admin.business_detail',business_id=payment.business.id)}}">{{payment.business.name}}</a>{% else %}Unlinked{% endif %}</p><p>Amount: ₦{{'{:,.2f}'.format(payment.amount_kobo/100)}} ({{payment.currency}})</p><p>Provider: {{payment.provider}}</p><p>Product: {{payment.product}}</p><p>Created: {{payment.created_at.strftime('%d %b %Y %H:%M')}} UTC</p><p>Paid: {{payment.paid_at.strftime('%d %b %Y %H:%M') ~ ' UTC' if payment.paid_at else 'Not recorded'}}</p><p>Reference: {{payment.reference}}</p><p>Lifetime Access: {{'Active' if payment.business and payment.business.has_write_access else 'Inactive'}}</p></div>
-{% if issues %}<section class="admin-card"><h2>Needs review</h2>{% for issue in issues %}<p class="notice warning">{{issue}}</p>{% endfor %}</section>{% endif %}
-<section class="admin-card"><h2>Verify with Paystack</h2><p>Checks this reference, price, currency, customer and payment status against Paystack before updating access. Repeating a verified request does not create another payment.</p><form method="post" action="{{url_for('admin.verify_payment',payment_id=payment.id)}}"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><label class="confirmation"><input type="checkbox" name="confirm" required>Confirm verification of this reference with Paystack.</label><button>Verify with Paystack</button></form></section>{% endblock %}
+{% extends "admin/base.html" %}
+{% block content %}
+<a href="{{url_for('admin.payments')}}">← Subscription payments</a>
+<h1>Subscription payment</h1>
+<p>Read-only details. A payment status alone does not establish current subscription access.</p>
+<div class="admin-card detail-grid">
+  <p>Customer: <a href="{{url_for('admin.user_detail',user_id=owner.id)}}">{{owner.full_name}} ({{owner.email}})</a></p>
+  <p>Payment email: {{payment.customer_email}}</p>
+  <p>Business: {% if payment.business %}<a href="{{url_for('admin.business_detail',business_id=payment.business.id)}}">{{payment.business.name}}</a>{% else %}Unlinked{% endif %}</p>
+  <p>Plan: {{payment.plan_code|title if payment.plan_code else 'Not recorded'}}</p>
+  <p>Billing interval: {{payment.billing_interval|title if payment.billing_interval else 'Not recorded'}}</p>
+  <p>Amount: {{payment.currency}} {{'{:,.2f}'.format(payment.amount_kobo/100)}}</p>
+  <p>Currency: {{payment.currency}}</p>
+  <p>Provider: {{payment.provider}}</p>
+  <p>Transaction reference: {{payment.reference}}</p>
+  <p>Payment status: <span class="status-badge {{'success' if payment.status=='success' else ('failed' if payment.status=='failed' else 'pending')}}">{{payment.status|title}}</span></p>
+  <p>Created: {{payment.created_at.strftime('%d %b %Y %H:%M')}} UTC</p>
+  <p>Paid: {{payment.paid_at.strftime('%d %b %Y %H:%M') ~ ' UTC' if payment.paid_at else 'Not recorded'}}</p>
+  <p>Recurring subscription status: {{subscription.status.replace('_',' ')|title if subscription else 'Not linked or unavailable'}}</p>
+</div>
+{% endblock %}

@@ -431,8 +431,7 @@ def businesses():
 @admin_bp.get("/businesses/<int:business_id>")
 @admin_required
 def business_detail(business_id):
-    b=db.session.get(Business,business_id)
-    if not b: abort(404)
+    b=customer_business_query().filter(Business.id==business_id).first_or_404()
     metrics={"products":Product.query.filter_by(business_id=b.id).count(),
         "sales":Sale.query.filter_by(business_id=b.id).count(),
         "restocks":Restock.query.filter_by(business_id=b.id).count(),
@@ -459,31 +458,37 @@ def suspend_business(business_id):
     safely_send(send_account_status_email,b.owner,active=active,business=b)
     return redirect(url_for("admin.business_detail",business_id=b.id))
 
+def subscription_payments_query():
+    # Explicit account ownership is authoritative; never infer it from email.
+    # A linked business must belong to that same ordinary customer account.
+    return Payment.query.join(User, Payment.user_id==User.id).filter(
+        Payment.product=="subscription", User.role=="user", User.admin_enabled.is_(False),
+        or_(Payment.business_id.is_(None), Payment.business.has(Business.user_id==Payment.user_id)))
+
+
 @admin_bp.get("/payments")
 @admin_required
 def payments():
     status=request.args.get("status","all")
-    query=Payment.query.options(joinedload(Payment.business)).filter_by(product="lifetime")
+    query=subscription_payments_query().options(joinedload(Payment.business))
     if status in ("success","failed","pending"):
         query=query.filter(Payment.status.in_(("initialized","pending")) if status=="pending" else Payment.status==status)
-    rows=query.order_by(Payment.created_at.desc()).paginate(page=request.args.get("page",1,type=int),per_page=25,error_out=False)
+    rows=query.order_by(Payment.created_at.desc(),Payment.id.desc()).paginate(page=request.args.get("page",1,type=int),per_page=25,error_out=False)
     return render_template("admin/payments.html",rows=rows,status=status)
 
 
 @admin_bp.get("/payments/<int:payment_id>")
 @admin_required
 def payment_detail(payment_id):
-    payment=Payment.query.options(joinedload(Payment.business)).filter_by(id=payment_id,product="lifetime").first_or_404()
-    owner=User.query.filter(func.lower(User.email)==payment.customer_email.lower()).first()
-    issues=[]
-    if not payment.business_id: issues.append("No business is associated with this payment.")
-    elif payment.business and payment.business.subscription_status!="active" and payment.status=="success":
-        issues.append("Payment is successful, but Lifetime Access is not active.")
-    if payment.amount_kobo!=current_app.config["LIFETIME_PRICE_NAIRA"]*100 or payment.currency!="NGN":
-        issues.append("Amount or currency differs from the Lifetime Access price.")
-    if payment.status in ("initialized","pending") and payment.created_at<datetime.utcnow()-timedelta(days=2):
-        issues.append("This payment has been pending for more than two days.")
-    return render_template("admin/payment_detail.html",payment=payment,owner=owner,issues=issues)
+    payment=subscription_payments_query().options(joinedload(Payment.business)).filter(Payment.id==payment_id).first_or_404()
+    owner=customer_query().filter(User.id==payment.user_id).first_or_404()
+    # A corrupt/mismatched subscription reference must not disclose another account.
+    subscription=RecurringSubscription.query.join(Business, RecurringSubscription.business_id==Business.id).filter(
+        RecurringSubscription.id==payment.subscription_id, RecurringSubscription.user_id==owner.id,
+        Business.user_id==owner.id)
+    if payment.business_id is not None:
+        subscription=subscription.filter(RecurringSubscription.business_id==payment.business_id)
+    return render_template("admin/payment_detail.html",payment=payment,owner=owner,subscription=subscription.first())
 
 
 @admin_bp.post("/payments/<int:payment_id>/verify")

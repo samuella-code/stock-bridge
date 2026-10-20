@@ -51,7 +51,8 @@ def test_admin_verification_checks_paystack_and_is_repeat_safe(client,monkeypatc
         payment_id=p.id
     client.application.config.update(PAYSTACK_PUBLIC_KEY="pk_test_dummy",PAYSTACK_SECRET_KEY="sk_test_dummy")
     admin_login(client)
-    assert b"Verify with Paystack" in client.get(f"/admin/payments/{payment_id}").data
+    # Lifetime verification remains available to its existing handler, not the subscription UI.
+    assert client.get(f"/admin/payments/{payment_id}").status_code==404
     assert client.post(f"/admin/payments/{payment_id}/verify").status_code==302
     assert client.get("/admin/reports?period=custom&start=2026-09-01&end=2026-09-30").status_code==200
     assert client.get("/admin/notifications").status_code==200
