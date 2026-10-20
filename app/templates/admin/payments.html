@@ -1,1 +1,33 @@
-{% extends "admin/base.html" %}{% block content %}<h1>Lifetime Access payments</h1><p>Open a payment to inspect its reference and verify it directly with Paystack.</p><form method="get" class="filters"><select name="status" aria-label="Payment status">{% for key,label in [('all','All'),('success','Successful'),('pending','Pending'),('failed','Failed')] %}<option value="{{key}}" {{'selected' if status==key}}>{{label}}</option>{% endfor %}</select><button>Filter</button></form><div class="table-scroll"><table class="admin-table"><thead><tr><th>Date</th><th>Email</th><th>Business</th><th>Amount</th><th>Status</th><th>Access</th><th>Reference</th></tr></thead><tbody>{% for p in rows.items %}<tr><td data-label="Date">{{p.created_at.strftime('%d %b %Y')}}</td><td data-label="Email">{{p.customer_email}}</td><td data-label="Business">{{p.business.name if p.business else '—'}}</td><td data-label="Amount">₦{{'{:,.2f}'.format(p.amount_kobo/100)}}</td><td data-label="Status"><span class="status-badge {{'success' if p.status=='success' else ('failed' if p.status=='failed' else 'pending')}}">{{p.status|title}}</span></td><td data-label="Access">{{'Lifetime active' if p.business and p.business.has_write_access else 'Not active'}}</td><td data-label="Reference"><a href="{{url_for('admin.payment_detail',payment_id=p.id)}}">{{p.reference}}</a></td></tr>{% else %}<tr class="empty-row"><td colspan="7">No payments.</td></tr>{% endfor %}</tbody></table></div>{% include "admin/pager.html" %}{% endblock %}
+{% extends "admin/base.html" %}
+{% block content %}
+<h1>Subscription payments</h1>
+<p>Read-only payment history. Subscription access is managed by the existing payment verification process.</p>
+<form method="get" class="filters">
+  <label for="payment-status">Payment status</label>
+  <select id="payment-status" name="status">
+    {% for key,label in [('all','All'),('success','Successful'),('pending','Pending'),('failed','Failed')] %}
+    <option value="{{key}}" {{'selected' if status==key}}>{{label}}</option>
+    {% endfor %}
+  </select>
+  <button type="submit">Filter</button>
+</form>
+<div class="table-scroll">
+<table class="admin-table">
+  <thead><tr><th>Date</th><th>Customer</th><th>Business</th><th>Plan</th><th>Amount</th><th>Status</th><th>Reference</th></tr></thead>
+  <tbody>
+  {% for p in rows.items %}
+  <tr>
+    <td data-label="Date">{{p.created_at.strftime('%d %b %Y')}}</td>
+    <td data-label="Customer"><a href="{{url_for('admin.user_detail',user_id=p.user_id)}}">{{p.customer_email}}</a></td>
+    <td data-label="Business">{% if p.business %}<a href="{{url_for('admin.business_detail',business_id=p.business.id)}}">{{p.business.name}}</a>{% else %}Unlinked{% endif %}</td>
+    <td data-label="Plan">{{p.plan_code|title if p.plan_code else 'Not recorded'}} · {{p.billing_interval|title if p.billing_interval else 'Interval not recorded'}}</td>
+    <td data-label="Amount">{{p.currency}} {{'{:,.2f}'.format(p.amount_kobo/100)}}</td>
+    <td data-label="Status"><span class="status-badge {{'success' if p.status=='success' else ('failed' if p.status=='failed' else 'pending')}}">{{p.status|title}}</span></td>
+    <td data-label="Reference"><a href="{{url_for('admin.payment_detail',payment_id=p.id)}}">{{p.reference}}</a></td>
+  </tr>
+  {% else %}<tr class="empty-row"><td colspan="7">No subscription payments.</td></tr>{% endfor %}
+  </tbody>
+</table>
+</div>
+{% include "admin/pager.html" %}
+{% endblock %}
