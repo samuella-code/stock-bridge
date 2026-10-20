@@ -95,3 +95,6 @@ main>section{margin-block:24px}h2{font-size:clamp(19px,2.5vw,23px);line-height:1
 .admin-auth-page .auth-intro,.admin-auth-page .login-box{overflow-wrap:anywhere}
 .auth-form input{min-width:0}.field-heading{flex-wrap:wrap}
 .password-toggle{top:2px;right:2px;height:44px;min-height:44px}
+
+/* The login card must not depend on the shared main container's width. */
+.admin-auth-page .admin-login-shell{width:100%;max-width:480px;margin-inline:auto}

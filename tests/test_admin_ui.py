@@ -133,7 +133,7 @@ def test_admin_authentication_form_contracts_and_named_sections(client, template
     with client.application.test_request_context(path):
         html = render_template('admin/' + template, invalid=False, error=None)
     dom = Elements(html)
-    sections = [s for s in dom.get('section') if s.get('class') == 'auth-shell']
+    sections = [s for s in dom.get('section') if 'auth-shell' in s.get('class', '').split()]
     assert sections and sections[0]['aria-labelledby'] in {h.get('id') for h in dom.get('h1')}
     inputs = {i.get('name'): i for i in dom.get('input')}
     assert 'csrf_token' in inputs
@@ -145,3 +145,14 @@ def test_admin_authentication_form_contracts_and_named_sections(client, template
         assert inputs['password']['minlength'] == inputs['confirm_password']['minlength'] == '12'
     assert all(form.get('method') == 'post' for form in dom.get('form'))
     assert 'aria-label="Admin navigation"' not in html
+
+
+def test_admin_login_width_constraint_is_scoped_to_login_only(client):
+    login = Elements(client.get('/admin/login').get_data(as_text=True))
+    shells = [s for s in login.get('section') if 'admin-login-shell' in s.get('class', '').split()]
+    assert len(shells) == 1 and shells[0]['aria-labelledby'] == 'login-title'
+    recovery = client.get('/admin/forgot-password').get_data(as_text=True)
+    assert 'admin-login-shell' not in recovery
+    assert 'admin-login-shell' not in Path('app/templates/admin/reset_password.html').read_text()
+    css = Path('app/static/css/admin.css').read_text()
+    assert '.admin-auth-page .admin-login-shell{width:100%;max-width:480px;margin-inline:auto}' in css
