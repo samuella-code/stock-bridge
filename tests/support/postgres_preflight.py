@@ -194,10 +194,10 @@ def windows_evidence():
     return evidence
 
 
-def database_snapshot(connection):
+def database_snapshot(connection, protected_evidence=None):
     # This function must run within an explicit READ ONLY transaction.
     row=connection.execute("""SELECT current_database(),current_user,session_user,
-        inet_server_addr()::text,inet_server_port(),current_setting('server_version_num')::int,
+        host(inet_server_addr()),inet_server_port(),current_setting('server_version_num')::int,
         pg_get_userbyid(datdba) FROM pg_database WHERE datname=current_database()""").fetchone()
     snapshot=dict(zip(('database','user','session_user','address','port','version','owner'),row))
     role=connection.execute("""SELECT rolsuper,rolcreatedb,rolcreaterole,rolreplication,rolbypassrls,rolcanlogin
@@ -222,15 +222,24 @@ def database_snapshot(connection):
         snapshot['revision']=revisions[0][0]
     # Restricted roles may lack permission for these reads. Do not elevate them:
     # failure is BLOCKED pending a separately reviewed read-only evidence route.
-    snapshot['data_directory']=connection.execute("SHOW data_directory").fetchone()[0]
-    snapshot['listen_addresses']=connection.execute("SHOW listen_addresses").fetchone()[0]
-    from psycopg.rows import dict_row
-    snapshot['hba_rules']=[dict(r) for r in connection.execute("SELECT type,database,user_name AS \"user\",address,netmask,auth_method,error FROM pg_hba_file_rules ORDER BY rule_number",row_factory=dict_row)]
+    if protected_evidence is not None:
+        for key in ('data_directory','listen_addresses','hba_rules'):
+            snapshot[key]=protected_evidence.get(key)
+    else:
+        snapshot['data_directory']=connection.execute("SHOW data_directory").fetchone()[0]
+        snapshot['listen_addresses']=connection.execute("SHOW listen_addresses").fetchone()[0]
+        from psycopg.rows import dict_row
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute("SELECT type,database,user_name AS \"user\",address,netmask,auth_method,error FROM pg_hba_file_rules ORDER BY rule_number")
+            snapshot['hba_rules']=[dict(r) for r in cursor]
     return snapshot
 
 
 def preflight(environ, phase='empty', expected_tables=(), expected_identity=None):
     url=validated_test_url(environ)
+    if environ.get('STOCKBRIDGE_TEST_POSTGRES_MODE')=='ubuntu-isolated-cluster':
+        from tests.support.ubuntu_postgres_identity import ubuntu_preflight
+        return ubuntu_preflight(environ,url,phase,expected_tables,expected_identity)
     if environ.get('STOCKBRIDGE_TEST_POSTGRES_MODE')!='existing-local-service':
         reject('this preflight requires existing-local-service mode')
     evidence=windows_evidence()

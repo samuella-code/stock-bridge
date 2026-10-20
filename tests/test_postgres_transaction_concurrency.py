@@ -13,8 +13,26 @@ import pytest
 from tests.support.isolated_postgres import validated_test_url
 from tests.support.postgres_preflight import preflight
 from tests.support.postgres_concurrency import concurrent_posts
+from tests.support.postgres_connections import connection_policy
 
 SCENARIOS=('sale_single','sale_multi','restock_single','restock_multi','adjust_increase','adjust_decrease','expense')
+
+@pytest.fixture(scope='module', autouse=True)
+def mutation_run_guard(request):
+    if (os.environ.get('STOCKBRIDGE_TEST_POSTGRES_MUTATIONS_ACK') == 'approved-phase5d5b-synthetic-only'
+            and request.config.getoption('maxfail') != 1):
+        pytest.exit('Authorized PostgreSQL mutation runs require -x; stop before database access.', returncode=2)
+
+
+@pytest.fixture(autouse=True)
+def post_scenario_identity(request):
+    app, env, relations, identity = request.getfixturevalue('pg_app')
+    yield
+    import threading
+    if any(t.name.startswith('stockbridge-race-') and t.is_alive() for t in threading.enumerate()):
+        pytest.exit('Worker shutdown unconfirmed; no further preflight or scenario permitted.', returncode=2)
+    preflight(env, phase='migrated', expected_tables=relations, expected_identity=identity)
+
 
 @pytest.fixture(scope='module')
 def pg_app():
@@ -39,14 +57,15 @@ def pg_app():
     from unittest.mock import patch
     config=dict(TESTING=True,SECRET_KEY='isolated-concurrency-test-signing-only',
         SQLALCHEMY_DATABASE_URI=url,SQLALCHEMY_ENGINE_OPTIONS=dict(pool_size=4,max_overflow=0,
-            pool_timeout=5,connect_args=dict(connect_timeout=5,options='-c statement_timeout=10000 -c lock_timeout=5000')),
+            pool_timeout=5,connect_args=connection_policy(env)),
         SUBSCRIPTIONS_ENABLED=False,BILLING_PROVIDER_ENABLED=False,
         INVENTORY_EMAILS_ENABLED=True,INVENTORY_EMAIL_BASE_URL='https://staging.example.invalid',
         INVENTORY_EMAIL_TRIGGER_URL='',INVENTORY_EMAIL_TRIGGER_SECRET='',INVENTORY_EMAIL_DISPATCH_SECRET='',
         BUSINESS_IMAGE_STORAGE='disabled',SMTP_HOST='',SMTP_PASSWORD='',PAYSTACK_SECRET_KEY='',PAYSTACK_PUBLIC_KEY='',
         GOOGLE_CLIENT_ID='',GOOGLE_CLIENT_SECRET='',APPLE_CLIENT_ID='',APPLE_PRIVATE_KEY='')
     def forbidden(*args,**kwargs):raise AssertionError('External integration attempted')
-    with patch('requests.sessions.Session.request',side_effect=forbidden),patch('smtplib.SMTP',side_effect=forbidden),\
+    with patch('requests.sessions.Session.request',side_effect=forbidden),patch('urllib.request.urlopen',side_effect=forbidden),\
+         patch('app.payments.service.urlopen',side_effect=forbidden),patch('smtplib.SMTP',side_effect=forbidden),\
          patch('smtplib.SMTP_SSL',side_effect=forbidden),patch('boto3.client',side_effect=forbidden):
         app=create_app(config);app.config['WTF_CSRF_ENABLED']=True
         with app.app_context():
@@ -120,7 +139,7 @@ def run_race(pg_app,clients,path,payloads,**kwargs):
     app,env,_,_=pg_app;url=validated_test_url(env)
     import psycopg
     with psycopg.connect(host=url.host,port=url.port,dbname=url.database,user=url.username,password=url.password,
-        connect_timeout=5,autocommit=True,options='-c default_transaction_read_only=on -c statement_timeout=3000') as observer:
+        autocommit=True,**connection_policy(env, observer=True)) as observer:
         with app.app_context():engine=__import__('app').db.engine
         return concurrent_posts(engine,clients,path,payloads,observer,**kwargs)
 
