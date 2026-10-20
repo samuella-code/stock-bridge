@@ -69,7 +69,8 @@ def read_scoped_evidence(connection):
     def reject(): raise UnsafeTestDatabase('PostgreSQL preflight rejected: Ubuntu scoped SQL evidence missing or untrusted')
     from psycopg.rows import dict_row
     # Exact function body, owner, search path and ACL, not JSON parsing alone.
-    row=connection.execute("""SELECT p.prosrc,p.prosecdef,p.provolatile,p.proconfig,
+    with connection.cursor(row_factory=dict_row) as cursor:
+        cursor.execute("""SELECT p.prosrc,p.prosecdef,p.provolatile,p.proconfig,
         pg_get_userbyid(p.proowner) AS owner,l.lanname AS language,
         pg_get_userbyid(n.nspowner) AS schema_owner,
         has_schema_privilege(current_user,n.oid,'CREATE') AS can_create,
@@ -78,7 +79,8 @@ def read_scoped_evidence(connection):
         FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
         JOIN pg_catalog.pg_language l ON l.oid=p.prolang
         WHERE n.nspname='stockbridge_preflight' AND p.proname='read_evidence'
-        AND p.pronargs=0 AND p.prorettype='jsonb'::regtype""",row_factory=dict_row).fetchall()
+        AND p.pronargs=0 AND p.prorettype='jsonb'::regtype""")
+        row=cursor.fetchall()
     if len(row)!=1: reject()
     item=dict(row[0])
     if (item.get('prosrc')!=BODY or item.get('prosecdef') is not True or item.get('provolatile')!='s'

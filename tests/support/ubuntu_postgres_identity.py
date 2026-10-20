@@ -16,6 +16,22 @@ def reject(category):
     raise UnsafeTestDatabase('PostgreSQL preflight rejected: Ubuntu ' + category)
 
 
+def normalized_oid(value):
+    """Accept only positive PostgreSQL OIDs and canonical ASCII decimal strings."""
+    if type(value) is str and re.fullmatch(r'[1-9][0-9]{0,9}',value):
+        value=int(value)
+    if type(value) is not int or not 1<=value<=4294967295:
+        reject('database/role OID invalid')
+    return value
+
+
+def validate_scoped_oids(protected, snapshot):
+    keys=('database_oid','role_oid')
+    trusted=tuple(normalized_oid(protected.get(key)) for key in keys)
+    direct=tuple(normalized_oid(snapshot.get(key)) for key in keys)
+    if trusted!=direct: reject('scoped SQL evidence OIDs mismatch')
+
+
 def wrapped(function, *args, **kwargs):
     try: return function(*args, **kwargs)
     except os_collector.EvidenceError as error: raise UnsafeTestDatabase(str(error)) from None
@@ -146,6 +162,7 @@ def validate_ubuntu_database(snapshot, run_id, phase='empty', expected_tables=()
             or snapshot.get('data_directory')!=DIRECTORY): reject('database/role/server identity mismatch')
     oids=(snapshot.get('database_oid'),snapshot.get('role_oid'))
     if any(type(oid) is not int or oid<=0 for oid in oids): reject('database/role OIDs missing')
+    for oid in oids: normalized_oid(oid)
     if expected_identity is not None and oids!=expected_identity: reject('approved database/role OID mismatch')
     role=snapshot.get('role')
     if (not isinstance(role,dict) or set(role)!={'superuser','createdb','createrole','replication','bypassrls','login'}
@@ -201,8 +218,7 @@ def ubuntu_preflight(environ, url, phase='empty', expected_tables=(), expected_i
                 elif method!='direct': reject('database evidence method unsupported')
                 snapshot=database_snapshot(conn,protected_evidence=protected) if protected is not None else database_snapshot(conn)
                 if protected is not None:
-                    if (protected.get('database_oid'),protected.get('role_oid'))!=(snapshot['database_oid'],snapshot['role_oid']):
-                        reject('scoped SQL evidence OIDs mismatch')
+                    validate_scoped_oids(protected,snapshot)
                     snapshot['protected_schema_verified']=True
                 else: snapshot['protected_schema_verified']=False
                 snapshot['schemas']=[r[0] for r in conn.execute("SELECT nspname FROM pg_namespace WHERE nspname NOT IN ('pg_catalog','pg_toast','information_schema') ORDER BY nspname")]

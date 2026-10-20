@@ -269,3 +269,46 @@ def test_migrated_indexes_must_belong_to_approved_tables():
     assert ubuntu.validate_ubuntu_database(data,RUN,'migrated',tables)
     data['indexes'][0]['table']='public.unapproved'
     with pytest.raises(UnsafeTestDatabase):ubuntu.validate_ubuntu_database(data,RUN,'migrated',tables)
+
+
+@pytest.mark.parametrize('value,expected',[(1,1),(4294967295,4294967295),('1',1),('4294967295',4294967295)])
+def test_oid_normalization_valid(value,expected):
+    assert ubuntu.normalized_oid(value)==expected
+
+
+@pytest.mark.parametrize('value',[None,True,False,0,-1,4294967296,1.0,'','0','-1','+1','01',' 1','1 ',
+    '1.0','1e3','4294967296','١','１',[],{},'9'*1000])
+def test_oid_normalization_rejects_invalid(value):
+    with pytest.raises(UnsafeTestDatabase,match='OID invalid'):
+        ubuntu.normalized_oid(value)
+
+
+@pytest.mark.parametrize('key',['database_oid','role_oid'])
+@pytest.mark.parametrize('side',['protected','direct'])
+@pytest.mark.parametrize('value',[None,True,-1,'01',4294967296])
+def test_scoped_oid_invalid_on_either_side(key,side,value):
+    protected=dict(database_oid='1000',role_oid='1001')
+    direct=dict(database_oid=1000,role_oid=1001)
+    (protected if side=='protected' else direct)[key]=value
+    with pytest.raises(UnsafeTestDatabase):ubuntu.validate_scoped_oids(protected,direct)
+
+
+@pytest.mark.parametrize('key',['database_oid','role_oid'])
+def test_scoped_oid_genuine_mismatch(key):
+    protected=dict(database_oid='1000',role_oid='1001')
+    direct=dict(database_oid=1000,role_oid=1001);direct[key]+=1
+    with pytest.raises(UnsafeTestDatabase,match='scoped SQL evidence OIDs mismatch'):
+        ubuntu.validate_scoped_oids(protected,direct)
+
+
+@pytest.mark.parametrize('protected,direct',[
+    (dict(database_oid='1000',role_oid='1001'),dict(database_oid=1000,role_oid=1001)),
+    (dict(database_oid=1000,role_oid=1001),dict(database_oid=1000,role_oid=1001)),
+    (dict(database_oid=1000,role_oid='1001'),dict(database_oid='1000',role_oid=1001))])
+def test_scoped_oid_valid_representations(protected,direct):
+    ubuntu.validate_scoped_oids(protected,direct)
+
+
+def test_direct_database_oid_out_of_range_rejected():
+    data=snapshot();data['database_oid']=4294967296
+    with pytest.raises(UnsafeTestDatabase):ubuntu.validate_ubuntu_database(data,RUN)
