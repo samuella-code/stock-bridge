@@ -52,7 +52,7 @@ def test_downgrade_prompt_has_no_false_active_business(app):
     client=app.test_client();login(client,user);html=client.get('/businesses/').get_data(as_text=True)
     assert 'Choose your active business' in html
     assert 'Working in' not in html
-    assert 'Both businesses and all their records are safely stored' in html
+    assert 'All businesses and their records are safely stored' in html
 
 def test_public_home_has_no_customer_redesign_assets(app):
     html=app.test_client().get('/').get_data(as_text=True)

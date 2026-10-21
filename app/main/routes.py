@@ -78,7 +78,7 @@ def recent_activity(b):
 def public_plan_prices():
     from app.subscriptions.entitlements import PLANS
     return {plan: {interval: PLANS[(plan, interval)]['amount'] // 100
-                   for interval in ('monthly', 'yearly')} for plan in ('basic', 'plus')}
+                   for interval in ('monthly', 'yearly')} for plan in ('basic', 'plus', 'pro')}
 
 
 def sales_chart(per_day, week_start):

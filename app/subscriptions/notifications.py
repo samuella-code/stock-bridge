@@ -16,7 +16,7 @@ def queue_due(now=None):
         user=db.session.get(User,account.user_id)
         lock_account(user.id)
         if effective_access(user,now=now).kind == 'trial' and now >= account.trial_ends_at-timedelta(days=2):
-            notice(user.id,f'trial-ending:{user.id}','trial_ending','Your trial ends soon. Choose Basic or Plus to keep recording business activity. No automatic charge follows your trial.')
+            notice(user.id,f'trial-ending:{user.id}','trial_ending','Your trial ends soon. Choose Basic, Plus or Pro to keep recording business activity. No automatic charge follows your trial.')
         elif now >= account.trial_ends_at and effective_access(user,now=now).kind == 'restricted':
             notice(user.id,f'trial-expired:{user.id}','trial_expired','Your free trial has ended. Your business records remain available to view. Choose a plan to record new activity.')
     for sub in RecurringSubscription.query.filter(RecurringSubscription.current_period_end<=now).yield_per(100):

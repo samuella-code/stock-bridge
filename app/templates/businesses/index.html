@@ -2,7 +2,7 @@
 {% block page_title %}My Businesses{% endblock %}
 {% block content %}
 <section class="dashboard-wrap"><h2>My Businesses</h2><p class="muted">Manage access to each business. Products and transactions stay separate.</p>
-{% if choosing %}<div class="panel-card"><h2>Choose the business you want to keep active.</h2><p>Your current entitlement supports one business. Both businesses and all their records are safely stored. Choose one to continue; Plus restores access to the other.</p></div>{% endif %}
+{% if choosing %}<div class="panel-card"><h2>Choose the business you want to keep active.</h2><p>Your current entitlement supports one business. All businesses and their records are safely stored. Choose one to continue; Your plan’s allowance determines which businesses are accessible.</p></div>{% endif %}
 {% if businesses and not allowed %}<div class="panel-card" role="status"><h2>No eligible active business available</h2><p>Business records are unavailable under the current account status and plan restrictions. Suspended business records remain preserved.</p></div>{% endif %}
 <div class="business-grid">
 {% for b in businesses %}
@@ -15,6 +15,6 @@
 {% else %}<article class="panel-card"><h2>No businesses yet</h2><p>Add your business to start recording stock and sales.</p></article>{% endfor %}
 </div>
 {% if can_add %}<p><a class="primary-btn button-link" href="{{ url_for('businesses.create') }}">Add Business</a></p>{% endif %}
-<p><a href="{{ url_for('subscriptions.index') }}">Manage plan / Upgrade to Plus</a></p>
+<p><a href="{{ url_for('subscriptions.index') }}">Manage plan / Review Plus or Pro</a></p>
 </section>
 {% endblock %}

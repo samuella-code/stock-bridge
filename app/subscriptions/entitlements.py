@@ -11,12 +11,14 @@ PLANS = {
     ('basic','yearly'): {'amount':3000000,'limit':1,'interval':'annually'},
     ('plus','monthly'): {'amount':500000,'limit':2,'interval':'monthly'},
     ('plus','yearly'): {'amount':5000000,'limit':2,'interval':'annually'},
+    ('pro','monthly'): {'amount':1000000,'limit':5,'interval':'monthly'},
+    ('pro','yearly'): {'amount':10000000,'limit':5,'interval':'annually'},
 }
 
 
 def plan_spec(plan, interval):
     if (plan, interval) not in PLANS:
-        raise ValueError('Choose Basic or Plus with monthly or yearly billing.')
+        raise ValueError('Choose Basic, Plus or Pro with monthly or yearly billing.')
     return PLANS[(plan, interval)]
 
 
@@ -65,7 +67,7 @@ def effective_access(user, *, business=None, now=None):
     ).order_by(RecurringSubscription.current_period_start.desc(), RecurringSubscription.id.desc()).first()
     kind, limit, days = 'restricted', 0, 0
     if subscription:
-        kind = 'legacy_lifetime_plus' if legacy and subscription.plan_code=='plus' else subscription.plan_code
+        kind = 'legacy_lifetime_' + subscription.plan_code if legacy and subscription.plan_code in ('plus', 'pro') else subscription.plan_code
         limit = plan_spec(subscription.plan_code, subscription.billing_interval)['limit']
     elif legacy:
         kind, limit = 'legacy_lifetime', 1
@@ -90,8 +92,8 @@ def effective_access(user, *, business=None, now=None):
 
 
 def access_label(user):
-    labels={'trial':'Free Trial','basic':'StockBridge Basic','plus':'StockBridge Plus',
-        'legacy_lifetime':'Existing account access','legacy_lifetime_plus':'Existing account access + Plus',
+    labels={'trial':'Free Trial','basic':'StockBridge Basic','plus':'StockBridge Plus','pro':'StockBridge Pro',
+        'legacy_lifetime':'Existing account access','legacy_lifetime_plus':'Existing account access + Plus','legacy_lifetime_pro':'Existing account access + Pro',
         'restricted':'Read-only — choose a plan'}
     access=effective_access(user)
     label=labels[access.kind]
@@ -128,3 +130,9 @@ def selected_business(user):
     # Billing remains reachable while a downgrade choice is required. The
     # request guard blocks ALL business screens until that choice is made.
     return fallback or primary or businesses[0]
+
+
+def immediate_upgrade(old_plan, new_plan, old_interval, new_interval):
+    ranks = {'basic': 1, 'plus': 2, 'pro': 3}
+    return (old_interval == new_interval and old_plan in ranks and new_plan in ranks
+            and ranks[new_plan] > ranks[old_plan])

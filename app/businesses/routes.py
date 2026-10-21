@@ -61,7 +61,7 @@ def create():
 def switch(business_id):
     business = Business.query.filter_by(id=business_id, user_id=current_user.id).first_or_404()
     if not accessible_business(current_user, business):
-        flash('This business is locked. Choose your active business or upgrade to Plus.', 'warning')
+        flash('This business is locked. Choose your active business or choose a plan with a larger business allowance.', 'warning')
         return redirect(url_for('businesses.index'))
     session['active_business_id'] = business.id
     return redirect(url_for('main.dashboard'))

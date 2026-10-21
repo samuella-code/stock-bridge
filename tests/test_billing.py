@@ -24,7 +24,7 @@ def app(monkeypatch):
     monkeypatch.setattr('app.email_service._send_email',lambda *args,**kwargs:False)
     app=create_app({'TESTING':True,'SECRET_KEY':'billing-test','SQLALCHEMY_DATABASE_URI':'sqlite:///:memory:',
         'SERVER_NAME':'localhost','SUBSCRIPTIONS_ENABLED':True,'BILLING_PROVIDER_ENABLED':True,'PAYSTACK_PUBLIC_KEY':'pk_test_fixture',
-        'PAYSTACK_SECRET_KEY':'sk_test_fixture',**{f'PAYSTACK_{p.upper()}_{i.upper()}_PLAN':f'PLN_{p}_{i}' for p in ('basic','plus') for i in ('monthly','yearly')}})
+        'PAYSTACK_SECRET_KEY':'sk_test_fixture',**{f'PAYSTACK_{p.upper()}_{i.upper()}_PLAN':f'PLN_{p}_{i}' for p in ('basic','plus','pro') for i in ('monthly','yearly')}})
     with app.app_context():
         db.create_all()
         yield app
@@ -150,7 +150,7 @@ def test_trial_product_and_isolation(client):
     assert Product.query.one().name=='Coke'
 
 
-@pytest.mark.parametrize('p,i,amount,limit',[('basic','monthly',300000,1),('basic','yearly',3000000,1),('plus','monthly',500000,2),('plus','yearly',5000000,2)])
+@pytest.mark.parametrize('p,i,amount,limit',[('basic','monthly',300000,1),('basic','yearly',3000000,1),('plus','monthly',500000,2),('plus','yearly',5000000,2),('pro','monthly',1000000,5),('pro','yearly',10000000,5)])
 def test_four_plans_only_grant_access_after_verified_payment(app,fake,p,i,amount,limit):
     u,b=seed(eligible=False);billing.begin_checkout(u,p,i)
     assert not effective_access(u).can_write
@@ -259,7 +259,7 @@ def test_missing_embedded_domain_rejects_authoritative_plan_mismatch(app,fake,mo
     assert Payment.query.filter_by(status='success').count()==0
 
 
-@pytest.mark.parametrize('old,old_interval,new,new_interval',[('basic','monthly','plus','monthly'),('plus','monthly','basic','monthly'),('basic','monthly','basic','yearly'),('plus','yearly','plus','monthly')])
+@pytest.mark.parametrize('old,old_interval,new,new_interval',[('basic','monthly','plus','monthly'),('plus','monthly','basic','monthly'),('basic','monthly','basic','yearly'),('plus','yearly','plus','monthly'),('basic','monthly','pro','monthly'),('plus','yearly','pro','yearly'),('pro','monthly','plus','monthly'),('pro','yearly','basic','yearly'),('pro','monthly','pro','yearly')])
 def test_safe_replacement_changes_and_no_duplicate_creation(app,fake,old,old_interval,new,new_interval):
     u,b=seed(eligible=False);s=purchase(u,old,old_interval);end=s.current_period_end
     link=billing.change_plan(u,s,new,new_interval)
@@ -474,7 +474,7 @@ def test_price_is_server_owned_and_lifetime_checkout_disabled(client,fake):
 
 @pytest.mark.parametrize('plan,interval,amount,limit',[
     ('basic','monthly',300000,1),('basic','yearly',3000000,1),
-    ('plus','monthly',500000,2),('plus','yearly',5000000,2),
+    ('plus','monthly',500000,2),('plus','yearly',5000000,2),('pro','monthly',1000000,5),('pro','yearly',10000000,5),
 ])
 def test_acceptance_checkout_rejects_browser_owned_billing_fields(client,fake,plan,interval,amount,limit):
     user,business=seed(eligible=False); login(client,user)

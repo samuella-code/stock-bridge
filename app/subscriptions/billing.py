@@ -4,11 +4,10 @@ import json
 import uuid
 from datetime import datetime, timezone
 from urllib.parse import urlparse
-from flask import url_for, current_app
 from sqlalchemy import update
 from app import db
 from app.models import User, AccountBilling, RecurringSubscription, Payment, BillingEvent
-from app.subscriptions.entitlements import plan_spec, account_for, selected_business, effective_access
+from app.subscriptions.entitlements import plan_spec, immediate_upgrade, account_for, selected_business, effective_access
 from app.subscriptions import provider
 
 
@@ -52,6 +51,7 @@ def subscription_details(sub):
 
 
 def begin_checkout(user,plan,interval,*,replacement_of_id=None):
+    callback = provider.checkout_callback()
     code,spec=provider.configured_plan(plan,interval)
     if not provider.validate_plan(provider.call('/plan/'+code),code,spec):
         raise ValueError('Configured Paystack plan price or interval differs; checkout stopped.')
@@ -70,8 +70,8 @@ def begin_checkout(user,plan,interval,*,replacement_of_id=None):
     if active:
         raise ValueError('Use Change Plan to stop the old renewal before starting another subscription.')
     account=account_for(user,create=True)
-    if account.legacy_granted_at and plan!='plus':
-        raise ValueError('Your existing account access already includes the core tools. Only choose Plus voluntarily.')
+    if account.legacy_granted_at and plan not in ('plus', 'pro'):
+        raise ValueError('Your existing account access already includes the core tools. Only choose Plus or Pro voluntarily.')
     sub=RecurringSubscription(user_id=user.id,business_id=selected_business(user).id,plan_code=plan,
         billing_interval=interval,amount_kobo=spec['amount'],provider_plan_code=code,
         checkout_reference='SBS-'+uuid.uuid4().hex,status='initializing',replacement_of_id=replacement_of_id)
@@ -82,9 +82,6 @@ def begin_checkout(user,plan,interval,*,replacement_of_id=None):
     db.session.add(payment)
     # A committed pending operation survives unknown network outcomes. Do not retry it blindly.
     db.session.commit()
-    callback=url_for('subscriptions.callback',_external=True)
-    if __import__('os').getenv('VERCEL_ENV')=='production':
-        callback=f"https://{current_app.config['CUSTOMER_HOST']}"+url_for('subscriptions.callback')
     data=provider.call('/transaction/initialize','POST',{'email':user.email,'amount':spec['amount'],
         'currency':'NGN','plan':code,'reference':payment.reference,'callback_url':callback,'channels':['card'],
         'metadata':{'product':'stockbridge_subscription','user_id':user.id,'subscription_id':sub.id,
@@ -208,8 +205,8 @@ def cancel(user,sub):
 def change_plan(user,sub,plan,interval):
     spec=plan_spec(plan,interval)
     account=account_for(user)
-    if account and account.legacy_granted_at and plan!='plus':
-        raise ValueError('Your existing account access already includes Basic tools. Plus is optional.')
+    if account and account.legacy_granted_at and plan not in ('plus', 'pro'):
+        raise ValueError('Your existing account access already includes Basic tools. Plus or Pro is optional.')
     if sub.user_id!=user.id:raise ValueError('This subscription does not belong to your account.')
     if (sub.plan_code,sub.billing_interval)==(plan,interval):raise ValueError('That plan and interval are already selected.')
     if sub.current_period_end is None or sub.current_period_end<=datetime.utcnow():
@@ -217,8 +214,8 @@ def change_plan(user,sub,plan,interval):
     current=effective_access(user).subscription
     if not current or current.id!=sub.id:
         raise ValueError('Only your currently paid subscription can be changed.')
-    # Immediate Basic→Plus only when interval stays the same. All interval changes defer.
-    immediate=sub.plan_code=='basic' and plan=='plus' and interval==sub.billing_interval
+    # Higher-tier upgrades are immediate only with the same interval; all other changes defer.
+    immediate=immediate_upgrade(sub.plan_code, plan, sub.billing_interval, interval)
     code,spec=provider.configured_plan(plan,interval)
     if not provider.validate_plan(provider.call('/plan/'+code),code,spec):raise ValueError('The replacement plan differs from the configured price.')
     lock_account(user.id)

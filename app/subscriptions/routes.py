@@ -4,7 +4,7 @@ from flask_login import current_user, login_required
 from app import db
 from app.models import RecurringSubscription, BillingEvent
 from app.payments.service import PaystackError
-from app.subscriptions.entitlements import effective_access, account_for, PLANS, plan_spec
+from app.subscriptions.entitlements import effective_access, account_for, PLANS, plan_spec, immediate_upgrade
 from app.subscriptions import billing, provider
 
 subscriptions_bp = Blueprint('subscriptions', __name__, url_prefix='/plans')
@@ -30,7 +30,7 @@ def failed(error):
 def index():
     business = selected_business(current_user) if current_user.is_authenticated else None
     if not current_app.config.get('SUBSCRIPTIONS_ENABLED'):
-        return render_template('subscriptions/index.html', business=business, plan_prices={plan: {interval: PLANS[(plan, interval)]['amount'] / 100 for interval in ('monthly', 'yearly')} for plan in ('basic', 'plus')})
+        return render_template('subscriptions/index.html', business=business, plan_prices={plan: {interval: PLANS[(plan, interval)]['amount'] / 100 for interval in ('monthly', 'yearly')} for plan in ('basic', 'plus', 'pro')})
     access = effective_access(current_user, business=business) if current_user.is_authenticated else None
     history = RecurringSubscription.query.filter_by(user_id=current_user.id).order_by(RecurringSubscription.id.desc()).limit(20).all() if current_user.is_authenticated else []
     events = BillingEvent.query.filter(BillingEvent.user_id==current_user.id, BillingEvent.kind.notin_(('provider_event','business_created','business_selected'))).order_by(BillingEvent.id.desc()).limit(10).all() if current_user.is_authenticated else []
@@ -38,7 +38,7 @@ def index():
     plan_prices = {
         plan: {interval: PLANS[(plan, interval)]["amount"] / 100
                for interval in ("monthly", "yearly")}
-        for plan in ("basic", "plus")
+        for plan in ("basic", "plus", "pro")
     }
     return render_template('subscriptions/billing.html', access=access,
         history=history, events=events,
@@ -65,12 +65,12 @@ def review():
     try:
         spec = plan_spec(plan, interval)
         access = effective_access(current_user)
-        if access.legacy and plan != 'plus':
-            raise ValueError('Your existing account access already includes Basic tools. Plus is optional.')
+        if access.legacy and plan not in ('plus', 'pro'):
+            raise ValueError('Your existing account access already includes Basic tools. Plus or Pro is optional.')
         sub = access.subscription
         if sub and (sub.plan_code, sub.billing_interval) == (plan, interval):
             raise ValueError('That plan and interval are already selected.')
-        immediate = not sub or (sub.plan_code == 'basic' and plan == 'plus' and sub.billing_interval == interval)
+        immediate = not sub or (immediate_upgrade(sub.plan_code, plan, sub.billing_interval, interval))
         return render_template('subscriptions/review.html', plan=plan, interval=interval,
             spec=spec, sub=sub, immediate=immediate, provider_ready=provider.configured(), access=access)
     except ValueError as error:
