@@ -187,17 +187,27 @@ def test_admin_suspension_and_reactivation_send_after_commit(app, messages):
     assert client.post("/admin/login", data={"email": "operator@example.test",
         "password": "long-safe-password123"}).status_code == 302
     assert client.post(f"/admin/users/{user_id}/suspension",
-        data={"confirm": "on", "reason": "Account review"}).status_code == 302
+        data={"confirm": "on", "reason": "Account review",
+              "desired_state": "suspend", "expected_state": "active"}).status_code == 302
     assert len(messages) == 1 and "suspended" in messages[0]["Subject"]
     with app.app_context():
-        assert db.session.get(User, user_id).suspended_at
+        suspended_at = db.session.get(User, user_id).suspended_at
+        assert suspended_at
     assert client.post(f"/admin/users/{user_id}/suspension",
-        data={"confirm": "on", "reason": "Review complete"}).status_code == 302
+        data={"confirm": "on", "reason": "Review complete",
+              "desired_state": "reactivate", "expected_state": "suspended",
+              "expected_suspended_at": suspended_at.isoformat()}).status_code == 302
     assert len(messages) == 2 and "reactivated" in messages[1]["Subject"]
     assert client.post(f"/admin/businesses/{business_id}/suspension",
-        data={"confirm": "on", "reason": "Inventory review"}).status_code == 302
+        data={"confirm": "on", "reason": "Inventory review",
+              "desired_state": "suspend", "expected_state": "active"}).status_code == 302
+    with app.app_context():
+        business_suspended_at = db.session.get(Business, business_id).suspended_at
+        assert business_suspended_at
     assert client.post(f"/admin/businesses/{business_id}/suspension",
-        data={"confirm": "on", "reason": "Resolved"}).status_code == 302
+        data={"confirm": "on", "reason": "Resolved",
+              "desired_state": "reactivate", "expected_state": "suspended",
+              "expected_suspended_at": business_suspended_at.isoformat()}).status_code == 302
     assert len(messages) == 4
     assert "business has been suspended" in messages[2]["Subject"]
     assert "business has been reactivated" in messages[3]["Subject"]
