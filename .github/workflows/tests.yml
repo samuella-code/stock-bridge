@@ -1,9 +1,9 @@
 name: Tests
 on:
   push:
-    branches: [main, feature/product-inventory]
+    branches: [main, release/staging-phase6, feature/product-inventory]
   pull_request:
-    branches: [main]
+    branches: [main, release/staging-phase6]
 jobs:
   test:
     runs-on: ubuntu-latest
