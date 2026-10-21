@@ -19,7 +19,7 @@ def test_retired_endpoints_cannot_create_payments(app, monkeypatch, enabled, pro
     count=Payment.query.count()
     for response in (client.get('/payments/checkout'), client.post('/payments/initialize', data={'amount':'1','product':'lifetime'})):
         assert response.status_code == 410
-        assert b'View Basic and Plus plans' in response.data
+        assert b'View Basic, Plus and Pro plans' in response.data
         assert b'Lifetime' not in response.data
     assert Payment.query.count()==count
 
