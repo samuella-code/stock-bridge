@@ -2,6 +2,7 @@
 from app.error_handling import log_failure
 import os
 import smtplib
+import time
 from datetime import datetime, timedelta
 from email.message import EmailMessage
 from email.utils import formataddr
@@ -51,13 +52,28 @@ def _send_email(subject, recipient, body, html=None):
     message.set_content(body)
     if html:
         message.add_alternative(html, subtype="html")
-    with smtplib.SMTP(host, current_app.config["SMTP_PORT"], timeout=15) as smtp:
-        if current_app.config["SMTP_USE_TLS"]:
-            smtp.starttls()
-        username = current_app.config["SMTP_USERNAME"]
-        if username:
-            smtp.login(username, current_app.config["SMTP_PASSWORD"])
-        smtp.send_message(message)
+    stage = "connection"
+    started = time.monotonic()
+    try:
+        with smtplib.SMTP(host, current_app.config["SMTP_PORT"], timeout=15) as smtp:
+            if current_app.config["SMTP_USE_TLS"]:
+                stage = "starttls"
+                smtp.starttls()
+            username = current_app.config["SMTP_USERNAME"]
+            if username:
+                stage = "authentication"
+                smtp.login(username, current_app.config["SMTP_PASSWORD"])
+            stage = "message_transmission"
+            smtp.send_message(message)
+            stage = "connection_closure"
+    except Exception as error:
+        # Never include exception text or SMTP protocol/debug output.
+        current_app.logger.error(
+            "smtp_failure stage=%s exception_type=%s elapsed_ms=%d",
+            stage, type(error).__name__,
+            max(0, round((time.monotonic() - started) * 1000)),
+        )
+        raise
     return True
 
 
