@@ -14,7 +14,7 @@ def test_social_migration_upgrade_downgrade_preserves_existing_records(tmp_path)
         db.session.execute(text('INSERT INTO "user" (id,full_name,email,password_hash,created_at,role,admin_enabled,admin_auth_version) VALUES (1,:name,:email,:password,:now,\'user\',false,0)'),
             {'name':'Existing Owner','email':'migration@example.invalid','password':'original-hash','now':datetime.utcnow()})
         db.session.commit()
-        upgrade()
+        upgrade(revision='0014_social_identity')
         assert 'social_identity' in inspect(db.engine).get_table_names()
         assert db.session.execute(text('SELECT password_hash FROM "user" WHERE id=1')).scalar()=='original-hash'
         db.session.execute(text('INSERT INTO social_identity (user_id,provider,provider_subject,created_at) VALUES (1,\'google\',\'stable-subject\',:now)'), {'now':datetime.utcnow()}); db.session.commit()
