@@ -3,25 +3,30 @@
   const mode=basket.dataset.mode,search=basket.querySelector('.basket-search'),results=basket.querySelector('.basket-results'),lines=basket.querySelector('.basket-lines'),message=basket.querySelector('.basket-message');
   const form=basket.closest('form'),submitButton=form.querySelector('button[type=submit]'),serverDisabled=submitButton.disabled;let timer,controller,sequence=0,basketInvalid=false,submitting=false;
   const money=value=>'₦'+Number(value).toLocaleString('en-NG',{minimumFractionDigits:2,maximumFractionDigits:2});
-  function total(){let amount=0;basketInvalid=false;
+  const counted=(count,noun)=>`${count} ${noun}${count===1?'':'s'}`;
+  function total(){let amount=0,units=0,quantitiesValid=true;basketInvalid=false;
    lines.querySelectorAll('.basket-line').forEach(row=>{
     const input=row.querySelector('[name=quantity]'),q=Number(input.value||0),priceInput=row.querySelector('.line-price'),price=Number(priceInput.value||0);
-    const subtotal=q*price;amount+=!Number.isFinite(subtotal)?0:subtotal;row.querySelector('.line-total').textContent=money(!Number.isFinite(subtotal)?0:subtotal);
+    const subtotal=q*price;let rowInvalid=!input.validity.valid||!priceInput.validity.valid||!Number.isFinite(subtotal);
+    quantitiesValid=quantitiesValid&&input.validity.valid;units+=q;
     if(mode==='sale'||mode==='restock'){
      const warning=row.querySelector('.stock-warning'),stock=Number(row.dataset.stock);
      const excess=mode==='sale'&&q>stock;warning.textContent=excess?`Only ${stock} available. Reduce the quantity.`:(!input.validity.valid?'Enter a valid whole quantity within the supported stock range.':(!priceInput.validity.valid?'Enter a valid non-negative unit price or purchase cost with at most two decimal places.':''));
      warning.hidden=!warning.textContent;input.setAttribute('aria-invalid',String(excess||!input.validity.valid));
      priceInput.setAttribute('aria-invalid',String(!priceInput.validity.valid));
      if(mode==='restock'){row.querySelector('.expected-stock').textContent=Number.isInteger(q)&&q>0&&q+stock<=2147483647?`Expected stock after restocking: ${q+stock}`:'Expected stock: review quantity';}
-     basketInvalid=basketInvalid||excess||!input.validity.valid||!priceInput.validity.valid;
+     rowInvalid=rowInvalid||excess;
     }
+    basketInvalid=basketInvalid||rowInvalid;
+    if(!rowInvalid)amount+=subtotal;
+    row.querySelector('.line-total').textContent=rowInvalid?'Review inputs':money(subtotal);
    });
-   basket.querySelector('.basket-total').textContent='Total: '+money(amount);
+   basket.querySelector('.basket-total').textContent=basketInvalid?'Total unavailable — review inputs':'Total: '+money(amount);
    if(mode==='sale'||mode==='restock'){
     const count=basket.querySelector('.basket-count'),empty=basket.querySelector('.basket-empty');
-    if(count)count.textContent=`${lines.children.length} products selected`;
+    if(count)count.textContent=counted(lines.children.length,'product')+' selected';
     if(empty)empty.hidden=lines.children.length>0;
-    const review=basket.querySelector('.restock-review');if(review){const units=[...lines.children].reduce((sum,row)=>sum+(Number(row.querySelector('[name=quantity]').value)||0),0);review.textContent=`Review: ${lines.children.length} products · ${units} units · ${money(amount)}`;}
+    const review=basket.querySelector('.restock-review');if(review)review.textContent=`Review: ${counted(lines.children.length,'product')} · ${quantitiesValid?counted(units,'unit'):'Review quantities'} · ${basketInvalid?'Total unavailable — review inputs':money(amount)}`;
     submitButton.disabled=serverDisabled||basketInvalid||submitting;
    }
   }
@@ -35,7 +40,7 @@
    const qty=field(mode==='sale'?'Quantity':'Quantity received','quantity','1','1');qty.max=mode==='sale'?product.stock:2147483647-Number(product.stock);qty.setAttribute('aria-describedby',`${mode}-stock-${product.id} ${mode}-warning-${product.id}`);
    const price=field(mode==='sale'?'Unit price (₦)':'Purchase cost per unit (₦)',mode==='sale'?'unit_price':'unit_cost',mode==='sale'?product.price:product.cost,'0.01');price.className='line-price';price.setAttribute('aria-describedby',`${mode}-warning-${product.id}`);if(mode==='restock')price.max='9999999999.99';
    {const warning=document.createElement('p');warning.className='stock-warning';warning.id=`${mode}-warning-${product.id}`;warning.setAttribute('role','status');warning.hidden=true;row.append(warning);if(mode==='restock'){const after=document.createElement('small');after.className='expected-stock';row.append(after);}}
-   const subtotal=document.createElement('strong');subtotal.className='line-total';row.append(subtotal);const remove=document.createElement('button');remove.type='button';remove.className='secondary-btn';remove.textContent='Remove item';remove.onclick=()=>{row.remove();total();if(mode==='sale')search.focus();};row.append(remove);lines.append(row);results.replaceChildren();search.value='';message.textContent='Product added. Add another or review your basket.';if(mode==='sale')search.focus();else qty.focus();total();
+   const subtotal=document.createElement('strong');subtotal.className='line-total';row.append(subtotal);const remove=document.createElement('button');remove.type='button';remove.className='secondary-btn';remove.textContent='Remove item';remove.onclick=()=>{row.remove();message.textContent='';total();if(mode==='sale')search.focus();};row.append(remove);lines.append(row);results.replaceChildren();search.value='';message.textContent='Product added. Add another or review your basket.';if(mode==='sale')search.focus();else qty.focus();total();
   }
   async function lookup(term,target=results){controller?.abort();controller=new AbortController();const mine=++sequence;target.textContent='Searching…';
    try{const response=await fetch(`${basket.dataset.lookup}?q=${encodeURIComponent(term)}`,{signal:controller.signal,headers:{Accept:'application/json'}});if(!response.ok)throw Error();const data=await response.json();if(mine!==sequence)return;target.replaceChildren();

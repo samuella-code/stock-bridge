@@ -1,6 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
+import pytest
 from app import db
 from app.models import Restock, Product, Business
 from app.restocking.history import receipt_history
@@ -48,3 +49,22 @@ def test_picker_and_sales_action_accessibility(client):
     source=(Path(__file__).resolve().parents[1]/'app/templates/sales/index.html').read_text()
     assert '>⋯</summary>' in source and '>⋯ Actions</summary>' not in source
     assert 'aria-label="Actions for sale' in source
+
+
+@pytest.mark.parametrize('count', [0, 1, 2])
+def test_receipt_item_wording_preserves_counts_and_amounts(client, count):
+    owner(client); pid = add(client, 'Synthetic receipt product', 5)
+    product = db.session.get(Product, pid)
+    for _ in range(count):
+        db.session.add(Restock(business_id=product.business_id, product_id=pid,
+            quantity=2, unit_cost=100, batch_id='wording-receipt'))
+    db.session.commit()
+    response = client.get('/restocking/')
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    if count:
+        assert f' · {count} {"item" if count == 1 else "items"} · ₦{count * 200:,.2f}' in html
+        assert '1 items' not in html
+    else:
+        assert 'No restocks recorded yet' in html
+    assert Restock.query.count() == count

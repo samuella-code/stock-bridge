@@ -1,6 +1,7 @@
 from app.subscriptions.entitlements import selected_business
 from datetime import datetime, time, timedelta
 from decimal import Decimal
+import re
 from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for, jsonify, abort
 from flask_login import current_user, login_required
 from sqlalchemy import func, case, distinct
@@ -27,6 +28,32 @@ def period_dates(args):
         period = "today"
         start, end = today, today + timedelta(days=1)
     return period, datetime.combine(start, time.min), datetime.combine(end, time.min)
+
+def report_date_errors(args):
+    """Validate the Reports form without changing Dashboard's period handling."""
+    if args.get("period", "today") != "custom":
+        return {}
+    errors, dates = {}, {}
+    for field, label in (("from", "From"), ("to", "To")):
+        value = args.get(field, "")
+        if not value.strip():
+            errors[field] = f"Enter a {label} date."
+        elif not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
+            errors[field] = f"Enter the {label} date in YYYY-MM-DD format."
+        else:
+            try:
+                dates[field] = datetime.strptime(value, "%Y-%m-%d").date()
+            except ValueError:
+                errors[field] = f"Enter a real calendar date for {label}."
+    if errors:
+        return errors
+    if dates["to"] < dates["from"]:
+        errors["to"] = "To date must be on or after the From date."
+    elif (dates["to"] - dates["from"]).days > 366:
+        errors["to"] = "Choose a date range of no more than 366 days."
+    elif dates["to"] == datetime.max.date():
+        errors["to"] = "To date must be earlier than 9999-12-31."
+    return errors
 
 def figures(b, start, end):
     conditions = (Sale.business_id == b.id, Sale.voided_at.is_(None),
@@ -133,11 +160,11 @@ def reports():
     b = selected_business(current_user)
     if not b.has_write_access and not current_app.config.get("SUBSCRIPTIONS_ENABLED"):
         return redirect(url_for("subscriptions.index"))
-    try:
-        period, start, end = period_dates(request.args)
-    except (ValueError, KeyError):
-        flash("Choose a valid reporting period.", "error")
-        return redirect(url_for("main.reports"))
+    errors = report_date_errors(request.args)
+    if errors:
+        return render_template("reports.html", business=b, period="custom",
+            report_errors=errors), 400
+    period, start, end = period_dates(request.args)
     metrics = figures(b, start, end)
     cutoff = datetime.utcnow() - timedelta(days=30)
     slow = Product.query.filter(Product.business_id == b.id, Product.active.is_(True),

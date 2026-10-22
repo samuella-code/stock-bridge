@@ -97,9 +97,12 @@
                 <div class="profile-menu"><button class="profile-pill" id="profileButton" type="button" aria-label="Account menu" aria-controls="profileDropdown" aria-expanded="false">
                     <div class="avatar">{{ current_user.full_name[:1] | upper }}</div>
                     <div class="profile-copy">
+                        <span class="profile-identity-label">Account</span>
                         <strong>{{ current_user.full_name }}</strong>
                         <span>Owner</span>
-                    </div></button><div class="profile-dropdown" id="profileDropdown"><a href="{{ url_for('profile.index') }}">Profile & settings</a><a href="{{ url_for('businesses.index') }}">My Businesses</a><a href="{{ url_for('subscriptions.index') }}">{{ "Billing & plans" }}</a></div></div>
+                    </div></button><div class="profile-dropdown" id="profileDropdown">
+                        <dl class="profile-plan"><dt>Plan</dt><dd>{% if not config.SUBSCRIPTIONS_ENABLED %}Subscription plans are not enabled{% elif billing_label is defined and billing_label %}{{ billing_label }}{% else %}Plan information unavailable{% endif %}</dd></dl>
+                        <a href="{{ url_for('profile.index') }}">Profile & settings</a><a href="{{ url_for('businesses.index') }}">My Businesses</a><a href="{{ url_for('subscriptions.index') }}">{{ "Billing & plans" }}</a></div></div>
             </header>
             {% endif %}
 
