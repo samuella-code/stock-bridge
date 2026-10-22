@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 
 from app import csrf, db
 from paystack_policy import subscription_environment_allowed
@@ -179,7 +180,7 @@ def webhook():
         try:
             if process_event(event) or preview:
                 return jsonify(status="ok"), 200
-        except (ValueError, PaystackError):
+        except (ValueError, PaystackError, IntegrityError):
             db.session.rollback()
             current_app.logger.warning("Subscription event needs reconciliation; no access extended.")
             return jsonify(status="billing reconciliation required"), 503

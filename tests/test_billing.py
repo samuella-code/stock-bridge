@@ -535,7 +535,7 @@ def test_card_link_is_owned_and_host_checked(client,fake,monkeypatch):
 def test_replayed_payment_never_extends_another_invoice_period(client,fake):
     u,b=seed(eligible=False);s=purchase(u);prior=s.current_period_end
     event=renewal_event(s,s.checkout_reference,prior,prior+timedelta(days=31))
-    assert webhook(client,event).status_code==200 and s.current_period_end==prior
+    assert webhook(client,event).status_code==503 and s.current_period_end==prior
     assert Payment.query.count()==1
 
 
