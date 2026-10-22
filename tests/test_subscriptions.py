@@ -44,7 +44,7 @@ def test_unverified_signup_cannot_enter_dashboard_or_pay(client, app, monkeypatc
         token = verification_token("ada@example.com")
     preview = client.get(f"/auth/verify/{token}", follow_redirects=True)
     assert b"Explore StockBridge" in preview.data
-    assert b"View Basic and Plus plans" in preview.data
+    assert b"View Basic, Plus and Pro plans" in preview.data
     assert b"Lifetime" not in preview.data
     assert client.get("/products/").headers["Location"].endswith("/plans/")
 

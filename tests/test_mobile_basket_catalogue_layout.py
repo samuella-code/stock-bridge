@@ -23,6 +23,7 @@ def test_catalogue_sort_has_full_width_mobile_hook_and_original_options(view):
     env = Environment(loader=ChoiceLoader([
         DictLoader({'base.html': '{% block content %}{% endblock %}'}),
         FileSystemLoader(ROOT / 'app/templates')]), autoescape=True)
+    env.globals['url_for'] = lambda endpoint, **kw: '/' + endpoint
     html = env.get_template('products/index.html').render(
         request=SimpleNamespace(args={'view': view}), total_products=0,
         low_stock_count=0, inventory_value=0, query='', categories=[], category='',

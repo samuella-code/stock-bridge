@@ -7,6 +7,7 @@ import json
 import os
 import re
 from urllib.parse import parse_qs, urlsplit
+from paystack_policy import staging_preview_authorized
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 PROJECT = "prj_yeCWXPd44jShVUGHAgJu9khMjOMv"
@@ -18,6 +19,8 @@ PLANS = (
     ("Basic Yearly", "PAYSTACK_BASIC_YEARLY_PLAN", 3000000, "annually"),
     ("Plus Monthly", "PAYSTACK_PLUS_MONTHLY_PLAN", 500000, "monthly"),
     ("Plus Yearly", "PAYSTACK_PLUS_YEARLY_PLAN", 5000000, "annually"),
+    ("Pro Monthly", "PAYSTACK_PRO_MONTHLY_PLAN", 1000000, "monthly"),
+    ("Pro Yearly", "PAYSTACK_PRO_YEARLY_PLAN", 10000000, "annually"),
 )
 
 
@@ -71,9 +74,13 @@ def validate(env=None, getter=None):
     result.update({name: False for name, *_ in PLANS})
     result.update({"Subscription flags": False, "Staging database isolation": False})
     # Fail closed BEFORE inspecting credentials or making any network request.
-    if not (env.get("VERCEL_PROJECT_ID") == PROJECT
-            and env.get("VERCEL_ENV") == "production"
-            and env.get("CUSTOMER_HOST") == HOST):
+    preview_config = dict(env)
+    for key in ('STAGING_PAYSTACK_TEST_ENABLED', 'SUBSCRIPTIONS_ENABLED', 'BILLING_PROVIDER_ENABLED'):
+        preview_config[key] = env.get(key) == 'true'
+    production = (env.get("VERCEL_PROJECT_ID") == PROJECT
+                  and env.get("VERCEL_ENV") == "production"
+                  and env.get("CUSTOMER_HOST") == HOST)
+    if not (production or staging_preview_authorized(preview_config, env)):
         return result
     result["Staging database isolation"] = isolated(env)
     result["Subscription flags"] = all(
@@ -87,7 +94,7 @@ def validate(env=None, getter=None):
     if not all(result[k] for k in result if k not in {p[0] for p in PLANS}):
         return result
     codes = [env.get(key, "") for _, key, _, _ in PLANS]
-    if len(set(codes)) != 4:
+    if len(set(codes)) != len(PLANS):
         return result
     for (name, _, amount, interval), code in zip(PLANS, codes):
         if not re.fullmatch(r"PLN_[A-Za-z0-9]+", code):

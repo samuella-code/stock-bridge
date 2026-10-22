@@ -10,8 +10,10 @@ from urllib.parse import urlparse
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 
 from app import csrf, db
+from paystack_policy import subscription_environment_allowed
 from app.models import Payment, User
 from app.admin.routes import log
 from app.email_service import safely_send, send_access_receipt_once
@@ -49,6 +51,8 @@ def _confirm(payment, data, *, commit=True):
 
 
 def _activate_account(payment, *, commit=True):
+    if os.getenv("VERCEL_ENV") == "preview":
+        return False
     users = User.query.filter(func.lower(User.email) == payment.customer_email.lower()).limit(2).all()
     if len(users) != 1 or users[0].role != "user" or users[0].admin_enabled or payment.status != "success":
         return False
@@ -107,6 +111,8 @@ def _payments_configured():
 
 @payments_bp.get("/callback")
 def callback():
+    if os.getenv("VERCEL_ENV") == "preview":
+        return jsonify(status="not available"), 404
     reference = request.args.get("reference", "")
     payment = Payment.query.filter_by(reference=reference,
         customer_email=current_user.email).first() if current_user.is_authenticated else None
@@ -132,6 +138,8 @@ def callback():
 @payments_bp.get("/status/<reference>")
 @login_required
 def status(reference):
+    if os.getenv("VERCEL_ENV") == "preview":
+        return jsonify(status="not available"), 404
     payment = Payment.query.filter_by(reference=reference, customer_email=current_user.email).first_or_404()
     if payment.status == "success":
         if _activate_account(payment):
@@ -142,7 +150,8 @@ def status(reference):
 @payments_bp.post("/webhook")
 @csrf.exempt
 def webhook():
-    if os.getenv("VERCEL_ENV") and os.getenv("VERCEL_ENV") != "production":
+    preview = os.getenv("VERCEL_ENV") == "preview"
+    if not subscription_environment_allowed(current_app.config, os.environ):
         return jsonify(status="not available"), 404
     secret = current_app.config["PAYSTACK_SECRET_KEY"]
     signature = request.headers.get("x-paystack-signature", "")
@@ -159,6 +168,8 @@ def webhook():
         return jsonify(status="invalid payload"), 400
     old_lifetime = event.get('event') == 'charge.success' and Payment.query.filter_by(
         reference=(event.get('data') or {}).get('reference'), product='lifetime').first() is not None
+    if preview and old_lifetime:
+        return jsonify(status="not available"), 404
     billing_names = {'charge.success', 'subscription.create', 'subscription.not_renew',
         'subscription.disable', 'invoice.create', 'invoice.update', 'invoice.payment_failed'}
     if current_app.config.get("SUBSCRIPTIONS_ENABLED") and not old_lifetime and event.get('event') in billing_names:
@@ -167,12 +178,15 @@ def webhook():
         if not configured():
             return jsonify(status="billing disabled"), 503
         try:
-            if process_event(event):
+            if process_event(event) or preview:
                 return jsonify(status="ok"), 200
-        except (ValueError, PaystackError):
+        except (ValueError, PaystackError, IntegrityError):
             db.session.rollback()
             current_app.logger.warning("Subscription event needs reconciliation; no access extended.")
             return jsonify(status="billing reconciliation required"), 503
+    if preview:
+        # Preview authorization is subscription-only, including signed events.
+        return jsonify(status="not available"), 404
     if event.get("event") == "charge.success":
         data = event.get("data") or {}
         payment = Payment.query.filter_by(reference=data.get("reference")).first()

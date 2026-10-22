@@ -206,7 +206,7 @@ def test_live_checkout_auth_failure_is_clear_and_creates_no_payment(client, app,
     monkeypatch.setattr("app.payments.routes.initialize_transaction",lambda *args:
         (_ for _ in ()).throw(PaystackError("Rejected",status_code=401,code="invalid_api_key")))
     response=client.post("/payments/initialize",follow_redirects=True)
-    assert response.status_code == 410 and b"View Basic and Plus plans" in response.data
+    assert response.status_code == 410 and b"View Basic, Plus and Pro plans" in response.data
     assert warnings == []
     assert "sk_live_do_not_log" not in repr(warnings)
     with app.app_context():

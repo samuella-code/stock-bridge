@@ -78,7 +78,7 @@
 .billing-access-banner { margin:16px 24px; line-height:1.6; }
 .billing-page { max-width:1080px; }
 .billing-page .panel-card { margin:18px 0; min-width:0; overflow-wrap:anywhere; }
-.billing-plan-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
+.billing-plan-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
 .billing-page form { display:grid; gap:12px; margin-top:16px; }
 .billing-page label { display:block; line-height:1.6; }
 .billing-page select { display:block; width:100%; min-height:48px; padding:10px; font:inherit; border:1px solid var(--line); border-radius:10px; }

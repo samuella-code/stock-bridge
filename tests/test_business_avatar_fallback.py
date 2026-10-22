@@ -34,6 +34,6 @@ def test_customer_stylesheet_version_updated(app):
     user, _ = seed('basic')
     client = app.test_client(); login(client, user)
     html = client.get('/dashboard').get_data(as_text=True)
-    assert 'css/customer.css?v=responsive-22460dd-2' in html
+    assert 'css/customer.css?v=phase7cd-mobile-1' in html
     assert 'css/customer.css?v=ui-6.1' not in html
     assert 'css/activity.css?v=activity-10' in html

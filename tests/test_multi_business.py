@@ -38,15 +38,15 @@ def seed(kind='plus', businesses=1, email='multi@example.invalid'):
     db.session.add(account)
     if kind == 'trial':
         account.trial_started_at=now; account.trial_ends_at=now+timedelta(days=7)
-    elif kind in ('lifetime', 'lifetime_plus'):
+    elif kind in ('lifetime', 'lifetime_plus', 'lifetime_pro'):
         payment=Payment(business_id=shops[0].id if shops else None, customer_email=email,
             reference=email, amount_kobo=300000, status='success')
         db.session.add(payment); db.session.flush()
         account.legacy_payment_id=payment.id; account.legacy_granted_at=now
         account.legacy_business_id=shops[0].id if shops else None
-    if kind in ('basic', 'plus', 'lifetime_plus'):
+    if kind in ('basic', 'plus', 'pro', 'lifetime_plus', 'lifetime_pro'):
         sub = RecurringSubscription(user_id=user.id, business_id=shops[0].id if shops else 999,
-            plan_code='basic' if kind=='basic' else 'plus', billing_interval='monthly', amount_kobo=300000 if kind=='basic' else 500000,
+            plan_code='basic' if kind=='basic' else 'pro' if kind in ('pro', 'lifetime_pro') else 'plus', billing_interval='monthly', amount_kobo=300000 if kind=='basic' else 1000000 if kind in ('pro', 'lifetime_pro') else 500000,
             provider_plan_code='PLN_fixture', status='active', current_period_start=now-timedelta(hours=1), current_period_end=now+timedelta(days=30))
         db.session.add(sub)
     db.session.commit()
@@ -64,11 +64,11 @@ def add_business(client, user, name):
     return client.post('/businesses/new', data={'name': name, 'creation_token': creation_token(user)})
 
 
-@pytest.mark.parametrize('kind,limit', [('basic',1),('trial',1),('lifetime',1),('plus',2),('lifetime_plus',2)])
+@pytest.mark.parametrize('kind,limit', [('basic',1),('trial',1),('lifetime',1),('plus',2),('lifetime_plus',2),('pro',5),('lifetime_pro',5)])
 def test_entitlement_limits_and_crafted_posts(app, kind, limit):
     user, shops=seed(kind); client=app.test_client(); login(client,user)
-    if limit==2:
-        assert add_business(client,user,'Second').status_code==302
+    for n in range(1, limit):
+        assert add_business(client,user,f'Shop {n+1}').status_code==302
     result=add_business(client,user,'Forbidden')
     assert result.status_code==302 and Business.query.filter_by(user_id=user.id).count()==limit
     assert b'Forbidden' not in client.get('/businesses/').data

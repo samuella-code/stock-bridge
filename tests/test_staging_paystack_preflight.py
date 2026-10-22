@@ -26,7 +26,7 @@ def test_valid_plans():
         calls.append(code)
         return good_plan(code, secret)
     assert all(preflight.validate(environment(), getter).values())
-    assert len(calls) == 4
+    assert len(calls) == 6
 
 
 @pytest.mark.parametrize("key,value", [
@@ -101,3 +101,22 @@ def test_get_only_fixed_host_and_no_redirect(monkeypatch):
     assert requests[0].full_url == "https://api.paystack.co/plan/PLN_fixture0"
     assert requests[0].data is None
     assert preflight.NoRedirect().redirect_request(None, None, 302, "", {}, "https://evil.invalid") is None
+
+
+def test_authorized_preview_checks_all_six_plans():
+    env = environment()
+    env.update(VERCEL_ENV='preview', VERCEL_TARGET_ENV='preview',
+        VERCEL_GIT_REPO_OWNER='samuella-code', VERCEL_GIT_REPO_SLUG='stock-bridge',
+        VERCEL_GIT_COMMIT_REF='release/staging-phase6', VERCEL_GIT_COMMIT_SHA='a'*40,
+        STAGING_PAYSTACK_APPROVED_SHA='a'*40, STAGING_PAYSTACK_TEST_ENABLED='true',
+        STAGING_PAYSTACK_CALLBACK_ORIGIN='https://stock-bridge-staging.vercel.app')
+    calls = []
+    def getter(code, secret):
+        calls.append(code)
+        return good_plan(code, secret)
+    assert all(preflight.validate(env, getter).values())
+    assert len(calls) == 6
+    env['VERCEL_GIT_COMMIT_REF'] = 'other-branch'
+    def forbidden(*args):
+        pytest.fail('Unapproved Preview contacted Paystack')
+    assert not any(preflight.validate(env, forbidden).values())

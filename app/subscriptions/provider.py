@@ -1,7 +1,8 @@
 """Paystack billing adapter. No shared-plan edits or direct charge API."""
 import os
 import re
-from flask import current_app
+from flask import current_app, url_for
+from paystack_policy import staging_preview_authorized, staging_callback_origin, subscription_environment_allowed
 from app.payments.service import PaystackError, _request
 from app.subscriptions.entitlements import plan_spec
 
@@ -10,7 +11,7 @@ def configured():
     cfg=current_app.config
     public,secret=cfg.get('PAYSTACK_PUBLIC_KEY',''),cfg.get('PAYSTACK_SECRET_KEY','')
     return bool(cfg.get('SUBSCRIPTIONS_ENABLED') and cfg.get('BILLING_PROVIDER_ENABLED')
-        and (not os.getenv('VERCEL_ENV') or os.getenv('VERCEL_ENV')=='production')
+        and subscription_environment_allowed(cfg, os.environ)
         and ((public.startswith('pk_test_') and secret.startswith('sk_test_'))
              or (public.startswith('pk_live_') and secret.startswith('sk_live_'))))
 
@@ -75,3 +76,16 @@ def disable_subscription(code,token):
 
 def verify(reference):
     return call('/transaction/verify/'+identifier(reference))
+
+
+def checkout_callback():
+    if not subscription_environment_allowed(current_app.config, os.environ):
+        raise PaystackError('Subscription billing is not enabled in this environment.')
+    environment = os.getenv('VERCEL_ENV')
+    if environment == 'preview':
+        if not staging_preview_authorized(current_app.config, os.environ):
+            raise PaystackError('Subscription billing is not enabled in this environment.')
+        return staging_callback_origin(current_app.config) + url_for('subscriptions.callback')
+    if environment == 'production':
+        return f"https://{current_app.config['CUSTOMER_HOST']}" + url_for('subscriptions.callback')
+    return url_for('subscriptions.callback', _external=True)

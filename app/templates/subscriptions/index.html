@@ -3,4 +3,4 @@
 {% from 'components/legal_links.html' import billing_links %}
 {% block title %}Billing & Plan · StockBridge{% endblock %}
 {% block page_title %}Billing & Plan{% endblock %}
-{% block content %}{{ billing_links() }}<section class="billing-page"><div class="billing-intro"><h2>Basic and Plus</h2><p>Subscription checkout is not currently available. Trials are unavailable while subscription rollout is off. Your existing valid access is unchanged.</p></div>{{ price_toggle() }}{{ pricing_cards(plan_prices) }}{% if business %}<a class="secondary-btn" href="{{ url_for('main.dashboard') }}">Open dashboard</a>{% endif %}</section>{% endblock %}
+{% block content %}{{ billing_links() }}<section class="billing-page"><div class="billing-intro"><h2>Basic, Plus and Pro</h2><p>Subscription checkout is not currently available. Trials are unavailable while subscription rollout is off. Your existing valid access is unchanged.</p></div>{{ price_toggle() }}{{ pricing_cards(plan_prices) }}{% if business %}<a class="secondary-btn" href="{{ url_for('main.dashboard') }}">Open dashboard</a>{% endif %}</section>{% endblock %}

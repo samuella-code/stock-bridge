@@ -85,7 +85,8 @@ def test_homepage_workflow_prices_navigation_faq_and_ctas(app):
 @pytest.mark.parametrize('path',['/auth/login','/auth/signup'])
 def test_auth_labels_preserved_fields_and_social_actions(app,path):
     html=app.test_client().get(path).get_data(as_text=True)
-    assert 'entry-auth' in html and '<label>Email address' in html and '<label>Password' in html
+    assert 'entry-auth' in html and '<label>Email address' in html
+    assert '<label for="login-password">Password</label>' in html if path.endswith('login') else '<label for="signup-password">Password</label>' in html
     assert 'action="/auth/google/start"' in html and 'action="/auth/apple/start"' not in html
     assert 'name="csrf_token"' in html and 'autocomplete="email"' in html
     if path.endswith('signup'):
@@ -115,7 +116,7 @@ def test_review_server_prices_no_writes_and_price_tampering(app,plan,interval):
     html=client.get(f'/plans/review?plan={plan}&interval={interval}&amount=1&business_limit=999&plan_code=evil').get_data(as_text=True)
     assert 'Subscription Summary' in html and user.email in html
     assert f'₦{PLANS[(plan,interval)]["amount"]/100:,.0f}' in html
-    assert ('Up to 2 businesses' if plan=='plus' else '1 business') in html
+    assert {'basic': '1 business', 'plus': 'Up to 2 businesses', 'pro': 'Up to 5 businesses'}[plan] in html
     assert 'Amount due today' in html and 'Continue to Paystack' in html
     assert 'action="/plans/checkout"' in html
     assert 'name="amount"' not in html and 'name="business_limit"' not in html

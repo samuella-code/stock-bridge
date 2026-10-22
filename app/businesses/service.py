@@ -13,8 +13,9 @@ def owned_businesses(user):
 
 
 def selection_key(user):
-    # Each paid Plus generation requires its own explicit lower-tier choice.
-    previous = RecurringSubscription.query.filter_by(user_id=user.id, plan_code='plus').filter(
+    # Each paid multi-business generation requires its own explicit lower-tier choice.
+    previous = RecurringSubscription.query.filter_by(user_id=user.id).filter(
+        RecurringSubscription.plan_code.in_(('plus', 'pro')),
         RecurringSubscription.current_period_start.isnot(None)).order_by(RecurringSubscription.id.desc()).first()
     return f'business-selection:{user.id}:{previous.id if previous else 0}'
 
@@ -86,7 +87,7 @@ def create_business(user, name, token):
         raise ValueError('An active plan or trial is required to add a business.')
     count = Business.query.filter_by(user_id=user.id).count()
     if count >= access.business_limit:
-        raise ValueError('Your plan supports '+str(access.business_limit)+' business'+('es.' if access.business_limit != 1 else '. Upgrade to Plus to add another business.'))
+        raise ValueError('Your plan supports '+str(access.business_limit)+' business'+('es.' if access.business_limit != 1 else '. Choose a higher business allowance to add another business.'))
     now = datetime.utcnow()
     business = Business(user_id=user.id, name=name, subscription_plan='starter',
         subscription_status='inactive', trial_started_at=now, trial_ends_at=now)

@@ -4,11 +4,10 @@ import json
 import uuid
 from datetime import datetime, timezone
 from urllib.parse import urlparse
-from flask import url_for, current_app
 from sqlalchemy import update
 from app import db
 from app.models import User, AccountBilling, RecurringSubscription, Payment, BillingEvent
-from app.subscriptions.entitlements import plan_spec, account_for, selected_business, effective_access
+from app.subscriptions.entitlements import plan_spec, immediate_upgrade, account_for, selected_business, effective_access
 from app.subscriptions import provider
 
 
@@ -25,7 +24,9 @@ def timestamp(value):
 
 
 def lock_account(user_id):
-    db.session.execute(update(User).where(User.id==user_id).values(last_activity_at=User.last_activity_at))
+    # ORM autoflush must not acquire payment/subscription locks before the owner.
+    with db.session.no_autoflush:
+        db.session.execute(update(User).where(User.id==user_id).values(last_activity_at=User.last_activity_at))
 
 
 def notice(user_id,key,kind,message,subscription_id=None):
@@ -52,6 +53,7 @@ def subscription_details(sub):
 
 
 def begin_checkout(user,plan,interval,*,replacement_of_id=None):
+    callback = provider.checkout_callback()
     code,spec=provider.configured_plan(plan,interval)
     if not provider.validate_plan(provider.call('/plan/'+code),code,spec):
         raise ValueError('Configured Paystack plan price or interval differs; checkout stopped.')
@@ -70,8 +72,8 @@ def begin_checkout(user,plan,interval,*,replacement_of_id=None):
     if active:
         raise ValueError('Use Change Plan to stop the old renewal before starting another subscription.')
     account=account_for(user,create=True)
-    if account.legacy_granted_at and plan!='plus':
-        raise ValueError('Your existing account access already includes the core tools. Only choose Plus voluntarily.')
+    if account.legacy_granted_at and plan not in ('plus', 'pro'):
+        raise ValueError('Your existing account access already includes the core tools. Only choose Plus or Pro voluntarily.')
     sub=RecurringSubscription(user_id=user.id,business_id=selected_business(user).id,plan_code=plan,
         billing_interval=interval,amount_kobo=spec['amount'],provider_plan_code=code,
         checkout_reference='SBS-'+uuid.uuid4().hex,status='initializing',replacement_of_id=replacement_of_id)
@@ -82,9 +84,6 @@ def begin_checkout(user,plan,interval,*,replacement_of_id=None):
     db.session.add(payment)
     # A committed pending operation survives unknown network outcomes. Do not retry it blindly.
     db.session.commit()
-    callback=url_for('subscriptions.callback',_external=True)
-    if __import__('os').getenv('VERCEL_ENV')=='production':
-        callback=f"https://{current_app.config['CUSTOMER_HOST']}"+url_for('subscriptions.callback')
     data=provider.call('/transaction/initialize','POST',{'email':user.email,'amount':spec['amount'],
         'currency':'NGN','plan':code,'reference':payment.reference,'callback_url':callback,'channels':['card'],
         'metadata':{'product':'stockbridge_subscription','user_id':user.id,'subscription_id':sub.id,
@@ -111,14 +110,20 @@ def attach_subscription(code):
         if len(matches)!=1:
             raise ValueError('Subscription cannot be linked unambiguously. Contact support.')
         sub=matches[0]
-        sub.provider_subscription_code=code
+    # Serialize before any association mutation/autoflush; refresh a waiting worker's snapshot.
+    lock_account(sub.user_id)
+    db.session.refresh(sub)
+    if sub.provider_subscription_code not in (None, code):
+        raise ValueError('Subscription association changed; reconciliation required.')
     # Check all facts before persisting the association; caller rolls back any failure.
     spec=plan_spec(sub.plan_code,sub.billing_interval)
     if (data.get('domain')!=provider.mode() or data.get('subscription_code')!=code
         or not provider.validate_plan(data.get('plan') or {},sub.provider_plan_code,spec)
         or customer(data)['email'].lower()!=db.session.get(User,sub.user_id).email.lower()):
         raise ValueError('Provider subscription ownership, mode or plan differs.')
+    sub.provider_subscription_code=code
     sub.provider_customer_code=provider.identifier(customer(data).get('customer_code'))
+    db.session.flush()  # Persist under the owner lock before confirm_payment refreshes it.
     return sub,data
 
 
@@ -127,8 +132,6 @@ def confirm_payment(sub,payment,data,period=None,details=None):
     db.session.refresh(sub)
     if payment.id:
         db.session.refresh(payment)
-    if payment.status=='success' and payment.paid_at:
-        return True
     user=db.session.get(User,sub.user_id)
     if (data.get('domain')!=provider.mode() or data.get('status')!='success'
         or data.get('reference')!=payment.reference or type(data.get('amount')) is not int
@@ -144,6 +147,16 @@ def confirm_payment(sub,payment,data,period=None,details=None):
             except ValueError:raise ValueError('Invalid payment metadata.')
         if not isinstance(meta,dict) or meta.get('product')!='stockbridge_subscription' or meta.get('user_id')!=sub.user_id or meta.get('subscription_id')!=sub.id or meta.get('plan_code')!=sub.plan_code or meta.get('billing_interval')!=sub.billing_interval:
             raise ValueError('Payment metadata did not match the initialized subscription.')
+    receipt_key = 'payment-period:' + hashlib.sha256(payment.reference.encode()).hexdigest()
+    if payment.status=='success' and payment.paid_at:
+        if period is not None:
+            receipt = BillingEvent.query.filter_by(event_key=receipt_key,
+                user_id=sub.user_id, subscription_id=sub.id, kind='provider_event').first()
+            expected = json.dumps([value.isoformat() for value in period], separators=(',', ':'))
+            if not receipt or receipt.message != expected:
+                # Historic payments without a receipt are preserved, never guessed/backfilled.
+                raise ValueError('Payment already recorded; invoice period requires reconciliation.')
+        return True
     paid_at=timestamp(data.get('paid_at') or data.get('paidAt'))
     details=details or subscription_details(sub)
     if period:
@@ -163,6 +176,10 @@ def confirm_payment(sub,payment,data,period=None,details=None):
         sub.current_period_start=start;sub.current_period_end=end
         sub.next_renewal_at=end;sub.subscription_started_at=sub.subscription_started_at or start
         sub.status='cancel_at_period_end' if sub.cancel_at_period_end else 'active'
+    # Commit the exact original period atomically with payment and entitlement changes.
+    # provider_event is internal and excluded from customer billing email dispatch.
+    notice(user.id,receipt_key,'provider_event',
+        json.dumps([start.isoformat(),end.isoformat()],separators=(',', ':')),sub.id)
     payment.status='success';payment.paid_at=paid_at
     notice(user.id,'payment:'+payment.reference,'subscription_paid',
         f'Your StockBridge {sub.plan_code.title()} {sub.billing_interval} payment is verified. Paid access ends {end:%d %b %Y}.',sub.id)
@@ -208,8 +225,8 @@ def cancel(user,sub):
 def change_plan(user,sub,plan,interval):
     spec=plan_spec(plan,interval)
     account=account_for(user)
-    if account and account.legacy_granted_at and plan!='plus':
-        raise ValueError('Your existing account access already includes Basic tools. Plus is optional.')
+    if account and account.legacy_granted_at and plan not in ('plus', 'pro'):
+        raise ValueError('Your existing account access already includes Basic tools. Plus or Pro is optional.')
     if sub.user_id!=user.id:raise ValueError('This subscription does not belong to your account.')
     if (sub.plan_code,sub.billing_interval)==(plan,interval):raise ValueError('That plan and interval are already selected.')
     if sub.current_period_end is None or sub.current_period_end<=datetime.utcnow():
@@ -217,8 +234,8 @@ def change_plan(user,sub,plan,interval):
     current=effective_access(user).subscription
     if not current or current.id!=sub.id:
         raise ValueError('Only your currently paid subscription can be changed.')
-    # Immediate Basic→Plus only when interval stays the same. All interval changes defer.
-    immediate=sub.plan_code=='basic' and plan=='plus' and interval==sub.billing_interval
+    # Higher-tier upgrades are immediate only with the same interval; all other changes defer.
+    immediate=immediate_upgrade(sub.plan_code, plan, sub.billing_interval, interval)
     code,spec=provider.configured_plan(plan,interval)
     if not provider.validate_plan(provider.call('/plan/'+code),code,spec):raise ValueError('The replacement plan differs from the configured price.')
     lock_account(user.id)
@@ -271,7 +288,9 @@ def process_event(event):
     lock_account(sub.user_id)
     invoice=data.get('invoice_code') or str(data.get('id') or '')
     key='event:'+hashlib.sha256(f'{name}:{code}:{invoice}:{data.get("period_end","")}'.encode()).hexdigest()
-    if BillingEvent.query.filter_by(event_key=key).first():return True
+    paid_invoice = name=='invoice.update' and data.get('paid') is True and data.get('status')=='success'
+    # Paid replays must still validate their transaction/period, even for an existing event key.
+    if BillingEvent.query.filter_by(event_key=key).first() and not paid_invoice:return True
     if name=='subscription.create':
         # Provider-created is not paid. Reconcile only our stored, verified checkout reference.
         if sub.checkout_reference:
