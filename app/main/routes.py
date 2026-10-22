@@ -160,11 +160,15 @@ def reports():
     b = selected_business(current_user)
     if not b.has_write_access and not current_app.config.get("SUBSCRIPTIONS_ENABLED"):
         return redirect(url_for("subscriptions.index"))
-    errors = report_date_errors(request.args)
+    # Explicit dates take precedence on Reports, including without JavaScript.
+    report_args = request.args.copy()
+    if any(report_args.get(field, "") for field in ("from", "to")):
+        report_args["period"] = "custom"
+    errors = report_date_errors(report_args)
     if errors:
         return render_template("reports.html", business=b, period="custom",
             report_errors=errors), 400
-    period, start, end = period_dates(request.args)
+    period, start, end = period_dates(report_args)
     metrics = figures(b, start, end)
     cutoff = datetime.utcnow() - timedelta(days=30)
     slow = Product.query.filter(Product.business_id == b.id, Product.active.is_(True),

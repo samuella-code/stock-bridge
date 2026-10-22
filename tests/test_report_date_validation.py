@@ -37,12 +37,17 @@ INVALID = [
 ]
 
 
-@pytest.mark.parametrize('values,field,message', INVALID)
-def test_invalid_custom_dates_preserve_input_and_hide_all_results(app, values, field, message):
+@pytest.mark.parametrize('period,values,field,message', [
+    (period, values, field, message)
+    for period in ('today', 'week', 'month', 'custom')
+    for values, field, message in INVALID
+    if period == 'custom' or any(values.values())
+])
+def test_invalid_custom_dates_preserve_input_and_hide_all_results(app, values, field, message, period):
     client, _ = authenticated_client(app)
     with patch('app.main.routes.figures', side_effect=AssertionError('Invalid report queried figures')), \
          patch('app.main.routes.top_products', side_effect=AssertionError('Invalid report queried products')):
-        response = client.get('/reports', query_string={'period':'custom', **values})
+        response = client.get('/reports', query_string={'period':period, **values})
     assert response.status_code == 400 and 'Location' not in response.headers
     html = response.get_data(as_text=True)
     assert '<option value="custom" selected>' in html
@@ -67,18 +72,21 @@ def test_invalid_custom_dates_preserve_input_and_hide_all_results(app, values, f
     ('2026-01-01', '2027-01-02'),  # Existing maximum difference: 366 days.
     ('9999-12-30', '9999-12-30'),
 ])
-def test_valid_empty_report_is_200_with_zero_totals(app, start, end):
+@pytest.mark.parametrize('period', ['today', 'week', 'month', 'custom'])
+def test_valid_empty_report_is_200_with_zero_totals(app, start, end, period):
     client, _ = authenticated_client(app)
     contexts = []
     def capture(sender, template, context, **extra):
         if template.name == 'reports.html': contexts.append(context)
     with template_rendered.connected_to(capture, app):
-        response = client.get('/reports', query_string={'period':'custom','from':start,'to':end})
+        response = client.get('/reports', query_string={'period':period,'from':start,'to':end})
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert 'data-report-results' in html and 'No sales in this period.' in html
     assert 'No report has been generated.' not in html and 'aria-invalid="true"' not in html
     assert all(value == 0 for value in contexts[0]['metrics'].values())
+    assert contexts[0]['period'] == 'custom'
+    assert '<option value="custom" selected>' in html
     assert contexts[0]['start'] == datetime.fromisoformat(start)
     assert contexts[0]['end'] == datetime.fromisoformat(end)
 
@@ -86,11 +94,12 @@ def test_valid_empty_report_is_200_with_zero_totals(app, start, end):
 @pytest.mark.parametrize('period', ['today', 'week', 'month'])
 def test_existing_preset_reports_remain_valid(app, period):
     client, _ = authenticated_client(app)
-    response = client.get('/reports', query_string={'period':period})
+    response = client.get('/reports', query_string={'period':period, 'from':'', 'to':''})
     assert response.status_code == 200 and b'data-report-results' in response.data
 
 
-def test_correcting_invalid_dates_restores_inclusive_financial_results(app):
+@pytest.mark.parametrize('period', ['today', 'week', 'month', 'custom'])
+def test_correcting_invalid_dates_restores_inclusive_financial_results(app, period):
     client, business = authenticated_client(app)
     product = Product(business_id=business.id, name='Synthetic report product', stock_quantity=9,
                       buying_price=300, selling_price=500)
@@ -115,7 +124,7 @@ def test_correcting_invalid_dates_restores_inclusive_financial_results(app):
     def capture(sender, template, context, **extra):
         if template.name == 'reports.html': contexts.append(context)
     with template_rendered.connected_to(capture, app):
-        response = client.get('/reports?period=custom&from=2026-10-01&to=2026-10-02')
+        response = client.get('/reports', query_string={'period':period, 'from':'2026-10-01', 'to':'2026-10-02'})
     assert response.status_code == 200
     metrics = contexts[0]['metrics']
     assert {key:metrics[key] for key in ('number_of_sales','units_sold','revenue','cogs',
@@ -139,3 +148,27 @@ def test_dashboard_invalid_date_redirect_is_unchanged(app, values):
 def test_report_errors_do_not_replace_authentication(app):
     response = app.test_client().get('/reports?period=custom&from=bad')
     assert response.status_code == 302 and '/auth/login' in response.headers['Location']
+
+
+@pytest.mark.parametrize('period', ['today', 'week', 'month', 'custom'])
+def test_exact_staging_reversed_dates_are_rejected_before_calculation(app, period):
+    client, _ = authenticated_client(app)
+    with patch('app.main.routes.figures', side_effect=AssertionError('Must not calculate')), \
+         patch('app.main.routes.top_products', side_effect=AssertionError('Must not query')):
+        response = client.get('/reports', query_string={
+            'period':period, 'from':'2026-10-22', 'to':'2026-10-20'})
+    assert response.status_code == 400
+    assert b'To date must be on or after the From date.' in response.data
+    assert b'data-report-results' not in response.data
+    assert b'value="2026-10-22"' in response.data
+    assert b'value="2026-10-20"' in response.data
+
+
+def test_reports_load_scoped_date_controls(app):
+    client, _ = authenticated_client(app)
+    response = client.get('/reports')
+    assert b'data-report-period' in response.data
+    assert b'js/report-dates.js' in response.data
+    dashboard = client.get('/dashboard')
+    assert b'data-report-period' not in dashboard.data
+    assert b'js/report-dates.js' not in dashboard.data
