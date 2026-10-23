@@ -11,6 +11,26 @@ SKIP_MARKER = ('STAGING MIGRATIONS SKIPPED: project identity verified; '
                'explicit skip=true; database command not invoked.')
 
 
+PREFLIGHT_SETTING = 'STAGING_PAYSTACK_READONLY_PREFLIGHT'
+
+
+def preflight_requested(environ):
+    """Authorize offline before allowing the existing provider checker."""
+    value = environ.get(PREFLIGHT_SETTING, '')
+    if value == '':
+        return False
+    if value != 'true':
+        raise ValueError
+    from paystack_policy import staging_preview_authorized
+    config = dict(environ)
+    for key in ('STAGING_PAYSTACK_TEST_ENABLED', 'SUBSCRIPTIONS_ENABLED',
+                'BILLING_PROVIDER_ENABLED'):
+        config[key] = environ.get(key) == 'true'
+    if not staging_preview_authorized(config, environ):
+        raise ValueError
+    return True
+
+
 def migration_policy(environ):
     """Return a decision; reject conflicting configuration without logging values."""
     project = environ.get('VERCEL_PROJECT_ID')
@@ -44,10 +64,30 @@ def main(argv=None):
                         help='Validate configuration without executing migrations.')
     options = parser.parse_args([] if argv is None else argv)
     try:
+        requested = preflight_requested(os.environ)
+    except ValueError:
+        print('PAYSTACK PREFLIGHT AUTHORIZATION: FAIL',
+              file=sys.stderr, flush=True)
+        return 1
+    try:
         policy = migration_policy(os.environ)
     except ValueError as error:
         print(f'MIGRATION POLICY ERROR: {error}', file=sys.stderr, flush=True)
         return 1
+    if requested:
+        if options.check_only:
+            print('PAYSTACK PREFLIGHT CHECK ONLY: PASS', flush=True)
+        else:
+            try:
+                from scripts import staging_paystack_preflight
+                status = staging_paystack_preflight.main()
+            except Exception:
+                print('PAYSTACK PREFLIGHT: FAIL', file=sys.stderr, flush=True)
+                return 1
+            if status != 0:
+                print('PAYSTACK PREFLIGHT: FAIL', file=sys.stderr, flush=True)
+                return 1
+            print('PAYSTACK PREFLIGHT: PASS', flush=True)
     if policy == 'staging-skip':
         print(SKIP_MARKER, flush=True)
         return 0

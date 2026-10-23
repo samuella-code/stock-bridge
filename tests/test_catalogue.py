@@ -385,7 +385,8 @@ def test_vercel_build_migration_guard(monkeypatch,environment):
     if environment:monkeypatch.setenv('VERCEL_ENV',environment)
     else:monkeypatch.delenv('VERCEL_ENV',raising=False)
     # Isolate the policy from the developer/CI environment.
-    for key in ('VERCEL_PROJECT_ID', 'VERCEL_TARGET_ENV', vercel_build.SKIP_SETTING):
+    for key in ('VERCEL_PROJECT_ID', 'VERCEL_TARGET_ENV',
+                vercel_build.SKIP_SETTING, vercel_build.PREFLIGHT_SETTING):
         monkeypatch.delenv(key, raising=False)
     calls=[];monkeypatch.setattr(vercel_build.subprocess,'call',lambda args:calls.append(args) or 0)
     assert vercel_build.main()==(1 if environment=='production' else 0)
