@@ -9,7 +9,7 @@ from sqlalchemy.dialects import postgresql
 from app import db
 from app.models import EmailOutbox, NotificationPreference
 from app.notifications.email_outbox import dispatch_one, claim
-from app.notifications.staging_email_policy import policy, METADATA, COHORT_KEY, ORIGIN
+from app.notifications.staging_email_policy import policy, METADATA, COHORT_KEY, ORIGIN, APPROVED_BRANCHES
 from tests.test_multi_business import app
 from tests.test_notifications_business_profile import setup, product, sale, restock
 
@@ -17,6 +17,7 @@ from tests.test_notifications_business_profile import setup, product, sale, rest
 @pytest.fixture
 def staging(app, monkeypatch):
     for key, value in METADATA.items(): monkeypatch.setenv(key, value)
+    monkeypatch.setenv('VERCEL_GIT_COMMIT_REF','release/staging-phase6')
     app.config.update(INVENTORY_EMAILS_ENABLED=True, INVENTORY_EMAIL_BASE_URL=ORIGIN,
         INVENTORY_EMAIL_TRIGGER_URL='', STAGING_INVENTORY_EMAIL_TEST_ENABLED=True,
         STAGING_INVENTORY_EMAIL_TEST_RUN_ID='a'*32,
@@ -29,7 +30,9 @@ def staging(app, monkeypatch):
     return sent
 
 
-def test_each_inventory_event_sends_once_in_current_cohort(app,staging):
+@pytest.mark.parametrize('branch', sorted(APPROVED_BRANCHES))
+def test_each_inventory_event_sends_once_in_current_cohort(app,staging,monkeypatch,branch):
+    monkeypatch.setenv('VERCEL_GIT_COMMIT_REF',branch)
     client,_,_=setup(app); p=product(client)
     sale(client,p,3); sale(client,p,5); restock(client,p,4)
     assert [r.event_type for r in EmailOutbox.query.order_by(EmailOutbox.id)]==[
@@ -43,7 +46,9 @@ def test_each_inventory_event_sends_once_in_current_cohort(app,staging):
 
 @pytest.mark.parametrize('status', ['pending','retry','processing','failed','sent','suppressed'])
 @pytest.mark.parametrize('tagged', [False,True])
-def test_historical_jobs_untouched_including_exhausted(app,staging,status,tagged):
+@pytest.mark.parametrize('branch', sorted(APPROVED_BRANCHES))
+def test_historical_jobs_untouched_including_exhausted(app,staging,status,tagged,monkeypatch,branch):
+    monkeypatch.setenv('VERCEL_GIT_COMMIT_REF',branch)
     client,_,_=setup(app);p=product(client);sale(client,p,3)
     old=EmailOutbox.query.one()
     old.status=status;old.attempt_count=old.max_attempts
@@ -60,7 +65,9 @@ def test_historical_jobs_untouched_including_exhausted(app,staging,status,tagged
 
 
 @pytest.mark.parametrize('change', ['unapproved_at_creation','removed_after_creation','changed_owner_email'])
-def test_unapproved_recipients_never_claimed_or_sent(app,staging,change):
+@pytest.mark.parametrize('branch', sorted(APPROVED_BRANCHES))
+def test_unapproved_recipients_never_claimed_or_sent(app,staging,change,monkeypatch,branch):
+    monkeypatch.setenv('VERCEL_GIT_COMMIT_REF',branch)
     client,user,_=setup(app)
     if change=='unapproved_at_creation':app.config['STAGING_INVENTORY_EMAIL_TEST_RECIPIENTS']='approved@example.invalid'
     p=product(client);sale(client,p,3)
@@ -95,8 +102,10 @@ def test_bad_configuration_does_not_touch_jobs(app,staging,key,value):
     row=EmailOutbox.query.one();assert row.status=='pending' and row.attempt_count==0 and not staging
 
 
-@pytest.mark.parametrize('key',list(METADATA))
-def test_missing_identity_fails_closed(app,staging,monkeypatch,key):
+@pytest.mark.parametrize('key', [*METADATA, 'VERCEL_GIT_COMMIT_REF'])
+@pytest.mark.parametrize('branch', sorted(APPROVED_BRANCHES))
+def test_missing_identity_fails_closed(app,staging,monkeypatch,key,branch):
+    monkeypatch.setenv('VERCEL_GIT_COMMIT_REF',branch)
     monkeypatch.delenv(key)
     assert policy().mode=='blocked' and dispatch_one()=='disabled' and not staging
 
@@ -166,7 +175,7 @@ def test_postgres_filters_compile_without_connection(app,staging):
 
 
 def test_defaults_and_production_behavior_unchanged(app,monkeypatch):
-    for key in METADATA:monkeypatch.delenv(key,raising=False)
+    for key in (*METADATA,'VERCEL_GIT_COMMIT_REF'):monkeypatch.delenv(key,raising=False)
     from app.config_safety import PRODUCTION_PROJECT_ID
     monkeypatch.setenv('VERCEL_PROJECT_ID',PRODUCTION_PROJECT_ID)
     monkeypatch.setenv('VERCEL_ENV','production');monkeypatch.setenv('VERCEL_TARGET_ENV','production')
@@ -182,7 +191,7 @@ def test_defaults_and_production_behavior_unchanged(app,monkeypatch):
 
 def test_missing_all_metadata_cannot_release_staging_backlog(app,staging,monkeypatch):
     client,_,_=setup(app);p=product(client);sale(client,p,3)
-    for key in METADATA:monkeypatch.delenv(key,raising=False)
+    for key in (*METADATA,'VERCEL_GIT_COMMIT_REF'):monkeypatch.delenv(key,raising=False)
     app.config['STAGING_INVENTORY_EMAIL_TEST_ENABLED']=False
     assert dispatch_one()=='disabled' and claim() is None
     assert EmailOutbox.query.one().attempt_count==0 and not staging
@@ -249,7 +258,7 @@ def test_uncertain_identity_never_claims_jobs_even_without_staging_origin(app,st
     row.attempt_count=row.max_attempts
     db.session.commit()
     before={c.name:getattr(row,c.name) for c in EmailOutbox.__table__.columns}
-    for key in (*METADATA,'VERCEL','VERCEL_GIT_PROVIDER'):
+    for key in (*METADATA,'VERCEL_GIT_COMMIT_REF','VERCEL','VERCEL_GIT_PROVIDER'):
         monkeypatch.delenv(key,raising=False)
     for key,value in metadata.items():monkeypatch.setenv(key,value)
     app.config.update(STAGING_INVENTORY_EMAIL_TEST_ENABLED=False,INVENTORY_EMAIL_BASE_URL=origin)
@@ -287,3 +296,32 @@ def test_production_identity_cannot_override_staging_test_configuration(app,stag
     app.config['STAGING_INVENTORY_EMAIL_TEST_ENABLED']=False
     assert policy().mode=='blocked'  # Staging origin also conflicts with production.
     assert dispatch_one()=='disabled' and not staging
+
+
+@pytest.mark.parametrize('branch', [None, '', 'main', 'other', 'feat/staging-startup-db-diagnostic',
+    'fix/staging-inventory-email-safety-extra', 'release/staging-phase6/',
+    'FIX/staging-inventory-email-safety', 'fix/staging-inventory-email-safety\n'])
+def test_only_exact_approved_branches_can_dispatch(app,staging,monkeypatch,branch):
+    client,_,_=setup(app);p=product(client);sale(client,p,3)
+    if branch is None:monkeypatch.delenv('VERCEL_GIT_COMMIT_REF',raising=False)
+    else:monkeypatch.setenv('VERCEL_GIT_COMMIT_REF',branch)
+    assert policy().mode=='blocked' and dispatch_one()=='disabled' and claim() is None
+    row=EmailOutbox.query.one()
+    assert row.status=='pending' and row.attempt_count==0 and not staging
+
+
+@pytest.mark.parametrize('branch', sorted(APPROVED_BRANCHES))
+@pytest.mark.parametrize('key,value', [(key,'wrong') for key in METADATA])
+def test_approved_branch_never_bypasses_other_identity_checks(app,staging,monkeypatch,branch,key,value):
+    monkeypatch.setenv('VERCEL_GIT_COMMIT_REF',branch)
+    monkeypatch.setenv(key,value)
+    assert policy().mode=='blocked' and dispatch_one()=='disabled' and not staging
+
+
+@pytest.mark.parametrize('branch', sorted(APPROVED_BRANCHES))
+def test_approved_branch_cannot_activate_staging_mode_in_production(app,staging,monkeypatch,branch):
+    from app.config_safety import PRODUCTION_PROJECT_ID
+    monkeypatch.setenv('VERCEL_GIT_COMMIT_REF',branch)
+    monkeypatch.setenv('VERCEL_PROJECT_ID',PRODUCTION_PROJECT_ID)
+    monkeypatch.setenv('VERCEL_ENV','production');monkeypatch.setenv('VERCEL_TARGET_ENV','production')
+    assert policy().mode=='blocked' and dispatch_one()=='disabled' and not staging

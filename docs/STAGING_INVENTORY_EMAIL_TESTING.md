@@ -24,14 +24,16 @@ and the known staging email origin. Missing, partial, unknown or inconsistent
 deployment identity is blocked, regardless of whether the origin looks like
 staging. Other Preview projects are blocked.
 
-All of these exact metadata values are required:
+All of these exact project/environment/repository metadata values are required:
 
 - VERCEL_PROJECT_ID=prj_yeCWXPd44jShVUGHAgJu9khMjOMv
 - VERCEL_ENV=preview
 - VERCEL_TARGET_ENV=preview
 - VERCEL_GIT_REPO_OWNER=samuella-code
 - VERCEL_GIT_REPO_SLUG=stock-bridge
-- VERCEL_GIT_COMMIT_REF=release/staging-phase6
+- VERCEL_GIT_COMMIT_REF must be exactly release/staging-phase6 or
+  fix/staging-inventory-email-safety (the approved test branch for draft PR #37).
+  No other branches, prefixes, wildcards or caller-supplied overrides are allowed.
 
 Do not spoof system variables. Production-target deployments of the staging
 project are blocked. Unrestricted production delivery requires the existing production project ID

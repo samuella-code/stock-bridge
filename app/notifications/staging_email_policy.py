@@ -12,13 +12,13 @@ from app.config_safety import PRODUCTION_PROJECT_ID
 PROJECT = 'prj_yeCWXPd44jShVUGHAgJu9khMjOMv'
 ORIGIN = 'https://stock-bridge-staging.vercel.app'
 COHORT_KEY = '_staging_test_run'
+APPROVED_BRANCHES = frozenset(('release/staging-phase6', 'fix/staging-inventory-email-safety'))
 METADATA = {
     'VERCEL_PROJECT_ID': PROJECT,
     'VERCEL_ENV': 'preview',
     'VERCEL_TARGET_ENV': 'preview',
     'VERCEL_GIT_REPO_OWNER': 'samuella-code',
     'VERCEL_GIT_REPO_SLUG': 'stock-bridge',
-    'VERCEL_GIT_COMMIT_REF': 'release/staging-phase6',
 }
 
 
@@ -68,6 +68,7 @@ def policy(now=None):
     if production:
         return Policy('production')
     if (opted_in is not True or any(os.getenv(k) != v for k, v in METADATA.items())
+            or os.getenv('VERCEL_GIT_COMMIT_REF') not in APPROVED_BRANCHES
             or origin != ORIGIN):
         return Policy('blocked')
     run_id = config.get('STAGING_INVENTORY_EMAIL_TEST_RUN_ID', '')
