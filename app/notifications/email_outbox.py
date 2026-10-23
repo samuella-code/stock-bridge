@@ -12,6 +12,7 @@ import requests
 from app import csrf, db
 from app.models import Business, EmailOutbox, NotificationPreference, User
 from app import email_service
+from app.notifications.staging_email_policy import policy, stamp_test_job, COHORT_KEY
 
 worker_bp = Blueprint('inventory_email_worker', __name__)
 PREFERENCE_FIELDS = ('low_stock_email', 'out_of_stock_email', 'product_added', 'sales', 'restocking')
@@ -41,6 +42,7 @@ def queue_alert(product, quantity, kind, event_key):
         max_attempts=max(1, min(10, current_app.config['INVENTORY_EMAIL_MAX_ATTEMPTS'])),
         payload={'business_name': business.name, 'product_name': product.name,
             'quantity': quantity, 'threshold': product.minimum_stock_level, 'unit': product.unit})
+    stamp_test_job(row)
     db.session.add(row)
     db.session.info['inventory_alert_created'] = True
     return row
@@ -101,6 +103,7 @@ def queue_restock_alert(business_id, items, event_key):
         },
     )
 
+    stamp_test_job(row)
     db.session.add(row)
     db.session.info['inventory_alert_created'] = True
     return row
@@ -122,14 +125,18 @@ def eligible(now):
 def claim(now=None, user_id=None, business_id=None):
     """PG SKIP LOCKED plus a guarded UPDATE; SQLite uses the same CAS guard."""
     now = now or datetime.utcnow()
+    selected_policy = policy(now)
+    if selected_policy.mode == 'blocked':
+        return None
+    safety_conditions = selected_policy.conditions()
     # A crashed final attempt must become terminal rather than remain stuck forever.
-    exhausted = update(EmailOutbox).where(eligible(now), EmailOutbox.attempt_count >= EmailOutbox.max_attempts)
+    exhausted = update(EmailOutbox).where(*safety_conditions, eligible(now), EmailOutbox.attempt_count >= EmailOutbox.max_attempts)
     if user_id is not None:
         exhausted = exhausted.where(EmailOutbox.recipient_user_id == user_id, EmailOutbox.business_id == business_id)
     db.session.execute(exhausted.values(
             status='failed', claim_token=None, claim_expires_at=None,
             last_error='AttemptsExhausted', updated_at=now))
-    query = EmailOutbox.query.filter(eligible(now), EmailOutbox.attempt_count < EmailOutbox.max_attempts)
+    query = EmailOutbox.query.filter(*safety_conditions, eligible(now), EmailOutbox.attempt_count < EmailOutbox.max_attempts)
     if user_id is not None:
         query = query.filter_by(recipient_user_id=user_id, business_id=business_id)
     row = query.order_by(EmailOutbox.next_attempt_at, EmailOutbox.id).with_for_update(skip_locked=True).first()
@@ -138,7 +145,7 @@ def claim(now=None, user_id=None, business_id=None):
         return None
     row_id = row.id
     token = uuid4().hex
-    changed = db.session.execute(update(EmailOutbox).where(EmailOutbox.id == row_id,
+    changed = db.session.execute(update(EmailOutbox).where(*safety_conditions, EmailOutbox.id == row_id,
         eligible(now), EmailOutbox.attempt_count < EmailOutbox.max_attempts).values(
             status='processing', claim_token=token,
             claim_expires_at=now + timedelta(seconds=current_app.config['INVENTORY_EMAIL_LEASE_SECONDS']),
@@ -157,6 +164,8 @@ def finish(row_id, token, status, now, **values):
 
 def dispatch_one(user_id=None, business_id=None, now=None):
     if not current_app.config['INVENTORY_EMAILS_ENABLED']:
+        return 'disabled'
+    if policy(now).mode == 'blocked':
         return 'disabled'
     # Invalid configuration must not consume all jobs' attempts.
     try:
@@ -185,6 +194,7 @@ def dispatch_one(user_id=None, business_id=None, now=None):
         finish(row_id, token, 'suppressed', now, last_error=None)
         return 'suppressed'
     payload, subject, recipient = dict(row.payload), row.subject, row.recipient_email
+    created_at = row.created_at
     attempts, maximum, kind = row.attempt_count, row.max_attempts, row.event_type
     try:
         if kind == 'restock_recorded':
@@ -235,6 +245,13 @@ def dispatch_one(user_id=None, business_id=None, now=None):
             )
 
         db.session.commit()  # No database locks or open transaction during SMTP.
+        current_policy = policy()
+        if (current_policy.mode == 'blocked' or (current_policy.mode == 'staging'
+                and (not current_policy.allows(recipient)
+                     or payload.get(COHORT_KEY) != current_policy.run_id
+                     or not current_policy.started_at <= created_at < current_policy.started_at + timedelta(hours=1)))):
+            finish(row_id, token, 'suppressed', datetime.utcnow(), last_error=None)
+            return 'suppressed'
         if not email_service._send_email(subject, recipient, body, html=html):
             raise RuntimeError('TransportUnavailable')
     except Exception as error:
@@ -294,6 +311,8 @@ def publish_committed_alert(response):
     publish. No SMTP runs here and no queue is silently provisioned.
     """
     if not g.pop('inventory_alert_committed', False) or not current_app.config['INVENTORY_EMAILS_ENABLED']:
+        return response
+    if policy().mode == 'blocked':
         return response
     raw = current_app.config['INVENTORY_EMAIL_TRIGGER_URL']
     secret = current_app.config['INVENTORY_EMAIL_TRIGGER_SECRET']
