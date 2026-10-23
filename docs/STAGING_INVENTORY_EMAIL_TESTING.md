@@ -19,10 +19,10 @@ markers use the existing JSON payload in newly created email_outbox rows.
 
 The existing global INVENTORY_EMAILS_ENABLED remains false by default.
 STAGING_INVENTORY_EMAIL_TEST_ENABLED also defaults to false. Both must be true
-for controlled staging delivery. Staging is identified by its project ID,
-Preview environment, an explicit test opt-in, or (when project metadata is
-absent) the known staging email origin. Other Preview projects are blocked.
-Missing required metadata never authorizes staging test delivery.
+for controlled staging delivery. Staging delivery requires the exact metadata below, the explicit test opt-in
+and the known staging email origin. Missing, partial, unknown or inconsistent
+deployment identity is blocked, regardless of whether the origin looks like
+staging. Other Preview projects are blocked.
 
 All of these exact metadata values are required:
 
@@ -34,8 +34,14 @@ All of these exact metadata values are required:
 - VERCEL_GIT_COMMIT_REF=release/staging-phase6
 
 Do not spoof system variables. Production-target deployments of the staging
-project are blocked. Existing non-staging delivery behavior remains unchanged
-when the new staging opt-in is absent/false. The application does not identify
+project are blocked. Unrestricted production delivery requires the existing production project ID
+from app.config_safety, VERCEL_ENV=production and VERCEL_TARGET_ENV=production,
+with staging test opt-in absent/false and a non-staging origin. If present, Git
+owner/slug/provider and VERCEL must also be consistent. Missing Git metadata is
+permitted for legitimate production deployments without Git provenance, but
+missing any of the three core identity fields blocks delivery. Verified
+production retains the existing dispatcher behavior. Local/unidentified
+environments no longer receive an unrestricted production fallback. The application does not identify
 production by a customer-controlled request header.
 
 Additional operator settings, scoped only to the approved staging Preview:

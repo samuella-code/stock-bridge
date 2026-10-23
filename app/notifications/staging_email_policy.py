@@ -7,6 +7,7 @@ import re
 from flask import current_app
 from sqlalchemy import false, func
 from app.models import EmailOutbox
+from app.config_safety import PRODUCTION_PROJECT_ID
 
 PROJECT = 'prj_yeCWXPd44jShVUGHAgJu9khMjOMv'
 ORIGIN = 'https://stock-bridge-staging.vercel.app'
@@ -50,11 +51,22 @@ def policy(now=None):
     project = os.getenv('VERCEL_PROJECT_ID')
     raw_origin = config.get('INVENTORY_EMAIL_BASE_URL', '')
     origin = raw_origin.rstrip('/') if isinstance(raw_origin, str) else ''
-    is_staging = (project == PROJECT or (not project
-        and origin == ORIGIN))
-    is_preview = os.getenv('VERCEL_ENV') == 'preview'
-    if not is_staging and not is_preview and not opted_in:
-        return Policy('production')  # Existing non-staging behavior unchanged.
+    # Unrestricted delivery requires positive production identity. Absence of
+    # staging signals (including a missing/wrong origin) is never authorization.
+    production = (
+        project == PRODUCTION_PROJECT_ID
+        and os.getenv('VERCEL_ENV') == 'production'
+        and os.getenv('VERCEL_TARGET_ENV') == 'production'
+        and not opted_in and origin != ORIGIN
+        and all(os.getenv(key) in (None, expected) for key, expected in (
+            ('VERCEL_GIT_REPO_OWNER', 'samuella-code'),
+            ('VERCEL_GIT_REPO_SLUG', 'stock-bridge'),
+            ('VERCEL_GIT_PROVIDER', 'github'),
+            ('VERCEL', '1'),
+        ))
+    )
+    if production:
+        return Policy('production')
     if (opted_in is not True or any(os.getenv(k) != v for k, v in METADATA.items())
             or origin != ORIGIN):
         return Policy('blocked')

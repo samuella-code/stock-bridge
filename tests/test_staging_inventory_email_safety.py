@@ -167,7 +167,8 @@ def test_postgres_filters_compile_without_connection(app,staging):
 
 def test_defaults_and_production_behavior_unchanged(app,monkeypatch):
     for key in METADATA:monkeypatch.delenv(key,raising=False)
-    monkeypatch.setenv('VERCEL_PROJECT_ID','prj_production_fixture')
+    from app.config_safety import PRODUCTION_PROJECT_ID
+    monkeypatch.setenv('VERCEL_PROJECT_ID',PRODUCTION_PROJECT_ID)
     monkeypatch.setenv('VERCEL_ENV','production');monkeypatch.setenv('VERCEL_TARGET_ENV','production')
     assert app.config['STAGING_INVENTORY_EMAIL_TEST_ENABLED'] is False
     assert policy().mode=='production' and policy().conditions()==()
@@ -225,3 +226,64 @@ def test_case_insensitive_allowlist_preserves_restock_preferences(app,staging):
     assert EmailOutbox.query.count()==0
     sale(client,p,5)
     assert dispatch_one()=='sent' and len(staging)==1
+
+
+@pytest.mark.parametrize('metadata', [
+    {},
+    {'VERCEL':'1'},
+    {'VERCEL_ENV':'production'},
+    {'VERCEL_TARGET_ENV':'production'},
+    {'VERCEL_ENV':'production','VERCEL_TARGET_ENV':'production'},
+    {'VERCEL_PROJECT_ID':METADATA['VERCEL_PROJECT_ID']},
+    {'VERCEL_PROJECT_ID':METADATA['VERCEL_PROJECT_ID'],'VERCEL_ENV':'production','VERCEL_TARGET_ENV':'production'},
+    {'VERCEL_PROJECT_ID':'prj_unknown','VERCEL_ENV':'production','VERCEL_TARGET_ENV':'production'},
+    {'VERCEL_PROJECT_ID':METADATA['VERCEL_PROJECT_ID'],'VERCEL_ENV':'preview'},
+    {'VERCEL_PROJECT_ID':METADATA['VERCEL_PROJECT_ID'],'VERCEL_TARGET_ENV':'preview'},
+    {'VERCEL_PROJECT_ID':METADATA['VERCEL_PROJECT_ID'],'VERCEL_ENV':'preview','VERCEL_TARGET_ENV':'production'},
+    {'VERCEL_PROJECT_ID':METADATA['VERCEL_PROJECT_ID'],'VERCEL_ENV':'production','VERCEL_TARGET_ENV':'preview'},
+])
+@pytest.mark.parametrize('origin', ['', 'https://wrong.example.invalid'])
+def test_uncertain_identity_never_claims_jobs_even_without_staging_origin(app,staging,monkeypatch,metadata,origin):
+    client,_,_=setup(app);p=product(client);sale(client,p,3)
+    row=EmailOutbox.query.one()
+    row.attempt_count=row.max_attempts
+    db.session.commit()
+    before={c.name:getattr(row,c.name) for c in EmailOutbox.__table__.columns}
+    for key in (*METADATA,'VERCEL','VERCEL_GIT_PROVIDER'):
+        monkeypatch.delenv(key,raising=False)
+    for key,value in metadata.items():monkeypatch.setenv(key,value)
+    app.config.update(STAGING_INVENTORY_EMAIL_TEST_ENABLED=False,INVENTORY_EMAIL_BASE_URL=origin)
+    assert policy().mode=='blocked'
+    assert dispatch_one()=='disabled' and claim() is None
+    assert not staging
+    db.session.refresh(row)
+    assert {c.name:getattr(row,c.name) for c in EmailOutbox.__table__.columns}==before
+
+
+@pytest.mark.parametrize('key,value', [
+    ('VERCEL_PROJECT_ID',None), ('VERCEL_PROJECT_ID',''), ('VERCEL_PROJECT_ID','prj_unknown'),
+    ('VERCEL_ENV',None), ('VERCEL_ENV',''), ('VERCEL_ENV','preview'), ('VERCEL_ENV','development'),
+    ('VERCEL_TARGET_ENV',None), ('VERCEL_TARGET_ENV',''), ('VERCEL_TARGET_ENV','preview'),
+    ('VERCEL_GIT_REPO_OWNER','wrong-owner'), ('VERCEL_GIT_REPO_SLUG','wrong-repo'),
+    ('VERCEL_GIT_PROVIDER','gitlab'), ('VERCEL','0'),
+])
+def test_incomplete_or_conflicting_production_identity_rejected(app,monkeypatch,key,value):
+    from app.config_safety import PRODUCTION_PROJECT_ID
+    env={**METADATA,'VERCEL_PROJECT_ID':PRODUCTION_PROJECT_ID,
+         'VERCEL_ENV':'production','VERCEL_TARGET_ENV':'production',
+         'VERCEL':'1','VERCEL_GIT_PROVIDER':'github'}
+    for field,setting in env.items():monkeypatch.setenv(field,setting)
+    if value is None:monkeypatch.delenv(key,raising=False)
+    else:monkeypatch.setenv(key,value)
+    app.config.update(INVENTORY_EMAILS_ENABLED=True,INVENTORY_EMAIL_BASE_URL='https://customer.example.invalid')
+    assert policy().mode=='blocked' and dispatch_one()=='disabled' and claim() is None
+
+
+def test_production_identity_cannot_override_staging_test_configuration(app,staging,monkeypatch):
+    from app.config_safety import PRODUCTION_PROJECT_ID
+    monkeypatch.setenv('VERCEL_PROJECT_ID',PRODUCTION_PROJECT_ID)
+    monkeypatch.setenv('VERCEL_ENV','production');monkeypatch.setenv('VERCEL_TARGET_ENV','production')
+    assert policy().mode=='blocked'  # Explicit staging opt-in remains present.
+    app.config['STAGING_INVENTORY_EMAIL_TEST_ENABLED']=False
+    assert policy().mode=='blocked'  # Staging origin also conflicts with production.
+    assert dispatch_one()=='disabled' and not staging
