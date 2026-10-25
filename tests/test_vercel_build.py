@@ -7,7 +7,8 @@ OTHER_PROJECT = 'prj_TestProduction123'
 
 @pytest.fixture
 def harness(monkeypatch, capsys):
-    for key in ('VERCEL_PROJECT_ID', 'VERCEL_ENV', 'VERCEL_TARGET_ENV', build.SKIP_SETTING):
+    for key in ('VERCEL_PROJECT_ID', 'VERCEL_ENV', 'VERCEL_TARGET_ENV',
+                build.SKIP_SETTING, build.PREFLIGHT_SETTING):
         monkeypatch.delenv(key, raising=False)
     calls = []
     monkeypatch.setattr(build.subprocess, 'call', lambda args: calls.append(args) or 0)
