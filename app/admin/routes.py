@@ -250,7 +250,10 @@ def overview():
     # Dual-role admins retain their business records, but are not customers.
     customer_ids=db.session.query(User.id).filter(User.role=="user",User.admin_enabled.is_(False))
     customer_business_ids=db.session.query(Business.id).filter(Business.user_id.in_(customer_ids))
+    from app.admin.subscription_reporting import current_subscription_accounts, collected_subscription_payments
     return {
+        "current_subscription_accounts": current_subscription_accounts(customer_query().all()),
+        "subscription_payments": collected_subscription_payments(),
         "users":User.query.filter(User.id.in_(customer_ids)).count(),
         "active_users":User.query.filter(User.id.in_(customer_ids),User.suspended_at.is_(None)).count(),
         "suspended_users":User.query.filter(User.id.in_(customer_ids),User.suspended_at.isnot(None)).count(),
@@ -459,11 +462,8 @@ def suspend_business(business_id):
     return redirect(url_for("admin.business_detail",business_id=b.id))
 
 def subscription_payments_query():
-    # Explicit account ownership is authoritative; never infer it from email.
-    # A linked business must belong to that same ordinary customer account.
-    return Payment.query.join(User, Payment.user_id==User.id).filter(
-        Payment.product=="subscription", User.role=="user", User.admin_enabled.is_(False),
-        or_(Payment.business_id.is_(None), Payment.business.has(Business.user_id==Payment.user_id)))
+    from app.admin.subscription_reporting import subscription_payments_query as query
+    return query()
 
 
 @admin_bp.get("/payments")
@@ -569,8 +569,17 @@ def reports():
         period,start,end=report_period()
     except ValueError as error:
         return render_template("admin/reports.html",metrics=None,error=str(error),period="30d"),400
+    metrics=period_metrics(start,end)
+    return render_template("admin/reports.html",metrics=metrics,period=period,start=start.date(),end=(end-timedelta(microseconds=1)).date())
+
+def period_metrics(start,end, *, current_accounts=None):
+    from app.admin.subscription_reporting import current_subscription_accounts, collected_subscription_payments
     verified=verified_payments_query().filter(Payment.paid_at>=start,Payment.paid_at<end)
-    metrics={
+    if current_accounts is None:
+        current_accounts=current_subscription_accounts(customer_query().all())
+    return {
+        "current_subscription_accounts": current_accounts,
+        "subscription_payments": collected_subscription_payments(start,end),
         "registrations":customer_query().filter(User.created_at>=start,User.created_at<end).count(),
         "verified_customers":customer_query().filter(User.email_verified_at>=start,User.email_verified_at<end).count(),
         "purchases":verified.count(),
@@ -580,7 +589,6 @@ def reports():
         "active_now":customer_query().filter(User.suspended_at.is_(None)).count(),
         "suspended_now":customer_query().filter(User.suspended_at.isnot(None)).count(),
     }
-    return render_template("admin/reports.html",metrics=metrics,period=period,start=start.date(),end=(end-timedelta(microseconds=1)).date())
 
 @admin_bp.get("/notifications")
 @admin_required
@@ -590,9 +598,23 @@ def notifications():
     payment_issues=payment_issues_query().filter(Payment.status=="success").order_by(Payment.created_at.desc()).limit(10).all()
     failed=Payment.query.filter_by(product="lifetime",status="failed").order_by(Payment.created_at.desc()).limit(10).all()
     recent=AuditLog.query.filter(AuditLog.action.in_(("USER_REGISTERED","ACCESS_PAYMENT_SUCCESSFUL","USER_SUSPENDED","BUSINESS_SUSPENDED"))).order_by(AuditLog.created_at.desc()).limit(20).all()
-    access_without_payment=customer_business_query().filter(Business.subscription_status=="active",
-        ~Business.payments.any(and_(Payment.status=="success",Payment.paid_at.isnot(None),
-            Payment.amount_kobo==current_app.config["LIFETIME_PRICE_NAIRA"]*100,Payment.currency=="NGN"))).limit(10).all()
+    # An old active business marker is not itself a current entitlement.
+    # Do not flag intentionally suspended accounts/businesses as billing anomalies.
+    from app.subscriptions.entitlements import EntitlementSnapshot
+    entitlement_now=datetime.utcnow()
+    candidates=customer_business_query().filter(Business.subscription_status=="active",
+        Business.suspended_at.is_(None),User.suspended_at.is_(None)).options(joinedload(Business.owner)).order_by(Business.id).all()
+    snapshot=EntitlementSnapshot([b.owner for b in candidates],now=entitlement_now)
+    access_without_payment=[]
+    legacy_ids={p.business_id for p in verified_payments_query().all()}
+    for business in candidates:
+        if snapshot.access(business.owner,business=business).can_write:
+            continue
+        if not current_app.config.get("SUBSCRIPTIONS_ENABLED") and business.id in legacy_ids:
+            continue
+        access_without_payment.append(business)
+        if len(access_without_payment)==10:
+            break
     security_alerts=db.session.query(AdminLoginAttempt.identifier).filter(
         AdminLoginAttempt.attempted_at>=datetime.utcnow()-timedelta(minutes=15)
     ).group_by(AdminLoginAttempt.identifier).having(func.count(AdminLoginAttempt.id)>=5).count()
@@ -633,6 +655,21 @@ def api_business(business_id):
 @admin_api_bp.get("/payments")
 @admin_required
 def api_payments():
+    product=request.args.get("product","lifetime")
+    if product not in ("lifetime","subscription"):
+        return jsonify(error="Choose lifetime or subscription payments."),400
+    if product=="subscription":
+        status=request.args.get("status","all")
+        query=subscription_payments_query()
+        if status in ("success","failed","pending"):
+            query=query.filter(Payment.status.in_(("initialized","pending")) if status=="pending" else Payment.status==status)
+        rows=query.order_by(Payment.created_at.desc(),Payment.id.desc()).limit(100).all()
+        return jsonify(product=product,payments=[{
+            "id":p.id,"business_id":p.business_id,"reference":p.reference,
+            "amount_kobo":p.amount_kobo,"status":p.status,"user_id":p.user_id,
+            "plan_code":p.plan_code,"billing_interval":p.billing_interval,
+            "paid_at":p.paid_at.isoformat() if p.paid_at else None} for p in rows])
+    # Preserve the historical default payload for existing API consumers.
     rows=Payment.query.filter_by(product="lifetime").order_by(Payment.id.desc()).limit(100).all()
     return jsonify(payments=[{"id":p.id,"business_id":p.business_id,"reference":p.reference,
         "amount_kobo":p.amount_kobo,"status":p.status} for p in rows])
@@ -647,4 +684,11 @@ def api_activity():
 @admin_api_bp.get("/reports")
 @admin_required
 def api_reports():
-    return jsonify(overview())
+    try:
+        period,start,end=report_period()
+    except ValueError as error:
+        return jsonify(error=str(error)),400
+    metrics=overview()
+    metrics["period_metrics"]=period_metrics(start,end,
+        current_accounts=metrics["current_subscription_accounts"])
+    return jsonify(metrics)

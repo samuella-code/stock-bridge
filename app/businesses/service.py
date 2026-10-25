@@ -14,20 +14,22 @@ def owned_businesses(user):
 
 def selection_key(user):
     # Each paid multi-business generation requires its own explicit lower-tier choice.
-    previous = RecurringSubscription.query.filter_by(user_id=user.id).filter(
-        RecurringSubscription.plan_code.in_(('plus', 'pro')),
-        RecurringSubscription.current_period_start.isnot(None)).order_by(RecurringSubscription.id.desc()).first()
-    return f'business-selection:{user.id}:{previous.id if previous else 0}'
+    from app.subscriptions.entitlements import selection_event_key, started_multi_business_subscriptions
+    previous = started_multi_business_subscriptions().filter_by(
+        user_id=user.id).order_by(RecurringSubscription.id.desc()).first()
+    return selection_event_key(user.id, previous.id if previous else 0)
 
 
 def selection_required(user, access=None):
-    from app.subscriptions.entitlements import effective_access
+    from app.subscriptions.entitlements import effective_access, needs_business_selection
     if not current_app.config.get('SUBSCRIPTIONS_ENABLED'):
         return False
     access = access or effective_access(user)
-    if access.business_limit != 1 or Business.query.filter_by(user_id=user.id).count() <= 1:
+    count = Business.query.filter_by(user_id=user.id).count() if access.business_limit == 1 else 0
+    if not needs_business_selection(True, access.business_limit, count, False):
         return False
-    return not BillingEvent.query.filter_by(event_key=selection_key(user), user_id=user.id).first()
+    selected = BillingEvent.query.filter_by(event_key=selection_key(user), user_id=user.id).first()
+    return needs_business_selection(True, access.business_limit, count, bool(selected))
 
 
 def accessible_business(user, business, access=None):
