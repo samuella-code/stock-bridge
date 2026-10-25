@@ -2,7 +2,7 @@
 from datetime import datetime
 from sqlalchemy import func, or_
 from app.models import Business, Payment, RecurringSubscription, User
-from app.subscriptions.entitlements import PLANS, effective_access
+from app.subscriptions.entitlements import PLANS, EntitlementSnapshot
 
 
 def current_subscription_accounts(customers, now=None):
@@ -10,8 +10,10 @@ def current_subscription_accounts(customers, now=None):
     now = now or datetime.utcnow()
     counts = {plan: {interval: 0 for interval in ('monthly', 'yearly')}
               for plan in ('basic', 'plus', 'pro')}
-    for user in customers:
-        access = effective_access(user, now=now)
+    customers = list(customers)
+    snapshot = EntitlementSnapshot(customers, now=now)
+    for user in snapshot.users.values():
+        access = snapshot.access(user)
         sub = access.subscription
         if access.can_write and sub and (sub.plan_code, sub.billing_interval) in PLANS:
             counts[sub.plan_code][sub.billing_interval] += 1

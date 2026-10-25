@@ -61,9 +61,8 @@ payment-processing code are untouched. Reporting GETs are tested to issue SELECT
 
 ## Limits and acceptance
 
-Shared entitlement evaluation queries per customer/business. Large-installation
-performance requires measurement on an approved isolated dataset; no hosted profiling
-was performed. No browser/mobile viewport or PostgreSQL verification is claimed.
+Entitlement reads now use four SELECTs per batch of at most 200 accounts. CPU and
+memory still scale with customer/business facts. No hosted profiling was performed. No browser/mobile viewport or PostgreSQL verification is claimed.
 Tests use synthetic data and disposable SQLite with network/SMTP/provider/subprocess
 and non-SQLite connections blocked. Migration tests are deliberately excluded.
 All changes remain uncommitted pending review. No release or deployment is authorized.
@@ -94,7 +93,7 @@ API reports now passes its already computed current-account totals into period_m
 A regression test proves one computation and identical nested/top-level account totals.
 The business-status label is corrected without changing the existing SQL calculation.
 
-### Bounded-query proposal (not implemented)
+### Earlier bounded-query proposal (historical; implementation below)
 
 Linear per-account SQL remains. Do not replace effective_access with separate admin
 SQL rules. A follow-up should introduce a shared batch entitlement interface in the
@@ -108,4 +107,75 @@ Use fixed set-based reads per request, or explicitly bounded batches for paramet
 limits; do not materialize an unbounded IN list. Reuse the immutable snapshot across
 API overview/period summaries and notification business checks. Prove scalar/batch
 parity and query bounds on SQLite and later approved isolated PostgreSQL before use.
-This is a proposal requiring separate review; entitlement code is unchanged here.
+The proposal above records the prior review. The uncommitted implementation below
+now changes the shared entitlement loader/evaluator for review.
+
+
+## PR 39 uncommitted bulk entitlement performance review
+
+Base: 3bb901bc0b248f5b42203665629c18439fb39db5, on
+feat/admin-subscription-reporting. No commits, dependencies, schema, provider calls,
+configuration or billing processing changes are part of this review patch.
+
+Scalar and bulk loading now call the same _account_access and _business_access
+rules. Current-period eligibility and selection-generation predicates are shared.
+Selection generation still means highest ID of a started Plus/Pro row, including
+expired/failed/future-started rows; subscription winner still means latest eligible
+period start then highest ID. Those two orderings intentionally differ.
+
+EntitlementSnapshot captures one naive UTC instant for all of its evaluations.
+Snapshots are local variables in admin reporting, never stored in Flask globals,
+process caches or sessions. Account Access results are computed once per user and
+reused for business checks. The API keeps reusing its overview account totals.
+User identity membership is checked before a snapshot result is returned.
+
+Four SELECTs per batch of <=200 unique loaded User IDs:
+1. AccountBilling rows.
+2. Only effective subscription winners, selected by SQL ROW_NUMBER partitioned by
+   user ID, with existing status and half-open period filters and tie ordering.
+3. Ordered owned business IDs (not entire business objects), needed for primary
+   validation, counts and slots. Suspended IDs still consume their original slots.
+4. Only matching selection-event user IDs, joined to a grouped MAX subscription-ID
+   generation subquery. Historical subscription/event objects are not loaded.
+
+The largest repeated ID parameter list is bounded at 200 per clause (the event
+query uses two such clauses). Empty snapshots issue no entitlement reads. For N
+accounts, entitlement loading costs 4*ceil(N/200) SELECTs; account and business
+checks after loading issue none. Query bounds do not imply constant memory, CPU,
+rows scanned or latency. Loaded customer rows must not be expired before evaluation.
+Notification candidates eagerly load owners, avoiding per-business owner lookups.
+No isolation/consistency guarantee beyond the existing transaction is introduced.
+
+Tests use explicit expected outcomes as well as scalar/bulk comparison. Coverage
+includes all plans/intervals, tie-breaking, period/trial boundaries, legacy overlays,
+user restrictions, invalid primary ownership, suspended slot consumption, foreign
+businesses/events, stale and future-failed selection generations, no-query business
+checks, next-request refresh, and 201-account batching (8 entitlement SELECTs).
+
+### Local measured results
+
+Same synthetic layout and cold ORM method described above. Before samples are the
+previously captured measurements of the reviewed base, not a fresh baseline run.
+After samples come from the final guarded regression run. SQL counts are exact per
+request across three samples. Milliseconds below are three-sample medians, including
+the first cold-template sample. These are local Flask test-client timings, not hosted
+latency; no PostgreSQL execution/performance claim is made.
+
+| Endpoint | Customers | Before SQL | After SQL | Before ms | After ms |
+|---|---:|---:|---:|---:|---:|
+| /admin/ | 10 | 59 | 33 | 21.230 | 12.792 |
+| /admin/reports | 10 | 44 | 18 | 15.082 | 8.327 |
+| /api/admin/reports | 10 | 66 | 40 | 19.946 | 14.829 |
+| /admin/notifications | 10 | 69 | 15 | 20.940 | 7.627 |
+| /admin/ | 100 | 329 | 33 | 140.384 | 17.993 |
+| /admin/reports | 100 | 314 | 18 | 96.785 | 11.536 |
+| /api/admin/reports | 100 | 336 | 40 | 102.712 | 18.616 |
+| /admin/notifications | 100 | 579 | 15 | 132.604 | 11.051 |
+
+Final guarded regression: 332 passed, 4 migration tests deselected, exit 0,
+92.01 seconds; 12,349 warnings (primarily existing deprecations). All measured GET
+statements are SELECT. Endpoint tests assert exact fixed counts at both 10 and 100
+customers, each with three businesses. The SQLite runner blocks external sockets,
+SMTP, subprocesses and PostgreSQL, disables dotenv, starts with a clean environment,
+and permits SQLite only in memory or the dedicated disposable test directory.
+No migrations were executed. Browser and hosted validation remain outstanding.

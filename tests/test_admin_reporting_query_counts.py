@@ -57,5 +57,9 @@ def test_measure_reporting_requests(client, monkeypatch, size):
             assert response.status_code == 200
             assert statements and set(statements) == {'SELECT'}
             samples.append({'queries': len(statements), 'elapsed_ms': round(elapsed, 3)})
+        assert len({sample['queries'] for sample in samples}) == 1
+        expected = {'/admin/': 33, '/admin/reports': 18, '/api/admin/reports': 40,
+                    '/admin/notifications': 15}
+        assert samples[0]['queries'] == expected[path]  # Same bound at 10 and 100 accounts.
         print('MEASUREMENT ' + json.dumps({'customers': size, 'businesses': size*3,
               'path': path, 'samples': samples}), flush=True)

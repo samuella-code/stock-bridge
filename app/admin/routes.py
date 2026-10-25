@@ -600,13 +600,15 @@ def notifications():
     recent=AuditLog.query.filter(AuditLog.action.in_(("USER_REGISTERED","ACCESS_PAYMENT_SUCCESSFUL","USER_SUSPENDED","BUSINESS_SUSPENDED"))).order_by(AuditLog.created_at.desc()).limit(20).all()
     # An old active business marker is not itself a current entitlement.
     # Do not flag intentionally suspended accounts/businesses as billing anomalies.
-    from app.subscriptions.entitlements import effective_access
+    from app.subscriptions.entitlements import EntitlementSnapshot
+    entitlement_now=datetime.utcnow()
     candidates=customer_business_query().filter(Business.subscription_status=="active",
-        Business.suspended_at.is_(None),User.suspended_at.is_(None)).order_by(Business.id)
+        Business.suspended_at.is_(None),User.suspended_at.is_(None)).options(joinedload(Business.owner)).order_by(Business.id).all()
+    snapshot=EntitlementSnapshot([b.owner for b in candidates],now=entitlement_now)
     access_without_payment=[]
     legacy_ids={p.business_id for p in verified_payments_query().all()}
     for business in candidates:
-        if effective_access(business.owner,business=business).can_write:
+        if snapshot.access(business.owner,business=business).can_write:
             continue
         if not current_app.config.get("SUBSCRIPTIONS_ENABLED") and business.id in legacy_ids:
             continue
