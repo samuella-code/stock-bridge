@@ -141,14 +141,14 @@ def test_invalid_primary_and_selection_history(client, enabled, history):
     db.session.add(BillingEvent(user_id=other.id,event_key=selection_key(user),kind='selection',message='foreign'))
     db.session.commit()
     check(user,shops[0],('basic',False,1))
-    assert selection_required(user)==enabled
+    assert selection_required(user, access=effective_access(user, now=NOW))==enabled
     account.primary_business_id=shops[0].id
     foreign_event=BillingEvent.query.filter_by(event_key=selection_key(user)).one()
     db.session.delete(foreign_event);db.session.flush()
     db.session.add(BillingEvent(user_id=user.id,event_key=selection_key(user),kind='selection',message='correct'))
     db.session.commit()
     check(user,shops[0],('basic',True,1))
-    assert not selection_required(user)
+    assert not selection_required(user, access=effective_access(user, now=NOW))
 
 
 def test_single_business_invalid_primary_fallback_and_empty_account(client):

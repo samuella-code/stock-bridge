@@ -87,3 +87,17 @@ def test_admin_login_is_not_given_customer_assistant(client):
     response=client.get('/admin/login')
     assert response.status_code == 200
     assert 'data-assistant' not in response.get_data(as_text=True)
+
+
+@pytest.mark.parametrize('endpoint', ['missing-request', 'main.reports', 'main.dashboard', None])
+def test_reports_marker_preserves_standalone_rendering_contract(endpoint):
+    env = Environment(loader=FileSystemLoader(ROOT / 'app/templates'),
+                      autoescape=True, undefined=StrictUndefined)
+    env.globals['url_for'] = lambda name, **kwargs: '/static/' + kwargs['filename'] if name == 'static' else '/fixed/' + name
+    context = dict(config=SimpleNamespace(SUBSCRIPTIONS_ENABLED=False, BILLING_PROVIDER_ENABLED=False),
+                   current_user=SimpleNamespace(is_authenticated=False))
+    if endpoint != 'missing-request':
+        context['request'] = SimpleNamespace(endpoint=endpoint)
+    html = env.get_template('components/assistant.html').render(**context)
+    assert ('data-assistant-page="reports"' in html) is (endpoint == 'main.reports')
+    assert 'data-assistant-config' in html
