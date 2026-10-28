@@ -90,6 +90,7 @@
   }
   function setOpen(open,restoreFocus=true){
     if(document.body.classList.contains('navigation-open'))open=false;
+    root.toggleAttribute('data-assistant-open',open);
     panel.hidden=!open;launcher.hidden=open;launcher.setAttribute('aria-expanded',String(open));
     if(open)input.focus();else if(restoreFocus)launcher.focus();
   }
