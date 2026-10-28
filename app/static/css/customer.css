@@ -94,6 +94,7 @@
 .customer-app .period-picker{padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:#fff;gap:12px;margin:18px 0}
 .customer-app .period-picker label{font-weight:600;color:var(--muted);min-width:0}
 .customer-app .period-picker input{width:100%;min-width:0}
+.customer-app [data-report-period]>label{grid-template-columns:minmax(0,1fr)}
 .customer-app .report-field-error{display:block;max-width:24rem;color:#991b1b;overflow-wrap:anywhere}
 .customer-app .report-date-errors{overflow-wrap:anywhere}
 .customer-app .period-caption{font-size:13px;color:var(--muted)}
@@ -357,4 +358,13 @@
 .customer-app .panel-card form input,.customer-app .panel-card form select,.customer-app .panel-card form textarea{min-width:0;max-width:100%;box-sizing:border-box}
 .customer-app .basket-browse summary,.customer-app .basket-line button{min-height:44px}
 .customer-app .basket-total,.customer-app .restock-review,.customer-app .basket-message{overflow-wrap:anywhere}
+}
+
+/* Reports only: avoid iOS native date-control percentage-width adjustments. */
+@media(max-width:600px){
+  .customer-app [data-report-period] input[type="date"]{
+    -webkit-appearance:none;
+    appearance:none;
+    box-sizing:border-box;
+  }
 }
