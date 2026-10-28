@@ -119,3 +119,10 @@
 .showcase-indicators button:focus-visible{outline:3px solid #23734a;outline-offset:-3px}
 .auth-product-demo .showcase-indicators button:focus-visible{outline-color:#fff}
 @media(min-width:769px) and (max-width:1000px){.entry-hero{grid-template-columns:minmax(0,1fr) minmax(0,1.1fr)}}
+
+/* Keep comparison words readable; scroll the table rather than the whole page. */
+@media(max-width:600px){
+  .entry-home .plan-comparison{max-width:100%;min-width:0}
+  .entry-home .plan-comparison table{min-width:38rem;overflow-wrap:normal;word-break:normal}
+  .entry-home .plan-comparison th,.entry-home .plan-comparison td{overflow-wrap:normal;word-break:normal;hyphens:none}
+}

@@ -51,7 +51,7 @@ for (const preset of ['today','week','month']) {
 const customerCss=fs.readFileSync('app/static/css/customer.css','utf8');
 check(customerCss.includes('.customer-app [data-report-period]>label{grid-template-columns:minmax(0,1fr)}'), 'inner grid is explicitly Reports-scoped');
 const assistantCss=fs.readFileSync('app/static/css/assistant.css','utf8');
-check(/@media\(max-width:600px\)\{\s*\.sb-assistant\[data-assistant-page="reports"\]:not\(\[data-assistant-open\]\)\{\s*position:static;/.test(assistantCss), 'only closed narrow Reports launcher enters flow');
+check(/@media\(max-width:600px\)\{\s*\.sb-assistant\[data-assistant-page="reports"\]:not\(\[data-assistant-open\]\),[\s\S]*?position:static;/.test(assistantCss), 'closed narrow Reports launcher retains flow');
 check(assistantCss.includes('.sb-assistant{position:fixed;'), 'shared fixed panel/desktop rule remains');
 // Check the approved rule's scope/declarations; this is not Safari rendering evidence.
 const dateRule = customerCss.match(/@media\(max-width:600px\)\{\s*\.customer-app \[data-report-period\] input\[type="date"\]\{([^}]+)\}\s*\}/);

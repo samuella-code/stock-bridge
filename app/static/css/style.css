@@ -240,3 +240,14 @@ th { color:#64748b; font-size:11px; text-transform:uppercase; letter-spacing:.08
     .auth-form-card h2 { font-size:27px; }
     .panel-card { padding:18px; }
 }
+
+/* Opt-in disclosures share the existing geometric arrow, not a platform glyph. */
+:is(.ui-disclosure,.basket-browse)>summary{position:relative;list-style:none;padding-left:22px;color:inherit}
+:is(.ui-disclosure,.basket-browse)>summary::-webkit-details-marker{display:none}
+:is(.ui-disclosure,.basket-browse)>summary::marker{content:""}
+:is(.ui-disclosure,.basket-browse)>summary::before{
+  content:"";position:absolute;left:4px;top:calc(.75em - 4px);
+  width:0;height:0;border-top:4px solid transparent;
+  border-bottom:4px solid transparent;border-left:6px solid #111827;
+}
+:is(.ui-disclosure,.basket-browse)[open]>summary::before{transform:rotate(90deg)}
