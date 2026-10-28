@@ -368,3 +368,17 @@
     box-sizing:border-box;
   }
 }
+
+/* Transaction dates retain their native picker and optional submitted values. */
+@media(max-width:600px){
+  .customer-app #sale-form>label,.customer-app #expense-form>label{min-width:0}
+  .customer-app #sale-form input[type="date"],
+  .customer-app #expense-form input[type="date"]{
+    -webkit-appearance:none;appearance:none;box-sizing:border-box;
+  }
+}
+.customer-app details.ui-disclosure>summary{padding-left:30px;color:var(--text)}
+.customer-app details.ui-disclosure>summary::before{left:16px;top:calc(10px + .75em - 4px)}
+/* Page-specific basket padding must not cover the disclosure arrow. */
+.customer-app :is(#sale-form,#restock-form) details.basket-browse>summary{padding-left:30px;color:var(--text)}
+.customer-app details.basket-browse>summary::before{left:16px;top:calc(10px + .75em - 4px)}

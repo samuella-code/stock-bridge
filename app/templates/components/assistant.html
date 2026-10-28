@@ -1,6 +1,6 @@
 {% from 'components/icons.html' import icon %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/assistant.css', v='assistant-1') }}">
-<div class="sb-assistant" data-assistant{% if request is defined and request.endpoint == 'main.reports' %} data-assistant-page="reports"{% endif %} hidden>
+<div class="sb-assistant" data-assistant{% if request is defined and request.endpoint == 'main.reports' %} data-assistant-page="reports"{% elif request is defined and request.endpoint == 'main.index' %} data-assistant-page="home"{% endif %} hidden>
   <button type="button" class="sb-assistant-launcher" aria-controls="sb-assistant-panel" aria-expanded="false" aria-label="Open StockBridge Assistant">{{ icon('help') }} <span>Help</span></button>
   <section id="sb-assistant-panel" class="sb-assistant-panel" role="region" aria-labelledby="sb-assistant-title" hidden>
     <header><div><h2 id="sb-assistant-title">StockBridge Assistant</h2><p>Automated guided help</p></div><div class="sb-assistant-controls"><button type="button" data-assistant-minimize aria-label="Minimize assistant">−</button><button type="button" data-assistant-close aria-label="Close assistant">×</button></div></header>
