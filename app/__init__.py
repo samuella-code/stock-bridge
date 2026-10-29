@@ -2,7 +2,7 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 
-from flask import Flask, has_request_context, abort, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, has_request_context, abort, flash, jsonify, redirect, render_template, request, session, url_for, g
 from flask_login import LoginManager, current_user, logout_user
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
@@ -109,8 +109,8 @@ def create_app(test_config=None):
             if not current_user.email_verified_at:
                 flash("Verify your email to access StockBridge.", "warning")
                 return redirect(url_for("auth.verification_pending"))
-        # Read-only help and tour-state retrieval must not start or commit a trial.
-        if (request.endpoint not in {"legal.help_centre", "main.onboarding_tour_current"}
+        # Read-only help, tour-state retrieval and Insights must not start or commit a trial.
+        if (request.endpoint not in {"legal.help_centre", "main.onboarding_tour_current", "main.insights"}
                 and app.config.get("SUBSCRIPTIONS_ENABLED")
                 and current_user.is_authenticated and current_user.email_verified_at):
             from app.subscriptions.entitlements import start_trial
@@ -133,6 +133,10 @@ def create_app(test_config=None):
 
     @app.context_processor
     def subscription_context():
+        if has_request_context() and request.endpoint == 'main.insights':
+            # The Insights route authorizes once at its captured UTC instant.
+            # Do not re-resolve a business or repair the session while rendering.
+            return getattr(g, 'insights_subscription_context', {})
         if not has_request_context() or not current_user.is_authenticated or not current_user.businesses:
             return {}
         from app.subscriptions.entitlements import selected_business

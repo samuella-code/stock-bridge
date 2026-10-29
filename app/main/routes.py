@@ -2,17 +2,18 @@ from app.subscriptions.entitlements import selected_business
 from datetime import datetime, time, timedelta
 from decimal import Decimal
 import re
-from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for, jsonify, abort
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for, jsonify, abort, g
 from flask_login import current_user, login_required
-from sqlalchemy import func, case, distinct
+from sqlalchemy import func, case
 from app import db
 from app.models import Expense, Product, Restock, Sale, SaleItem
 from app.main.onboarding import setup_progress
+from app.main.reporting import financial_totals
 
 main_bp = Blueprint("main", __name__)
 
-def period_dates(args):
-    today = datetime.utcnow().date()
+def period_dates(args, *, now=None):
+    today = (now or datetime.utcnow()).date()
     period = args.get("period", "today")
     if period == "week":
         start, end = today - timedelta(days=today.weekday()), today + timedelta(days=1)
@@ -56,16 +57,7 @@ def report_date_errors(args):
     return errors
 
 def figures(b, start, end):
-    conditions = (Sale.business_id == b.id, Sale.voided_at.is_(None),
-                  Sale.sold_at >= start, Sale.sold_at < end)
-    sales = db.session.query(
-        func.count(distinct(Sale.id)),
-        func.coalesce(func.sum(SaleItem.quantity), 0),
-        func.coalesce(func.sum(SaleItem.quantity * SaleItem.unit_price), 0),
-        func.coalesce(func.sum(SaleItem.quantity * SaleItem.unit_cost), 0)
-    ).join(SaleItem).filter(*conditions).one()
-    expenses = db.session.query(func.coalesce(func.sum(Expense.amount), 0)).filter(
-        Expense.business_id == b.id, Expense.spent_at >= start, Expense.spent_at < end, Expense.voided_at.is_(None)).scalar()
+    totals = financial_totals(b.id, start, end)
     purchased = db.session.query(func.coalesce(func.sum(Restock.quantity * Restock.unit_cost), 0)).filter(
         Restock.business_id == b.id, Restock.received_at >= start, Restock.received_at < end).scalar()
     stock = db.session.query(func.count(Product.id),
@@ -74,13 +66,10 @@ def figures(b, start, end):
             (Product.stock_quantity <= Product.minimum_stock_level), 1), else_=0)), 0),
         func.coalesce(func.sum(Product.stock_quantity * Product.buying_price), 0)
     ).filter(Product.business_id == b.id, Product.active.is_(True)).one()
-    revenue, cogs = sales[2], sales[3]
-    gross = revenue - cogs
-    return {"number_of_sales": sales[0], "units_sold": sales[1], "revenue": revenue,
-            "cogs": cogs, "gross_profit": gross, "expenses": expenses,
-            "net_profit": gross - expenses, "inventory_purchased": purchased,
-            "product_count": stock[0], "out_stock_count": stock[1],
-            "low_stock_count": stock[2], "inventory_value": stock[3]}
+    return {key: totals[key] for key in (
+        "number_of_sales", "units_sold", "revenue", "cogs", "gross_profit", "expenses", "net_profit"
+    )} | {"inventory_purchased": purchased, "product_count": stock[0],
+           "out_stock_count": stock[1], "low_stock_count": stock[2], "inventory_value": stock[3]}
 
 def top_products(b, start, end, order="units"):
     units = func.sum(SaleItem.quantity).label("units")
@@ -215,3 +204,36 @@ def onboarding_tour_state():
     except Exception:
         db.session.rollback()
         raise
+
+
+@main_bp.get("/insights")
+@login_required
+def insights():
+    from app.main.insights import insights_context, build_insights
+    now = datetime.utcnow()
+    g.insights_subscription_context = insights_context(current_user, now=now)
+    business = g.insights_subscription_context['subscription_business']
+    if business is None:
+        # No transaction/product reads for accounts without paid Plus/Pro access.
+        return render_template("insights.html", insights_denied=True), 403
+    args = request.args.copy()
+    if any(args.get(field, "") for field in ("from", "to")):
+        args["period"] = "custom"
+    errors = report_date_errors(args)
+    period = args.get("period", "today")
+    start = end = None
+    if not errors:
+        period, start, end = period_dates(args, now=now)
+        if start - datetime.min < end - start:
+            errors["from"] = "Choose a later From date to allow an equal preceding comparison period."
+    data = None if errors else build_insights(business.id, start, end, now=now)
+    return render_template("insights.html", business=business, period=period,
+                           report_errors=errors, insight=data), 400 if errors else 200
+
+
+@main_bp.after_request
+def protect_insights_response(response):
+    # Includes authorization redirects/errors returned by application hooks.
+    if request.endpoint == "main.insights":
+        response.headers["Cache-Control"] = "private, no-store"
+    return response

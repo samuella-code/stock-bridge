@@ -1,0 +1,6 @@
+/* Selected-business Insights only; share the verified native date-control rules. */
+.insights-page .period-picker > label{grid-template-columns:minmax(0,1fr)}
+.insights-page .metric-card h4{margin:0;font-size:1rem}
+.insights-page .metric-card p{font-size:.9rem}
+.insights-page .metric-card,.insights-page .panel-card{min-width:0;overflow-wrap:anywhere}
+.insights-page .report-field-error{color:#9b2525;white-space:normal}

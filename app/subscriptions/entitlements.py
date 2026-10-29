@@ -216,11 +216,11 @@ class EntitlementSnapshot:
                                 business, self.facts[user.id])
 
 
-def access_label(user):
+def access_label(user, *, access=None):
     labels={'trial':'Free Trial','basic':'StockBridge Basic','plus':'StockBridge Plus','pro':'StockBridge Pro',
         'legacy_lifetime':'Existing account access','legacy_lifetime_plus':'Existing account access + Plus','legacy_lifetime_pro':'Existing account access + Pro',
         'restricted':'Read-only — choose a plan'}
-    access=effective_access(user)
+    access=access if access is not None else effective_access(user)
     label=labels[access.kind]
     if access.subscription:
         label+=' · '+access.subscription.billing_interval.title()
