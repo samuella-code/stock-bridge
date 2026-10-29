@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block page_title %}Business Insights{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="{{ url_for('static', filename='css/insights.css') }}">{% endblock %}
+{% block content %}
+<section class="dashboard-wrap insights-page">
+  <h2>Business Insights</h2>
+  {% if insights_denied|default(false) %}
+  <div class="panel-card"><h3>Plus or Pro access required</h3><p>Business Insights requires current paid Plus or Pro access to a permitted business. Your existing Reports access is unchanged.</p><a href="{{ url_for('subscriptions.index') }}">Review your plan</a> · <a href="{{ url_for('businesses.index') }}">My Businesses</a></div>
+  {% else %}
+  <p class="eyebrow">{{ business.name }}</p>
+  <p>Explanations of this business's recorded activity. These figures are estimates, not complete accounts or forecasts. Only recorded operating expenses are included.</p>
+  <p><a href="{{ url_for('main.reports') }}">Open Reports</a> · Use the business switcher to view another permitted business.</p>
+  {% if report_errors %}
+  <div class="flash flash-error" role="alert" aria-labelledby="insight-error-title"><strong id="insight-error-title">Check your insight dates</strong><p>No insights have been generated. Correct the dates below.</p><ul>{% for field, error in report_errors.items() %}<li><a href="#insight-{{ field }}">{{ error }}</a></li>{% endfor %}</ul></div>
+  {% endif %}
+  <form method="GET" class="period-picker" data-report-period>
+    <label>Period<select name="period">{% for key, label in [('today','Today'),('week','This week'),('month','This month'),('custom','Custom dates')] %}<option value="{{ key }}" {{ 'selected' if period == key }}>{{ label }}</option>{% endfor %}</select></label>
+    {% for field, label in [('from','From'),('to','To')] %}
+    <label for="insight-{{ field }}">{{ label }}<input type="date" id="insight-{{ field }}" name="{{ field }}" value="{{ request.args.get(field, '') }}"{% if field in report_errors %} aria-invalid="true" aria-describedby="insight-{{ field }}-error"{% endif %}>{% if field in report_errors %}<small class="report-field-error" id="insight-{{ field }}-error">{{ report_errors[field] }}{% if request.args.get(field, '') %} Entered value: {{ request.args.get(field) }}{% endif %}</small>{% endif %}</label>
+    {% endfor %}
+    <button class="secondary-btn">Show insights</button>
+  </form>
+  {% if insight %}
+  <section aria-labelledby="insight-financial-title" data-insight-results>
+    <h3 id="insight-financial-title">Selected-period financial activity</h3>
+    <p>{{ insight.start.strftime('%d %b %Y') }} to {{ insight.last.strftime('%d %b %Y') }} inclusive (UTC).</p>
+    <p>Compared with the equal preceding period: {{ insight.previous_start.strftime('%d %b %Y') }} to {{ insight.previous_last.strftime('%d %b %Y') }} inclusive (UTC).</p>
+    {% if insight.incomplete %}<p class="flash flash-warning"><strong>Incomplete period.</strong> Today or future dates are included. Directional trends are withheld.</p>{% endif %}
+    <div class="metric-grid">
+    {% for key, label in [('revenue','Revenue'),('cogs','Cost of goods sold'),('gross_profit','Estimated gross profit'),('expenses','Recorded operating expenses'),('net_profit','Estimated result after recorded expenses')] %}
+      <article class="metric-card"><h4>{{ label }}</h4><strong>₦{{ '{:,.2f}'.format(insight.current[key]) }}</strong>
+      <p>Preceding period: ₦{{ '{:,.2f}'.format(insight.previous[key]) }}</p>
+      {% if key in insight.trends %}{% set trend = insight.trends[key] %}
+        {% if trend.state == 'incomplete' %}<p>Comparison withheld: incomplete period.</p>
+        {% elif trend.state == 'cost-review' %}<p>Profit comparison withheld: review zero saved costs.</p>
+        {% else %}<p>Recorded change: {{ '+' if trend.delta > 0 }}₦{{ '{:,.2f}'.format(trend.delta) }}{% if trend.percent is not none %} ({{ '+' if trend.percent > 0 }}{{ '{:,.1f}'.format(trend.percent) }}%){% endif %}.</p>
+          {% if trend.state == 'no-baseline' %}<p>No positive preceding baseline; a percentage trend cannot be established.</p>{% elif trend.state == 'negative-baseline' %}<p>Preceding value is negative; only the amount change is shown.</p>{% endif %}
+        {% endif %}
+      {% endif %}</article>
+    {% endfor %}
+    </div>
+    <div class="panel-card"><h3>What to review</h3>
+      {% for explanation in insight.explanations %}<p>{{ explanation }}</p>{% else %}<p>Review the recorded totals and preceding-period values above before making business decisions.</p>{% endfor %}
+      <p>Revenue uses saved sale prices. COGS uses saved sale-time costs. Estimated gross profit = revenue − COGS; estimated result after recorded expenses = gross profit − operating expenses. Voided sales and expenses are excluded. Stock purchases are separate and are not deducted again.</p>
+    </div>
+  </section>
+  <section class="panel-card" aria-labelledby="insight-stock-title">
+    <h3 id="insight-stock-title">Stock with no recorded sales in 30 complete UTC days</h3>
+    <p><strong>Separate stock review, independent of the selected financial dates.</strong> {{ insight.stock.start.strftime('%d %b %Y') }} up to, but excluding, {{ insight.stock.end.strftime('%d %b %Y') }} UTC. Today's sales are not included.</p>
+    <p>Up to 10 active products, added on or before the start of that window, with stock remaining. Newer products have insufficient history for this list. Current stock quantities are shown.</p>
+    <ul>{% for product in insight.stock.products %}<li>{{ product.name }} · {{ product.stock_quantity }} {{ product.unit }} in stock</li>{% else %}<li>No established products meet this condition. This does not establish demand for newer products.</li>{% endfor %}</ul>
+    <p>Check counts, product visibility and sales recording before purchasing more. This list does not predict future demand or recommend a restock quantity.</p>
+  </section>
+  {% endif %}
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/report-dates.js') }}" defer></script>{% endblock %}
