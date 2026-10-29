@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block page_title %}Multi-business Overview{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="{{ url_for('static', filename='css/insights.css') }}"><link rel="stylesheet" href="{{ url_for('static', filename='css/business-overview.css') }}">{% endblock %}
+{% macro change(trend) %}
+  {% if trend.state == 'incomplete' %}Comparison withheld: incomplete period.
+  {% elif trend.state == 'cost-review' %}Profit comparison withheld: review zero saved costs.
+  {% else %}Recorded change: {{ '+' if trend.delta > 0 }}₦{{ '{:,.2f}'.format(trend.delta) }}{% if trend.percent is not none %} ({{ '+' if trend.percent > 0 }}{{ '{:,.1f}'.format(trend.percent) }}%){% endif %}.
+    {% if trend.state == 'no-baseline' %}No positive preceding baseline; no percentage trend.
+    {% elif trend.state == 'negative-baseline' %}Negative preceding baseline; amount change only.{% endif %}
+  {% endif %}
+{% endmacro %}
+{% block content %}
+<section class="dashboard-wrap insights-page business-overview-page">
+  <h2>Multi-business Overview</h2>
+  {% if overview_denied|default(false) %}
+  <div class="panel-card"><h3>Current paid Pro access required</h3><p>This overview requires current paid Pro access. Your existing Insights and Reports access is unchanged.</p><a href="{{ url_for('subscriptions.index') }}">Review your plan</a></div>
+  {% else %}
+  <p class="flash flash-info"><strong>Scope: all your permitted, non-suspended businesses.</strong> This overview is independent of the selected-business header and switcher. Changing the selected business does not narrow these totals.</p>
+  <p>Recorded revenue, saved costs and operating expenses across the included businesses over one shared date range. Estimates are not complete accounts or forecasts. Unrecorded expenses cannot be detected.</p>
+  <p><a href="{{ url_for('main.insights') }}">Selected-business Insights</a> · <a href="{{ url_for('main.reports') }}">Selected-business Reports</a></p>
+  {% if report_errors %}<div class="flash flash-error" role="alert" aria-labelledby="overview-error-title"><strong id="overview-error-title">Check your overview dates</strong><p>No overview has been generated. Correct the dates below.</p><ul>{% for field,error in report_errors.items() %}<li><a href="#overview-{{ field }}">{{ error }}</a></li>{% endfor %}</ul></div>{% endif %}
+  <form method="GET" class="period-picker" data-report-period>
+    <label>Period<select name="period">{% for key,label in [('today','Today'),('week','This week'),('month','This month'),('custom','Custom dates')] %}<option value="{{ key }}" {{ 'selected' if period == key }}>{{ label }}</option>{% endfor %}</select></label>
+    {% for field,label in [('from','From'),('to','To')] %}<label for="overview-{{ field }}">{{ label }}<input type="date" id="overview-{{ field }}" name="{{ field }}" value="{{ request.args.get(field,'') }}"{% if field in report_errors %} aria-invalid="true" aria-describedby="overview-{{ field }}-error"{% endif %}>{% if field in report_errors %}<small class="report-field-error" id="overview-{{ field }}-error">{{ report_errors[field] }}{% if request.args.get(field,'') %} Entered value: {{ request.args.get(field) }}{% endif %}</small>{% endif %}</label>{% endfor %}
+    <button class="secondary-btn">Show overview</button>
+  </form>
+  {% if overview %}<div data-overview-results>
+    <h3>Combined recorded activity · {{ overview.rows|length }} included {{ 'business' if overview.rows|length == 1 else 'businesses' }}</h3>
+    <p>{{ overview.start.strftime('%d %b %Y') }} to {{ overview.last.strftime('%d %b %Y') }} inclusive (UTC). Equal preceding period: {{ overview.previous_start.strftime('%d %b %Y') }} to {{ overview.previous_last.strftime('%d %b %Y') }} inclusive (UTC).</p>
+    {% if overview.incomplete %}<p class="flash flash-warning"><strong>Incomplete period.</strong> Today or future dates are included. Totals contain recorded activity only; directional comparisons are withheld until every selected UTC day is complete.</p>{% endif %}
+    {% if overview.zero_cost %}<p class="flash flash-warning"><strong>Review zero saved costs.</strong> At least one included business has sale lines with zero saved unit cost in either period. These may be intentional or incomplete. Saved values are retained; combined profit direction is withheld.</p>{% endif %}
+    {% if not overview.rows %}<p class="panel-card">No permitted, non-suspended businesses are currently available. No financial records were queried. <a href="{{ url_for('businesses.index') }}">Review My Businesses</a>.</p>
+    {% elif not overview.current.number_of_sales and not overview.current.expense_count %}<p>No sales or operating expenses were recorded for the included businesses in the selected period. Check that records are up to date before drawing conclusions.</p>{% endif %}
+    <div class="metric-grid">{% for key,label in overview.metrics %}<article class="metric-card"><h4>{{ label }}</h4><strong>₦{{ '{:,.2f}'.format(overview.current[key]) }}</strong><p>Preceding: ₦{{ '{:,.2f}'.format(overview.previous[key]) }}</p><p>{{ change(overview.trends[key]) }}</p></article>{% endfor %}</div>
+    <h3 id="overview-business-title">Business comparisons · same date range</h3>
+    <p>Each included business appears below, including those with no recorded activity. Combined totals equal the business totals shown here. No unavailable businesses are included.</p>
+    <div class="overview-business-grid" aria-labelledby="overview-business-title">
+      {% for row in overview.rows %}<article class="panel-card" data-overview-business="{{ row.business.id }}">
+        <h4>{{ row.business.name }}</h4>
+        {% if not row.current.number_of_sales and not row.current.expense_count %}<p>No recorded sales or operating expenses in the selected period.</p>{% endif %}
+        {% if row.current.zero_cost_lines or row.previous.zero_cost_lines %}<p><strong>Review zero saved costs in this business.</strong> Profit direction is withheld; saved values are retained.</p>{% endif %}
+        <dl>{% for key,label in overview.metrics %}<div><dt>{{ label }}</dt><dd><strong>₦{{ '{:,.2f}'.format(row.current[key]) }}</strong><span>Preceding: ₦{{ '{:,.2f}'.format(row.previous[key]) }}</span><span>{{ change(row.trends[key]) }}</span></dd></div>{% endfor %}</dl>
+      </article>{% endfor %}
+    </div>
+    <div class="panel-card"><h3>How to read these figures</h3><p>Revenue = quantity × saved sale price. COGS = quantity × saved sale-time cost. Estimated gross profit = revenue − COGS. Estimated result after recorded expenses = gross profit − recorded operating expenses. Voided sales and expenses are excluded. Stock purchases are separate and are not deducted again.</p><p>Compare the recorded changes to identify which businesses need a closer review of sales records, saved costs or expense receipts. These comparisons do not establish causes or predict future performance.</p></div>
+  </div>{% endif %}
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/report-dates.js') }}" defer></script>{% endblock %}
