@@ -216,7 +216,15 @@ def insights():
     if business is None:
         # No transaction/product reads for accounts without paid Plus/Pro access.
         return render_template("insights.html", insights_denied=True), 403
-    args = request.args.copy()
+    period, start, end, errors = insight_dates(request.args, now=now)
+    data = None if errors else build_insights(business.id, start, end, now=now)
+    return render_template("insights.html", business=business, period=period,
+                           report_errors=errors, insight=data), 400 if errors else 200
+
+
+def insight_dates(values, *, now):
+    """Shared premium report periods; retain Reports validation and precedence."""
+    args = values.copy()
     if any(args.get(field, "") for field in ("from", "to")):
         args["period"] = "custom"
     errors = report_date_errors(args)
@@ -226,14 +234,30 @@ def insights():
         period, start, end = period_dates(args, now=now)
         if start - datetime.min < end - start:
             errors["from"] = "Choose a later From date to allow an equal preceding comparison period."
-    data = None if errors else build_insights(business.id, start, end, now=now)
-    return render_template("insights.html", business=business, period=period,
-                           report_errors=errors, insight=data), 400 if errors else 200
+    return period, start, end, errors
+
+
+@main_bp.get("/business-overview")
+@login_required
+def business_overview():
+    from app.main.insights import insights_context
+    from app.main.overview import build_overview
+    now = datetime.utcnow()
+    context = insights_context(current_user, now=now, plans=('pro',))
+    g.insights_subscription_context = context
+    access = context.get('billing_access')
+    if not (access and access.can_write and access.subscription
+            and access.subscription.plan_code == 'pro'):
+        return render_template('business_overview.html', overview_denied=True), 403
+    period, start, end, errors = insight_dates(request.args, now=now)
+    data = None if errors else build_overview(context['business_choices'], start, end, now=now)
+    return render_template('business_overview.html', period=period,
+                           report_errors=errors, overview=data), 400 if errors else 200
 
 
 @main_bp.after_request
 def protect_insights_response(response):
     # Includes authorization redirects/errors returned by application hooks.
-    if request.endpoint == "main.insights":
+    if request.endpoint in {"main.insights", "main.business_overview"}:
         response.headers["Cache-Control"] = "private, no-store"
     return response

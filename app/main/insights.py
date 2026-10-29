@@ -8,7 +8,7 @@ from app.main.reporting import financial_totals
 from app.subscriptions.entitlements import EntitlementSnapshot, access_label
 
 
-def insights_context(user, *, now):
+def insights_context(user, *, now, plans=('plus', 'pro')):
     """Resolve one request-local business and presentation context, without writes.
 
     Match selected_business's permitted fallback order: session, primary, then
@@ -29,7 +29,7 @@ def insights_context(user, *, now):
     if access.kind == 'trial':
         context['billing_trial_end'] = account.trial_ends_at
     if not (access.can_write and access.subscription
-            and access.subscription.plan_code in ('plus', 'pro')):
+            and access.subscription.plan_code in plans):
         return context
     businesses = Business.query.filter_by(user_id=user.id).order_by(Business.id).all()
     allowed = [b for b in businesses if snapshot.access(user, business=b).can_write]

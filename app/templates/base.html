@@ -49,6 +49,9 @@
                 {{ nav_link('Reports', url_for('main.reports'), request.endpoint == 'main.reports', '▥') }}
                 {% if config.SUBSCRIPTIONS_ENABLED and billing_access is defined and billing_access.can_write and billing_access.subscription and billing_access.subscription.plan_code in ('plus', 'pro') %}
                 {{ nav_link('Business Insights', url_for('main.insights'), request.endpoint == 'main.insights', '▥') }}
+                {% if billing_access.subscription.plan_code == 'pro' %}
+                {{ nav_link('Multi-business Overview', url_for('main.business_overview'), request.endpoint == 'main.business_overview', '◫') }}
+                {% endif %}
                 {% endif %}
                 <span class="nav-section">Account</span>
                 {{ nav_link('My Businesses', url_for('businesses.index'), request.blueprint == 'businesses', '◫') }}
