@@ -99,7 +99,7 @@ def sign_in(user):
     if current_app.config.get('SUBSCRIPTIONS_ENABLED'):
         start_trial(user)
     db.session.commit()
-    return redirect(url_for('main.dashboard' if user.email_verified_at else 'auth.verification_pending'))
+    return redirect(url_for(('staff.home' if user.staff_only else 'main.dashboard') if user.email_verified_at else 'auth.verification_pending'))
 
 
 @auth_bp.post('/<provider>/start')
@@ -237,14 +237,15 @@ def social_finish():
                 log('USER_REGISTERED', f'User {user.id} registered.', actor=user, business_id=business.id)
                 log('BUSINESS_CREATED', f'Business {business.id} created.', actor=user, business_id=business.id)
             first_verification = user.email_verified_at is None
-            user.email_verified_at = user.email_verified_at or datetime.utcnow()
+            if not user.staff_only:
+                user.email_verified_at = user.email_verified_at or datetime.utcnow()
             db.session.add(SocialIdentity(user_id=user.id, provider=pending['provider'], provider_subject=pending['sub']))
             db.session.commit()
         except IntegrityError:
             # Flush and commit conflicts roll back the entire new workspace.
             db.session.rollback()
             return fail(pending['provider'], 'This identity was already linked. Please sign in again.')
-        if first_verification:
+        if first_verification and not user.staff_only:
             safely_send(send_welcome_email, user)
         return sign_in(user)
     return render_template('auth/social_finish.html', pending=pending, existing=existing)

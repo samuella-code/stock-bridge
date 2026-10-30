@@ -65,10 +65,11 @@ def create_app(test_config=None):
     from app.subscriptions.routes import subscriptions_bp
     from app.payments.routes import payments_bp
     from app.admin.routes import admin_bp, admin_api_bp
+    from app.staff.routes import staff_bp
 
     for blueprint in (
         auth_bp, main_bp, legal_bp, products_bp, sales_bp,
-        expenses_bp, restocking_bp, profile_bp, businesses_bp, notifications_bp, worker_bp, subscriptions_bp, payments_bp, admin_bp, admin_api_bp,
+        expenses_bp, restocking_bp, profile_bp, businesses_bp, notifications_bp, worker_bp, subscriptions_bp, payments_bp, admin_bp, admin_api_bp, staff_bp,
     ):
         app.register_blueprint(blueprint)
 
@@ -101,6 +102,11 @@ def create_app(test_config=None):
             elif current_user.suspended_at:
                 if request.endpoint not in {"auth.logout", "static"} and not (request.endpoint in {"admin.login", "admin.forgot_password", "admin.reset_password"} and current_user.admin_enabled and not current_user.suspended_at):
                     return render_template("admin/suspended.html"), 403
+        if current_user.is_authenticated and current_user.staff_only:
+            allowed_auth = {'auth.login', 'auth.logout', 'auth.forgot_password', 'auth.reset_password',
+                            'auth.verification_pending', 'auth.resend_verification', 'auth.verify_email'}
+            if request.blueprint != 'staff' and request.endpoint != 'static' and request.endpoint not in allowed_auth:
+                abort(403)
         verified_areas = {"main", "products", "sales", "expenses", "restocking", "profile", "businesses", "notifications"}
         if app.config.get("SUBSCRIPTIONS_ENABLED"):
             verified_areas.add("subscriptions")
@@ -111,6 +117,7 @@ def create_app(test_config=None):
                 return redirect(url_for("auth.verification_pending"))
         # Read-only help and reporting must not start or commit a trial.
         if (request.endpoint not in {"legal.help_centre", "main.onboarding_tour_current", "main.insights", "main.business_overview"}
+                and request.blueprint != "staff"
                 and app.config.get("SUBSCRIPTIONS_ENABLED")
                 and current_user.is_authenticated and current_user.email_verified_at):
             from app.subscriptions.entitlements import start_trial
@@ -133,6 +140,8 @@ def create_app(test_config=None):
 
     @app.context_processor
     def subscription_context():
+        if has_request_context() and request.blueprint == 'staff':
+            return {}
         if has_request_context() and request.endpoint in {'main.insights', 'main.business_overview'}:
             # Each premium reporting route authorizes once at its UTC instant.
             # Do not re-resolve a business or repair the session while rendering.

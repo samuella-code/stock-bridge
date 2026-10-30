@@ -3,6 +3,7 @@ from flask_login import UserMixin
 from werkzeug.security import check_password_hash,generate_password_hash
 from app import db,login_manager
 class User(UserMixin,db.Model):
+ staff_only=db.Column(db.Boolean,nullable=False,default=False,server_default="false")
  id=db.Column(db.Integer,primary_key=True); full_name=db.Column(db.String(120),nullable=False); email=db.Column(db.String(180),unique=True,nullable=False,index=True); password_hash=db.Column(db.String(255),nullable=False); created_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False); email_verified_at=db.Column(db.DateTime); verification_sent_at=db.Column(db.DateTime); role=db.Column(db.String(20),nullable=False,default="user"); admin_enabled=db.Column(db.Boolean,nullable=False,default=False,server_default="false"); admin_auth_version=db.Column(db.Integer,nullable=False,default=0,server_default="0"); suspended_at=db.Column(db.DateTime); last_activity_at=db.Column(db.DateTime)
  businesses=db.relationship("Business",backref="owner",lazy=True,cascade="all, delete-orphan")
  def set_password(self,p): self.password_hash=generate_password_hash(p)
@@ -290,3 +291,73 @@ class TransactionSubmission(db.Model):
     completed_at = db.Column(db.DateTime)
     __table_args__ = (db.UniqueConstraint('business_id', 'user_id', 'operation', 'key',
                                         name='uq_transaction_submission_scope'),)
+
+
+class StaffRole(db.Model):
+    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), primary_key=True)
+    key = db.Column(db.String(32), primary_key=True)
+    name = db.Column(db.String(80), nullable=False)
+    permissions = db.Column(db.JSON, nullable=False)
+    archived = db.Column(db.Boolean, nullable=False, default=False)
+
+
+class StaffMembership(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    role = db.Column(db.String(32), nullable=False)
+    duty_label = db.Column(db.String(100), nullable=False, default='')
+    state = db.Column(db.String(16), nullable=False, default='active')
+    grant_event_id = db.Column(db.Integer, nullable=False)
+    grant_started_at = db.Column(db.DateTime, nullable=False)
+    grant_pro_start = db.Column(db.DateTime, nullable=False)
+    grant_subscription_id = db.Column(db.Integer, db.ForeignKey('recurring_subscription.id'), nullable=False)
+    access_until = db.Column(db.DateTime, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    revoked_at = db.Column(db.DateTime)
+    __table_args__ = (db.UniqueConstraint('owner_id', 'user_id', name='uq_staff_owner_user'),
+        db.ForeignKeyConstraint(['owner_id', 'role'], ['staff_role.owner_id', 'staff_role.key'], name='fk_staff_member_owned_role'),
+        db.CheckConstraint("state IN ('active','revoked')", name='ck_staff_state'),
+        db.CheckConstraint('owner_id <> user_id', name='ck_staff_not_owner'))
+
+
+class StaffInvitation(db.Model):
+    delivery_status = db.Column(db.String(24), nullable=False, default='pending', server_default='pending')
+    delivery_attempted_at = db.Column(db.DateTime)
+    id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    email = db.Column(db.String(180), nullable=False)
+    role = db.Column(db.String(32), nullable=False)
+    duty_label = db.Column(db.String(100), nullable=False, default='')
+    token_digest = db.Column(db.String(64), nullable=False, unique=True)
+    state = db.Column(db.String(16), nullable=False, default='pending')
+    grant_event_id = db.Column(db.Integer, nullable=False)
+    grant_started_at = db.Column(db.DateTime, nullable=False)
+    grant_pro_start = db.Column(db.DateTime, nullable=False)
+    grant_subscription_id = db.Column(db.Integer, db.ForeignKey('recurring_subscription.id'), nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    accepted_at = db.Column(db.DateTime)
+    revoked_at = db.Column(db.DateTime)
+    membership_id = db.Column(db.Integer, db.ForeignKey('staff_membership.id'))
+    __table_args__ = (db.CheckConstraint("delivery_status IN ('pending','sending','sent','disabled','configuration_required','failed','unknown','suppressed')", name='ck_staff_delivery_status'),
+        db.ForeignKeyConstraint(['owner_id', 'role'], ['staff_role.owner_id', 'staff_role.key'], name='fk_staff_invite_owned_role'),
+        db.CheckConstraint("state IN ('pending','accepted','revoked')", name='ck_invite_state'),
+        db.Index('ix_staff_invite_seats', 'owner_id', 'state', 'expires_at'))
+
+
+class StaffMembershipBusiness(db.Model):
+    membership_id = db.Column(db.Integer, db.ForeignKey('staff_membership.id'), primary_key=True)
+    business_id = db.Column(db.Integer, db.ForeignKey('business.id'), primary_key=True)
+
+
+class StaffInvitationBusiness(db.Model):
+    invitation_id = db.Column(db.Integer, db.ForeignKey('staff_invitation.id'), primary_key=True)
+    business_id = db.Column(db.Integer, db.ForeignKey('business.id'), primary_key=True)
+
+
+class StaffAuditEvent(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    audit_log_id = db.Column(db.Integer, db.ForeignKey('audit_log.id'), nullable=False, unique=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    details = db.Column(db.JSON, nullable=False)

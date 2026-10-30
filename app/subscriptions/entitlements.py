@@ -33,6 +33,8 @@ def account_for(user, *, create=False):
 
 
 def start_trial(user):
+    if user.staff_only:
+        return False
     account = account_for(user)
     if (not account or not account.trial_eligible or account.legacy_granted_at
             or not user.email_verified_at or user.role != 'user' or user.admin_enabled):
