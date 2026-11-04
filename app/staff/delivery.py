@@ -35,25 +35,25 @@ def gate(recipient, config, environ):
     return 'ready' if recipient in recipients else 'suppressed'
 
 
-def audit(row, status):
-    log = AuditLog(actor_id=row.owner_id, action='STAFF_DELIVERY_RESULT', target_type='staff',
+def audit(row, status, *, actor_id=None):
+    log = AuditLog(actor_id=row.owner_id if actor_id is None else actor_id, action='STAFF_DELIVERY_RESULT', target_type='staff',
         target_id=row.id, description='Staff invitation delivery status recorded.')
     db.session.add(log); db.session.flush()
     db.session.add(StaffAuditEvent(audit_log_id=log.id, owner_id=row.owner_id,
         details=dict(invitation_id=row.id, delivery_status=status)))
 
 
-def finish(identifier, digest, status):
+def finish(identifier, digest, status, *, actor_id=None):
     row = db.session.get(StaffInvitation, identifier)
     if not row: db.session.rollback(); return
     service.lock_owner(row.owner_id)
     row = db.session.get(StaffInvitation, identifier)
     if row.state in ('pending', 'accepted') and row.token_digest == digest and row.delivery_status == 'sending':
-        row.delivery_status = status; audit(row, status)
+        row.delivery_status = status; audit(row, status, actor_id=actor_id)
     db.session.commit()
 
 
-def deliver(identifier, raw):
+def deliver(identifier, raw, *, actor_id=None):
     """One bounded transport attempt; return fixed labels, never exception text."""
     row = db.session.get(StaffInvitation, identifier)
     if not row: db.session.rollback(); return 'suppressed'
@@ -69,7 +69,7 @@ def deliver(identifier, raw):
     except ValueError:
         status = 'suppressed'
     if status != 'ready':
-        row.delivery_status = status; audit(row, status); db.session.commit(); return status
+        row.delivery_status = status; audit(row, status, actor_id=actor_id); db.session.commit(); return status
     recipient = row.email
     row.delivery_status, row.delivery_attempted_at = 'sending', now
     db.session.commit()  # No open transaction/owner lock during SMTP.
@@ -86,5 +86,5 @@ def deliver(identifier, raw):
         # A server may have accepted the message before the error. No retry or
         # exception logging: SMTP already emits sanitized fixed diagnostics.
         status = 'unknown'
-    finish(identifier, digest, status)
+    finish(identifier, digest, status, actor_id=actor_id)
     return status

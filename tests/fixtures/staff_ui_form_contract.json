@@ -1,0 +1,23 @@
+{
+  "baseline_commit": "6a4593c61c852440dfb1fdc2cbf7c7b6b87eba62",
+  "description": "SHA256 of sorted-key JSON form contracts rendered from the committed templates with the synthetic contexts in test_staff_presentation.py; visible text excluded.",
+  "states": {
+    "manage": "3b3a4726a90f9bbe6e3423c06484ddbee5c5ea7df4b71dc5f4bb1331e218be2b",
+    "empty": "800726d6b2628339941b0fd979cfc7faf1cbb66b1327a9b7472f476e960fa8a3",
+    "roles-full": "7524250435370d1fae3e654ec2e730fccaf4316a216f700ad819a0dac40f0421",
+    "delivery-sent": "3b3a4726a90f9bbe6e3423c06484ddbee5c5ea7df4b71dc5f4bb1331e218be2b",
+    "delivery-disabled": "3b3a4726a90f9bbe6e3423c06484ddbee5c5ea7df4b71dc5f4bb1331e218be2b",
+    "delivery-failed": "3b3a4726a90f9bbe6e3423c06484ddbee5c5ea7df4b71dc5f4bb1331e218be2b",
+    "delivery-unknown": "3b3a4726a90f9bbe6e3423c06484ddbee5c5ea7df4b71dc5f4bb1331e218be2b",
+    "delivery-configuration_required": "3b3a4726a90f9bbe6e3423c06484ddbee5c5ea7df4b71dc5f4bb1331e218be2b",
+    "delivery-suppressed": "3b3a4726a90f9bbe6e3423c06484ddbee5c5ea7df4b71dc5f4bb1331e218be2b",
+    "invite": "be886fb6a8e071436a3d96ce13c46122cfa2cb856f83ac3140d9ac0128a28c8a",
+    "new-credentials": "8b9fb87e5ecf937791d8e5feb9da3e30d6253ae2786c61576adee3632faf265b",
+    "existing-identity": "abb9b645ca4d9ae73757c71ea358018300c4ca2dbcf93aebc1154318c8952d48",
+    "home": "9cce59e434b35a0064b0dd7ee2017c41b7721a239b536b1d277d08008a4e5e83",
+    "revoked-home": "9cce59e434b35a0064b0dd7ee2017c41b7721a239b536b1d277d08008a4e5e83",
+    "verify-email": "5117f7eaebc9237ee6fb99ebfb35a6638483e35d74b894743ed20d81e0f6407d",
+    "restocking-only": "57d81f75422862d1c5f40e6d22c81ddd5c157b5eac0ad2e74b504d1f8248ad0b",
+    "error": "3b3a4726a90f9bbe6e3423c06484ddbee5c5ea7df4b71dc5f4bb1331e218be2b"
+  }
+}

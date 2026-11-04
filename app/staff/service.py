@@ -88,16 +88,21 @@ def grant_matches(owner, row, *, now):
     return (True, choices) if end is not None and now < end else (False, [])
 
 
-def invite(owner, email, role, label, finance, ids, *, now):
+def invite(owner, email, role, label, finance, ids, *, now, actor=None):
     lock_owner(owner.id)
     now = max(now, datetime.utcnow())
-    return _invite_locked(owner, email, role, label, finance, ids, now=now)
+    return _invite_locked(owner, email, role, label, finance, ids, now=now, actor=actor)
 
 
-def _invite_locked(owner, email, role, label, finance, ids, *, now):
+def _invite_locked(owner, email, role, label, finance, ids, *, now, actor=None):
     access, choices = owner_access(owner, now=now)
-    role_service._initialize_locked(owner.id)
+    actor = owner if actor is None else actor
+    from app.staff import delegation_access as delegated
+    auth, _ = delegated.mutation(owner, actor, now=now)
+    if auth.owner: role_service._initialize_locked(owner.id)
     role, label, ids = fields(role, label, finance, ids, choices)
+    auth.assignment(role_service.resolve(owner.id,role).permissions,ids,
+                    target_email=email.strip(),actor_email=actor.email)
     email = email.strip().lower()
     if len(email) > 180 or not re.fullmatch(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", email) or email == owner.email.lower():
         raise ValueError('Enter a staff email different from the owner email.')
@@ -117,7 +122,7 @@ def _invite_locked(owner, email, role, label, finance, ids, *, now):
         expires_at=min(now+timedelta(days=2), access.subscription.current_period_end), created_at=now)
     db.session.add(invitation); db.session.flush()
     for bid in sorted(ids): db.session.add(StaffInvitationBusiness(invitation_id=invitation.id, business_id=bid))
-    audit(owner.id, owner.id, 'STAFF_INVITED', invitation=invitation)
+    audit(owner.id, actor.id, 'STAFF_INVITED', invitation=invitation)
     return invitation, raw
 
 
@@ -186,22 +191,27 @@ def accept(raw, actor, full_name, password, confirm, *, now):
     return user, membership
 
 
-def change(owner, membership_id, role, label, finance, ids, *, now):
+def change(owner, membership_id, role, label, finance, ids, *, now, actor=None):
     lock_owner(owner.id)
     now = max(now, datetime.utcnow())
     _, choices = owner_access(owner, now=now)
+    actor = owner if actor is None else actor
+    from app.staff import delegation_access as delegated
+    auth, _ = delegated.mutation(owner,actor,now=now)
     row = StaffMembership.query.filter_by(id=membership_id, owner_id=owner.id, state='active').first()
     if not row: raise ValueError('Active membership is unavailable.')
-    role_service._initialize_locked(owner.id)
+    if auth.owner: role_service._initialize_locked(owner.id)
     values = fields(role, label, finance, ids, choices)
-    audit(owner.id, owner.id, 'STAFF_CHANGE_BEFORE', membership=row)
+    delegated.target(auth,row)
+    auth.assignment(role_service.resolve(owner.id,values[0]).permissions,values[2],target_user=row.user_id)
+    audit(owner.id, actor.id, 'STAFF_CHANGE_BEFORE', membership=row)
     row.role, row.duty_label, assigned = values
     StaffMembershipBusiness.query.filter_by(membership_id=row.id).delete(synchronize_session=False)
     for bid in sorted(assigned): db.session.add(StaffMembershipBusiness(membership_id=row.id, business_id=bid))
-    db.session.flush(); audit(owner.id, owner.id, 'STAFF_CHANGED', membership=row)
+    db.session.flush(); audit(owner.id, actor.id, 'STAFF_CHANGED', membership=row)
 
 
-def revoke(owner, kind, identifier, *, now):
+def revoke(owner, kind, identifier, *, now, actor=None):
     lock_owner(owner.id)
     now = max(now, datetime.utcnow())
     owner_access(owner, now=now)
@@ -209,13 +219,18 @@ def revoke(owner, kind, identifier, *, now):
     if model is None: raise ValueError('Choose an invitation or membership.')
     row = model.query.filter_by(id=identifier, owner_id=owner.id).first()
     if not row: raise ValueError('Staff record is unavailable.')
+    actor = owner if actor is None else actor
+    from app.staff import delegation_access as delegated
+    auth, _ = delegated.mutation(owner,actor,now=now)
+    delegated.target(auth,row)
     if row.state == 'revoked': return
     if kind == 'invitation' and row.state != 'pending': raise ValueError('Invitation is no longer pending.')
     row.state, row.revoked_at = 'revoked', now
-    audit(owner.id, owner.id, 'STAFF_REVOKED', **{kind:row})
+    audit(owner.id, actor.id, 'STAFF_REVOKED', **{kind:row})
 
 
-def reconfirm(owner, identifier, *, now):
+def reconfirm(owner, identifier, *, now, actor=None):
+    if actor is not None and actor.id != owner.id: raise ValueError('Only the owner may restore Pro access.')
     lock_owner(owner.id)
     now = max(now, datetime.utcnow())
     access, choices = owner_access(owner, now=now)
@@ -245,15 +260,19 @@ def can_operate(*args, **kwargs):
     return False
 
 
-def resend(owner, identifier, *, now):
+def resend(owner, identifier, *, now, actor=None):
     """Explicit replacement, not an automatic retry; caller commits before SMTP."""
     lock_owner(owner.id); now = max(now, datetime.utcnow()); owner_access(owner, now=now)
     row = StaffInvitation.query.filter_by(id=identifier, owner_id=owner.id, state='pending').first()
     if not row: raise ValueError('Pending invitation is unavailable.')
+    actor = owner if actor is None else actor
+    from app.staff import delegation_access as delegated
+    auth, _ = delegated.mutation(owner,actor,now=now)
+    delegated.target(auth,row)
     if row.delivery_status == 'sending' and row.delivery_attempted_at and now < row.delivery_attempted_at + timedelta(minutes=2):
         raise ValueError('Delivery is still in progress; review later.')
     ids = [r.business_id for r in StaffInvitationBusiness.query.filter_by(invitation_id=row.id)]
     row.state, row.revoked_at = 'revoked', now
-    audit(owner.id, owner.id, 'STAFF_INVITE_REPLACED', invitation=row)
+    audit(owner.id, actor.id, 'STAFF_INVITE_REPLACED', invitation=row)
     db.session.flush()
-    return _invite_locked(owner, row.email, row.role, row.duty_label, False, ids, now=now)
+    return _invite_locked(owner, row.email, row.role, row.duty_label, False, ids, now=now, actor=actor)

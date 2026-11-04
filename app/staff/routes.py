@@ -115,3 +115,91 @@ def protect(response):
     response.headers['X-Frame-Options']='DENY'
     response.headers['Content-Security-Policy']="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'"
     return response
+
+
+def delegated_context(owner, user, now):
+    from app.staff import delegation_access as delegated, delegation as policy
+    auth, choices = delegated.mutation(owner,user,now=now)
+    all_roles = role_service.options(owner.id)
+    roles = {}
+    for key, value in all_roles.items():
+        try:
+            if not auth.owner:
+                auth.assignment(value['permissions'],auth.businesses)
+                delegated.shared(auth,key,value['permissions'],value['permissions'])
+            roles[key]=value
+        except ValueError: continue
+    members=[]; invitations=[]; assigned={}; names={}
+    for row in StaffMembership.query.filter_by(owner_id=owner.id).order_by(StaffMembership.id).all():
+        try: delegated.target(auth,row)
+        except ValueError: continue
+        members.append(row);assigned[row.id]=delegated.assignments(row)
+        person=db.session.get(User,row.user_id);names[row.user_id]=person.full_name
+    for row in StaffInvitation.query.filter_by(owner_id=owner.id).order_by(StaffInvitation.id.desc()).all():
+        try: delegated.target(auth,row)
+        except ValueError: continue
+        invitations.append(row)
+    return dict(authority=auth,team_owner=owner,choices=choices,roles=roles,
+        role_count=len(all_roles),seats=service.seat_count(owner.id,now=now),
+        catalogue=role_service.CATALOGUE,authority_catalogue=policy.CATALOGUE,
+        memberships=members,invitations=invitations,assignments=assigned,names=names)
+
+
+@staff_bp.get('/teams')
+@login_required
+def teams():
+    from app.staff import delegation_access as delegated
+    candidates={actor().id}
+    candidates.update(m.owner_id for m in StaffMembership.query.filter_by(user_id=actor().id,state='active'))
+    available=[];now=datetime.utcnow()
+    for owner_id in sorted(candidates):
+        owner=db.session.get(User,owner_id)
+        if not owner:continue
+        try: delegated.mutation(owner,actor(),now=now)
+        except ValueError:continue
+        available.append(owner)
+    return render_template('staff/teams.html',teams=available)
+
+
+@staff_bp.route('/team/<int:owner_id>',methods=['GET','POST'])
+@login_required
+def team_manage(owner_id):
+    owner=db.session.get(User,owner_id);user=actor();now=datetime.utcnow()
+    if not owner:abort(403)
+    try:context=delegated_context(owner,user,now)
+    except ValueError:abort(403)
+    if request.method=='GET':return render_template('staff/team_manage.html',**context)
+    raw=None;invitation_id=None
+    try:
+        if user.id!=owner.id and ('authority_permissions' in request.form):
+            raise ValueError('Only the owner may grant administration or export authority.')
+        action=request.form.get('action')
+        if action=='role_save':
+            role_service.save(owner,request.form.get('role_key') or None,request.form.get('role_name',''),
+                request.form.getlist('permissions'),now=now,actor=user,
+                authority_permissions=request.form.getlist('authority_permissions') if user.id==owner.id else None)
+            # A Manager posting authority fields must fail, not have them ignored.
+        elif action=='role_remove':role_service.remove(owner,request.form.get('role_key'),request.form.get('replacement') or None,now=now,actor=user)
+        elif action=='invite':
+            row,raw=service.invite(owner,request.form.get('email',''),request.form.get('role',''),request.form.get('duty_label',''),False,request.form.getlist('business_ids'),now=now,actor=user);invitation_id=row.id
+        elif action=='resend':
+            row,raw=service.resend(owner,int(request.form['id']),now=now,actor=user);invitation_id=row.id
+        elif action=='change':service.change(owner,int(request.form['id']),request.form.get('role',''),request.form.get('duty_label',''),False,request.form.getlist('business_ids'),now=now,actor=user)
+        elif action=='revoke':service.revoke(owner,request.form.get('kind'),int(request.form['id']),now=now,actor=user)
+        elif action=='reconfirm':
+            if request.form.get('confirm')!='on':raise ValueError('Confirmation required.')
+            service.reconfirm(owner,int(request.form['id']),now=now,actor=user)
+        else:raise ValueError('Action unavailable.')
+        db.session.commit()
+    except (ValueError,KeyError,IntegrityError):
+        db.session.rollback()
+        try:context=delegated_context(owner,user,datetime.utcnow())
+        except ValueError:abort(403)
+        return render_template('staff/team_manage.html',error='Change not saved. Check your permissions, business scope and available seats or roles.',**context),400
+    if raw:
+        try:status=delivery.deliver(invitation_id,raw,actor_id=user.id)
+        except Exception:db.session.rollback();status='unknown'
+        try:context=delegated_context(owner,user,datetime.utcnow())
+        except ValueError:abort(403)
+        return render_template('staff/team_manage.html',delivery_result=status,**context)
+    return redirect(url_for('staff.team_manage',owner_id=owner.id))
