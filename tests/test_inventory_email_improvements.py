@@ -19,6 +19,16 @@ from tests.test_multi_business import seed, login
 from werkzeug.datastructures import MultiDict
 
 
+@pytest.fixture(autouse=True)
+def existing_delivery_environment(monkeypatch):
+    # Keep these existing transport tests on the legacy production dispatch path.
+    # The real staging/production policy is exercised in its dedicated test file.
+    from app.notifications.staging_email_policy import Policy
+    selected = lambda now=None: Policy('production')
+    monkeypatch.setattr('app.notifications.staging_email_policy.policy', selected)
+    monkeypatch.setattr('app.notifications.email_outbox.policy', selected)
+
+
 def configure(app):
     app.config.update(INVENTORY_EMAILS_ENABLED=True, INVENTORY_EMAIL_BASE_URL='https://stock-bridge-staging.vercel.app',
         INVENTORY_EMAIL_DISPATCH_SECRET='test-dispatch-token-' + 'x' * 32)
