@@ -22,7 +22,7 @@ def env():
 def approval(tmp_path,mode='staff'):
     p=tmp_path/'file.py';p.write_text('synthetic source\n');files={'helper':p}
     before,after,cases=g.MODES[mode]
-    data=dict(schema=1,approved=True,mode=mode,target=dict(g.TARGET),run_id=g.RUN,
+    data=dict(schema=2,staff_integration_commit=g.INTEGRATION,scenario_revision=g.REVISION,starting_state_sha256='d'*64,approved=True,mode=mode,target=dict(g.TARGET),run_id=g.RUN,
         repository=str(tmp_path),baseline_sha256='c'*64,source_commit='b'*40,application_base_commit=g.BASE,
         schema_before=before,schema_after=after,cases=list(cases),database_oid=1000,role_oid=1001,
         package_provenance_approved=True,isolation_mode='application-guards-only',

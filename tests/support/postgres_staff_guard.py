@@ -6,6 +6,9 @@ import re
 RUN = '7e10a9c42b6d830f'
 NAME = 'stockbridge_test_' + RUN
 BASE = 'b18fee6c1a9aec56fb9c92756f4c39ff2c82ba2c'
+INTEGRATION = '934ea9b732489885bba6e609114da8dbbdba240f'
+REVISION = 'staff-manager-v2'
+MANAGER_CASES = ('G01','G02','G03','G04','G05','G06','C01','C02','C03','C04','C05','C06','B01','B02','B03','B04')
 TARGET = dict(host='127.0.0.1', port=55432, dbname=NAME, user=NAME)
 V17 = '0017_transaction_submission'
 V18 = '0018_staff_foundation'
@@ -17,6 +20,7 @@ MODES = {
     'migration-rollback': (V17, V17, ('M00',)),
     'migrate-0018': (V17, V18, ('M01',)),
     'staff': (V18, V18, CASES[2:]),
+    'manager': (V18,V18,MANAGER_CASES),
 }
 ACK = 'reviewed-staff-only'
 RUNTIME = None  # Set only by the separately authorized launcher, never by pytest env alone.
@@ -47,18 +51,22 @@ def target_url(env):
 
 def authorize(auth, mode, root, files, *, source_commit):
     """No approval generated here; all fields bind externally reviewed evidence."""
-    require(isinstance(auth,dict) and type(auth.get('schema')) is int and auth.get('schema') == 1 and auth.get('approved') is True, 'approval-required')
+    require(isinstance(auth,dict) and type(auth.get('schema')) is int and auth.get('schema') == 2 and auth.get('approved') is True, 'approval-required')
     require(mode in MODES and auth.get('mode') == mode, 'stage-rejected')
     require(auth.get('target') == TARGET and auth.get('run_id') == RUN, 'target-rejected')
     require(auth.get('repository') == str(Path(root).resolve()), 'source-path-rejected')
     require(isinstance(source_commit,str) and re.fullmatch('[0-9a-f]{40}',source_commit)
             and auth.get('source_commit') == source_commit and source_commit != BASE, 'source-rejected')
     require(auth.get('application_base_commit') == BASE, 'base-rejected')
+    require(auth.get('staff_integration_commit') == INTEGRATION and auth.get('scenario_revision') == REVISION
+            and source_commit != INTEGRATION, 'integration-review-required')
     before,after,cases=MODES[mode]
     require(auth.get('schema_before') == before and auth.get('schema_after') == after
             and auth.get('cases') == list(cases), 'schema-or-selection-rejected')
     if mode in ('migration-rollback','migrate-0018','staff'):
         require(isinstance(auth.get('baseline_sha256'),str) and re.fullmatch('[0-9a-f]{64}',auth['baseline_sha256']), 'baseline-hash-required')
+    if mode=='manager':
+        require(isinstance(auth.get('starting_state_sha256'),str) and re.fullmatch('[0-9a-f]{64}',auth['starting_state_sha256']), 'starting-state-required')
     require(auth.get('package_provenance_approved') is True, 'package-provenance-unapproved')
     require('network_isolation_approved' not in auth and auth.get('isolation_mode') == 'application-guards-only'
             and auth.get('os_outbound_enforcement') == 'unverified'

@@ -14,10 +14,14 @@ def owner_lock(statement):
             and ';' not in text and '--' not in text)
 
 
+def staff_path(path, owner_id):
+    return isinstance(path,str) and path in ('/staff/manage','/staff/invite','/staff/team/'+str(owner_id))
+
+
 def concurrent_posts(engine, clients, paths, payloads, observer, *, owner_id,
                      rollback=False, baseline_check=None, timeout=30, fail_audit_number=1, evidence=None):
     if (len(clients)!=2 or len(paths)!=2 or len(payloads)!=2 or
-            any(p not in ('/staff/manage','/staff/invite') for p in paths) or
+            any(not staff_path(p,owner_id) for p in paths) or
             type(owner_id) is not int or owner_id<=0 or type(timeout) not in (int,float)
             or not .1<=timeout<=30 or (rollback and baseline_check is None)):
         raise ValueError('Invalid Staff race configuration')
