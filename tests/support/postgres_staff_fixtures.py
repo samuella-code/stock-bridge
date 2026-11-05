@@ -73,9 +73,9 @@ class Runtime:
                 self.stack.enter_context(patch(path,side_effect=deny))
             from app import create_app
             from sqlalchemy.pool import NullPool
-            from tests.support.postgres_connections import connection_policy
+            from tests.support.postgres_staff_schema import staff_application_policy
             config=dict(TESTING=True,SECRET_KEY='staff-pg-synthetic-only',SQLALCHEMY_DATABASE_URI=target_url(self.env),
-                SQLALCHEMY_BINDS={},SQLALCHEMY_ENGINE_OPTIONS=dict(poolclass=NullPool,connect_args=connection_policy(self.env)),
+                SQLALCHEMY_BINDS={},SQLALCHEMY_ENGINE_OPTIONS=dict(poolclass=NullPool,connect_args=staff_application_policy(self.env)),
                 SUBSCRIPTIONS_ENABLED=True,BILLING_PROVIDER_ENABLED=False,INVENTORY_EMAILS_ENABLED=False,
                 INVENTORY_EMAIL_TRIGGER_URL='',INVENTORY_EMAIL_TRIGGER_SECRET='',STAFF_INVITATION_EMAIL_ENABLED='',
                 BUSINESS_IMAGE_STORAGE='disabled',SMTP_HOST='',SMTP_FROM_EMAIL='',SMTP_PASSWORD='',
