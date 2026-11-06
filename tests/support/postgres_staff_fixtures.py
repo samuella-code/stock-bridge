@@ -122,7 +122,7 @@ class Runtime:
     def migrate17(self):
         self.preflight('empty');app=self.app()
         from flask_migrate import upgrade
-        with app.app_context():upgrade(revision=V17)
+        with app.app_context():upgrade(directory=str((self.root/'migrations').resolve()),revision=V17)
         self.preflight(V17)
 
     def seed_baseline(self):
@@ -177,7 +177,7 @@ def migration_case(rt, case):
                     if name=='staff_role':raise ValueError('Synthetic migration rollback')
                     return result
                 try:
-                    with patch.object(Operations,'create_table',fail):upgrade(revision=V18)
+                    with patch.object(Operations,'create_table',fail):upgrade(directory=str((rt.root/'migrations').resolve()),revision=V18)
                 except ValueError:pass
                 else:raise AssertionError('Expected migration failure')
                 require(bool(rollback),'migration-rollback-unconfirmed')
@@ -185,7 +185,7 @@ def migration_case(rt, case):
                 with rt.connection() as conn:
                     require(conn.execute("SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='user' AND column_name='staff_only'").fetchone()[0]==0,'migration-column-survived')
             else:
-                upgrade(revision=V18);rt.preflight(V18)
+                upgrade(directory=str((rt.root/'migrations').resolve()),revision=V18);rt.preflight(V18)
                 with rt.connection() as conn:
                     require(conn.execute('SELECT count(*) FROM public."user" WHERE staff_only IS NOT FALSE').fetchone()[0]==0,'legacy-user-changed')
                     for table in STAFF_TABLES:require(conn.execute('SELECT count(*) FROM public.'+table).fetchone()[0]==0,'staff-schema-not-empty')
