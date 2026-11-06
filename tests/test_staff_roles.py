@@ -132,7 +132,7 @@ def test_role_ui_owner_edit_escaping_csrf_and_maximum_json_schema(app):
     response = client.post('/staff/manage', data=dict(action='role_save', role_name='<script>'+('X'*60), permissions=list(roles.CATALOGUE)))
     assert response.status_code == 302
     page = client.get('/staff/manage'); assert b'&lt;script&gt;' in page.data
-    assert b'Editing a shared role affects every membership' in page.data
+    assert b'Editing a role changes it for every employee and pending invitation using that role.' in page.data
     role = StaffRole.query.filter(StaffRole.key.notin_(roles.TEMPLATES)).one()
     roles.save(owner, role.key, 'N'*80, list(roles.CATALOGUE), now=NOW); db.session.commit()
     event = StaffAuditEvent.query.join(AuditLog).filter(AuditLog.action == 'STAFF_ROLE_CHANGED').one()
@@ -259,4 +259,4 @@ def test_rendered_permission_checkboxes_match_starter_defaults(app):
     assert parser.rows[''] == set()  # custom role starts with all permissions off
     assert b'Create products' in response.data and b'Edit product details' in response.data
     assert b'View restocking receipts and history' in response.data
-    assert b'Product editing does not grant manual stock adjustments' in response.data
+    assert b'Editing product details does not allow stock adjustments or unrestricted financial access.' in response.data

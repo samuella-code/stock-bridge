@@ -229,7 +229,7 @@ def test_owner_only_management_csrf_auditing_and_no_token_persistence(app):
     assert client.post('/staff/manage',data={'action':'invite'}).status_code==400
     app.config['WTF_CSRF_ENABLED']=False
     response=client.post('/staff/manage',data={'action':'invite','email':'ui@example.invalid','role':'manager','business_ids':[shops[0].id]})
-    assert response.status_code==200 and b'Invitation email status: disabled' in response.data
+    assert response.status_code==200 and b'<h2>Email delivery is off</h2>' in response.data
     assert b'#token=' not in response.data
     assert response.headers['Cache-Control']=='private, no-store'
     assert response.headers['Referrer-Policy']=='no-referrer'
@@ -472,7 +472,7 @@ def test_staff_verification_flow_does_not_send_or_create_owner_data(app):
         client=app.test_client();login(client,user)
         assert client.get('/staff/').status_code==302
         pending=client.get('/auth/verify-pending')
-        assert pending.status_code==200 and b'No email was automatically sent' in pending.data
+        assert pending.status_code==200 and b'Accepting the invitation did not send a verification email.' in pending.data
         complete_verification(user)
         assert s.member_businesses(member,user,now=NOW)
     assert not Business.query.filter_by(user_id=user.id).first()

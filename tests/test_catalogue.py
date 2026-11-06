@@ -368,7 +368,9 @@ def test_product_catalogue_migration_preserves_existing_data(tmp_path):
         db.session.execute(text("INSERT INTO payment (id,business_id,customer_email,reference,provider,product,amount_kobo,currency,status,created_at) VALUES (1,1,'admin@example.com','old','paystack','lifetime',300000,'NGN','success',CURRENT_TIMESTAMP)"))
         db.session.commit();upgrade(revision="0012_product_catalogue")
         assert Product.query.one().stock_quantity==20 and Product.query.one().barcode is None
-        assert User.query.one().password_hash=='unchanged' and User.query.one().admin_auth_version==7
+        # The fixture ends at 0012; later User columns are intentionally absent.
+        owner=db.session.query(User.password_hash,User.admin_auth_version).one()
+        assert owner.password_hash=='unchanged' and owner.admin_auth_version==7
         assert db.session.execute(text('SELECT status FROM payment')).scalar()=='success'
         assert 'uq_product_business_barcode' in {c['name'] for c in inspect(db.engine).get_unique_constraints('product')}
         assert {'ix_product_business_active_name','ix_product_business_active_category'} <= {i['name'] for i in inspect(db.engine).get_indexes('product')}

@@ -131,7 +131,7 @@ def test_owner_http_response_contains_status_only_and_resend_requires_owner_csrf
     def send(subject, recipient, body): captured.append(body); return True
     with patch.dict('os.environ', environ, clear=True), patch('app.staff.delivery.email_service._send_email', side_effect=send):
         response = client.post('/staff/manage', data=dict(action='invite', email='staff@example.invalid', role='manager', business_ids=[shops[0].id]))
-    assert response.status_code == 200 and b'Invitation email status: sent' in response.data
+    assert response.status_code == 200 and b'<h2>Email sent</h2>' in response.data
     secret = captured[0].split('#token=')[1].split('\n')[0]
     assert secret.encode() not in response.data and b'#token=' not in response.data
     with client.session_transaction() as state: assert secret not in json.dumps(dict(state))
@@ -166,7 +166,7 @@ def test_http_resend_emails_replacement_only_without_adding_a_seat(app):
     with patch.dict('os.environ',environ,clear=True), patch('app.staff.delivery.email_service._send_email',
             side_effect=lambda subject,recipient,body: bodies.append((recipient,body)) or False):
         response = client.post('/staff/manage',data=dict(action='resend',id=old.id))
-    assert response.status_code==200 and b'Invitation email status: failed' in response.data
+    assert response.status_code==200 and b'<h2>Email could not be sent</h2>' in response.data
     assert b'#token=' not in response.data and old.state=='revoked'
     assert bodies[0][0]==old.email and raw not in bodies[0][1]
     assert service.seat_count(owner.id,now=NOW)==1

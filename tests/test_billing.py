@@ -313,7 +313,8 @@ def test_readonly_preflight_and_migration_preserve_verified_lifetime(tmp_path):
         upgrade();a=db.session.get(AccountBilling,1)
         assert a.legacy_payment_id==1 and not a.trial_eligible and Payment.query.one().reference=='old'
         assert db.session.get(User,2).password_hash=='admin-preserved' and db.session.get(User,2).admin_auth_version==7
-        assert db.session.execute(text('SELECT version_num FROM alembic_version')).scalar()=='0017_transaction_submission'
+        assert db.session.execute(text('SELECT version_num FROM alembic_version')).scalar()=='0018_staff_foundation'
+        assert db.session.get(User,1).staff_only is False and db.session.get(User,2).staff_only is False
         assert {'account_billing','recurring_subscription','billing_event','social_identity'} <= set(inspect(db.engine).get_table_names())
         assert {'notification','notification_preference'} <= set(inspect(db.engine).get_table_names())
         assert db.session.execute(text('SELECT logo_key FROM business WHERE id=1')).scalar() is None
