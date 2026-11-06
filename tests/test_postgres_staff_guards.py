@@ -30,6 +30,8 @@ def approval(tmp_path,mode='staff'):
         files={'helper':g.sha(p)},source_files={'file.py':g.sha(p)},relations={'empty':[],g.V17:['public.user'],g.V18:['public.user','public.staff_role']})
     if mode in ('i01-state','i01-continuation'):
         data['continuation_namespace']='i01-cont-00000001'
+    if mode in ('staff-remaining-state','staff-remaining'):
+        data['continuation_namespace']='staff-cont-00000001'
     return data,files
 
 

@@ -13,7 +13,10 @@ TARGET = dict(host='127.0.0.1', port=55432, dbname=NAME, user=NAME)
 V17 = '0017_transaction_submission'
 V18 = '0018_staff_foundation'
 CASES = ('M00','M01','S01','R01','R02','I01','I02','A01','A02','X01','X02','D01','D02','D03','F01','F02','F03','F04')
+REMAINING_CASES = ('I02','A01','A02','X01','X02','D01','D02','D03','F01','F02','F03','F04')
 MODES = {
+    'staff-remaining-state': (V18,V18,()),
+    'staff-remaining': (V18,V18,REMAINING_CASES),
     'preflight': ('empty', 'empty', ()),
     'i01-state': (V18,V18,()),
     'i01-continuation': (V18,V18,('I01',)),
@@ -69,7 +72,9 @@ def authorize(auth, mode, root, files, *, source_commit):
         require(isinstance(auth.get('baseline_sha256'),str) and re.fullmatch('[0-9a-f]{64}',auth['baseline_sha256']), 'baseline-hash-required')
     if mode in ('i01-state','i01-continuation'):
         require(isinstance(auth.get('continuation_namespace'),str) and re.fullmatch(r'i01-cont-[a-f0-9]{8}',auth['continuation_namespace']), 'continuation-namespace-required')
-    if mode=='i01-continuation':
+    if mode in ('staff-remaining-state','staff-remaining'):
+        require(isinstance(auth.get('continuation_namespace'),str) and re.fullmatch(r'staff-cont-[a-f0-9]{8}',auth['continuation_namespace']), 'continuation-namespace-required')
+    if mode in ('i01-continuation','staff-remaining'):
         require(isinstance(auth.get('starting_state_sha256'),str) and re.fullmatch('[0-9a-f]{64}',auth['starting_state_sha256']), 'starting-state-required')
     if mode=='manager':
         require(isinstance(auth.get('starting_state_sha256'),str) and re.fullmatch('[0-9a-f]{64}',auth['starting_state_sha256']), 'starting-state-required')

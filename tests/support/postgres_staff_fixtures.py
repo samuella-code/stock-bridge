@@ -18,6 +18,11 @@ STAFF_TABLES = ('staff_role','staff_membership','staff_invitation','staff_member
 BASE_TABLES = ('user','business','account_billing','payment','recurring_subscription','billing_event','product','sale','sale_item','expense','transaction_submission','audit_log')
 
 
+EXPECTED_STATUSES = {'R01':[302,302],'R02':[302,400],'I01':[200,400],'I02':[302,400],'A01':[302,400],
+        'A02':[302,400],'X01':[200,400],'X02':[302,400],'D01':[302,302],'D02':[302,302],
+        'D03':[400,302],'F01':[400,200],'F02':[400,302],'F03':[400,302],'F04':[400,302]}
+
+
 class Runtime:
     def __init__(self, auth, password, guards, source_check):
         self.auth,self.password,self.guards,self.check_source=auth,password,guards,source_check
@@ -218,7 +223,10 @@ def login(app,email):
 
 
 def seed_case(rt, case, *, namespace=None):
-    require(namespace is None or (case=='I01' and type(namespace) is str and re.fullmatch(r'i01-cont-[a-f0-9]{8}',namespace)), 'continuation-namespace-rejected')
+    from tests.support.postgres_staff_guard import REMAINING_CASES
+    require(namespace is None or (type(namespace) is str and (
+        (case=='I01' and re.fullmatch(r'i01-cont-[a-f0-9]{8}',namespace))
+        or (case in REMAINING_CASES and re.fullmatch(r'staff-cont-[a-f0-9]{8}-'+case.lower(),namespace)))), 'continuation-namespace-rejected')
     label=case if namespace is None else namespace
     from app import db
     from app.models import User,Business,AccountBilling,RecurringSubscription,StaffMembership,StaffMembershipBusiness
@@ -243,7 +251,7 @@ def seed_case(rt, case, *, namespace=None):
         if occupied: db.session.commit()  # Starting seats must survive setup context teardown.
         invitation=None;raw=None;invitee=None
         if case not in ('R01','R02','I01','F01','S01'):
-            email=case.lower()+'-employee@example.invalid'
+            email=label.lower()+'-employee@example.invalid'
             if case=='A01':
                 invitee=User(full_name='Existing staff',email=email,email_verified_at=T,staff_only=True);invitee.set_password(PASSWORD);db.session.add(invitee)
             db.session.commit()
@@ -294,7 +302,7 @@ def race_case(rt, case, *, namespace=None):
         clients=[owner_client,second_owner];paths=['/staff/manage']*2
         payloads=[invite(c,f'{label}-{n}-invite@example.invalid') for n,c in enumerate(clients)]
     elif case=='I02':
-        c,p=acceptance();clients=[c,owner_client];paths=['/staff/invite','/staff/manage'];payloads=[p,invite(owner_client,'i02-extra@example.invalid')]
+        c,p=acceptance();clients=[c,owner_client];paths=['/staff/invite','/staff/manage'];payloads=[p,invite(owner_client,(label.lower()+'-extra@example.invalid') if namespace is not None else 'i02-extra@example.invalid')]
     elif case in ('A01','A02','F02'):
         c,p=acceptance();d,q=acceptance();clients=[c,d];paths=['/staff/invite']*2;payloads=[p,q]
     else:
@@ -304,7 +312,10 @@ def race_case(rt, case, *, namespace=None):
         if case in ('X02','D02'):clients.reverse();paths.reverse();payloads.reverse()
     before=state(rt,owner);rollback=case.startswith('F');proof={}
     if namespace is not None:
-        require(before['seats']==4 and len(before['staff_membership'])==4 and not before['staff_invitation'], 'continuation-starting-seats-invalid')
+        occupied=seed['occupied'] if case!='I01' else 4
+        pending=0 if case in ('I01','F01') else 1
+        require(before['seats']==occupied+pending and len(before['staff_membership'])==occupied
+            and len(before['staff_invitation'])==pending, 'continuation-starting-seats-invalid')
     def baseline():
         fresh=state(rt,owner)
         require(fresh['pid'] not in proof['workers']+[proof['observer']],'verifier-backend-not-independent')
@@ -313,10 +324,7 @@ def race_case(rt, case, *, namespace=None):
         with rt.connection() as observer:
             statuses=concurrent_posts(db.engine,clients,paths,payloads,observer,owner_id=owner,
                 rollback=rollback,baseline_check=baseline if rollback else None,fail_audit_number=2 if case=='F03' else 1,evidence=proof)
-    expected={'R01':[302,302],'R02':[302,400],'I01':[200,400],'I02':[302,400],'A01':[302,400],
-        'A02':[302,400],'X01':[200,400],'X02':[302,400],'D01':[302,302],'D02':[302,302],
-        'D03':[400,302],'F01':[400,200],'F02':[400,302],'F03':[400,302],'F04':[400,302]}
-    require_staff_statuses(case,statuses,expected[case])
+    require_staff_statuses(case,statuses,EXPECTED_STATUSES[case])
     after=state(rt,owner)
     require(after['pid'] not in proof['workers']+[proof['observer']],'fresh-backend-not-independent')
     roles=after['staff_role'];members=after['staff_membership'];invitations=after['staff_invitation']
