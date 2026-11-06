@@ -238,6 +238,7 @@ def seed_case(rt, case):
             db.session.add(user);db.session.flush()
             member=StaffMembership(owner_id=owner.id,user_id=user.id,role='salesperson',state='active',duty_label='',grant_event_id=0,grant_started_at=T,grant_pro_start=sub.current_period_start,grant_subscription_id=sub.id,access_until=sub.current_period_end)
             db.session.add(member);db.session.flush();db.session.add(StaffMembershipBusiness(membership_id=member.id,business_id=shop.id))
+        if occupied: db.session.commit()  # Starting seats must survive setup context teardown.
         invitation=None;raw=None;invitee=None
         if case not in ('R01','R02','I01','F01','S01'):
             email=case.lower()+'-employee@example.invalid'
