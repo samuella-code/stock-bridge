@@ -198,7 +198,7 @@ Four new configuration declarations do not change any environment setting:
 
 Initial live gate permits ONLY positively identified staging project
 prj_yeCWXPd44jShVUGHAgJu9khMjOMv, VERCEL=1, VERCEL_ENV=preview,
-VERCEL_TARGET_ENV=staging, branch release/staging-phase6 and an exact deployed
+VERCEL_TARGET_ENV=preview, branch release/staging-phase6 and an exact deployed
 SHA match. Link origin is pinned HTTPS and never derived from Host headers.
 Production delivery is intentionally unavailable through this initial gate; its
 policy requires separate review. No configuration values or credentials are
@@ -321,8 +321,11 @@ Read-only Vercel deployment/project evidence on 2026-10-29 identifies
 release/staging-phase6, commit b18fee6c1a9aec56fb9c92756f4c39ff2c82ba2c,
 and target staging. The public system-variable contract distinguishes VERCEL_ENV
 (production/preview/development) from VERCEL_TARGET_ENV (also custom names).
-The staff gate now requires the documented non-production pair preview/staging;
-it does not accept both preview/staging and preview/preview as alternatives.
+The original staff gate required preview/staging. The 2026-11-06 deployed
+release uses the standard preview target, confirmed by its successful exact
+Paystack identity gate. Staff delivery now requires preview/preview only;
+preview/staging is rejected. Project, branch, approved SHA, pinned origin and
+recipient allowlist remain mandatory.
 Runtime values were not queried and custom-environment lookup returned 404,
 including with the project team scope: runtime exposure/overrides remain an
 activation prerequisite. Missing/conflicting/production identities fail closed.
