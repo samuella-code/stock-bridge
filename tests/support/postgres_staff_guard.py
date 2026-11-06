@@ -15,6 +15,8 @@ V18 = '0018_staff_foundation'
 CASES = ('M00','M01','S01','R01','R02','I01','I02','A01','A02','X01','X02','D01','D02','D03','F01','F02','F03','F04')
 MODES = {
     'preflight': ('empty', 'empty', ()),
+    'i01-state': (V18,V18,()),
+    'i01-continuation': (V18,V18,('I01',)),
     'migrate-0017': ('empty', V17, ()),
     'seed-baseline': (V17, V17, ()),
     'migration-rollback': (V17, V17, ('M00',)),
@@ -65,6 +67,10 @@ def authorize(auth, mode, root, files, *, source_commit):
             and auth.get('cases') == list(cases), 'schema-or-selection-rejected')
     if mode in ('migration-rollback','migrate-0018','staff'):
         require(isinstance(auth.get('baseline_sha256'),str) and re.fullmatch('[0-9a-f]{64}',auth['baseline_sha256']), 'baseline-hash-required')
+    if mode in ('i01-state','i01-continuation'):
+        require(isinstance(auth.get('continuation_namespace'),str) and re.fullmatch(r'i01-cont-[a-f0-9]{8}',auth['continuation_namespace']), 'continuation-namespace-required')
+    if mode=='i01-continuation':
+        require(isinstance(auth.get('starting_state_sha256'),str) and re.fullmatch('[0-9a-f]{64}',auth['starting_state_sha256']), 'starting-state-required')
     if mode=='manager':
         require(isinstance(auth.get('starting_state_sha256'),str) and re.fullmatch('[0-9a-f]{64}',auth['starting_state_sha256']), 'starting-state-required')
     require(auth.get('package_provenance_approved') is True, 'package-provenance-unapproved')

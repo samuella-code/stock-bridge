@@ -28,6 +28,8 @@ def approval(tmp_path,mode='staff'):
         package_provenance_approved=True,isolation_mode='application-guards-only',
         os_outbound_enforcement='unverified',application_isolation_risk_accepted=True,
         files={'helper':g.sha(p)},source_files={'file.py':g.sha(p)},relations={'empty':[],g.V17:['public.user'],g.V18:['public.user','public.staff_role']})
+    if mode in ('i01-state','i01-continuation'):
+        data['continuation_namespace']='i01-cont-00000001'
     return data,files
 
 

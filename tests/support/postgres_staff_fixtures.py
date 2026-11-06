@@ -217,15 +217,17 @@ def login(app,email):
     require(response.status_code==302,'synthetic-login-failed');return client
 
 
-def seed_case(rt, case):
+def seed_case(rt, case, *, namespace=None):
+    require(namespace is None or (case=='I01' and type(namespace) is str and re.fullmatch(r'i01-cont-[a-f0-9]{8}',namespace)), 'continuation-namespace-rejected')
+    label=case if namespace is None else namespace
     from app import db
     from app.models import User,Business,AccountBilling,RecurringSubscription,StaffMembership,StaffMembershipBusiness
     from app.staff import service,roles
     app=rt.app()
     with app.app_context():
-        owner=User(full_name='Staff race owner',email=case.lower()+'-owner@example.invalid',email_verified_at=T);owner.set_password(PASSWORD)
+        owner=User(full_name='Staff race owner',email=label.lower()+'-owner@example.invalid',email_verified_at=T);owner.set_password(PASSWORD)
         db.session.add(owner);db.session.flush()
-        shop=Business(user_id=owner.id,name=case+' shop');db.session.add(shop);db.session.flush()
+        shop=Business(user_id=owner.id,name=label+' shop');db.session.add(shop);db.session.flush()
         db.session.add(AccountBilling(user_id=owner.id,primary_business_id=shop.id))
         sub=RecurringSubscription(user_id=owner.id,business_id=shop.id,plan_code='pro',billing_interval='monthly',amount_kobo=1000000,provider_plan_code='PLN_synthetic',status='active',current_period_start=T-timedelta(days=1),current_period_end=T+timedelta(days=30))
         db.session.add(sub);db.session.commit()
@@ -234,7 +236,7 @@ def seed_case(rt, case):
         if case=='R02':roles.save(owner,None,'Fourth',[],now=T);db.session.commit()
         occupied=4 if case in ('I01','I02','F01') else 3 if case in ('A01','A02') else 0
         for n in range(occupied):
-            user=User(full_name='Occupied staff',email=f'{case}-{n}@example.invalid',password_hash='synthetic-unused',staff_only=True,email_verified_at=T)
+            user=User(full_name='Occupied staff',email=f'{label}-{n}@example.invalid',password_hash='synthetic-unused',staff_only=True,email_verified_at=T)
             db.session.add(user);db.session.flush()
             member=StaffMembership(owner_id=owner.id,user_id=user.id,role='salesperson',state='active',duty_label='',grant_event_id=0,grant_started_at=T,grant_pro_start=sub.current_period_start,grant_subscription_id=sub.id,access_until=sub.current_period_end)
             db.session.add(member);db.session.flush();db.session.add(StaffMembershipBusiness(membership_id=member.id,business_id=shop.id))
@@ -274,10 +276,11 @@ def state(rt, owner):
 def comparable(value):return {k:v for k,v in value.items() if k!='pid'}
 
 
-def race_case(rt, case):
+def race_case(rt, case, *, namespace=None):
     from app import db
     from tests.support.postgres_staff_races import concurrent_posts
-    seed=seed_case(rt,case);app=rt.app();owner=seed['owner']
+    seed=seed_case(rt,case,namespace=namespace);app=rt.app();owner=seed['owner']
+    label=case if namespace is None else namespace
     owner_client=login(app,seed['email']); second_owner=login(app,seed['email'])
     def acceptance():
         client=login(app,seed['employee']) if seed['employee'] else app.test_client()
@@ -289,7 +292,7 @@ def race_case(rt, case):
         payloads=[manage(c,action='role_save',role_name='Custom '+str(n)) for n,c in enumerate(clients)]
     elif case in ('I01','F01'):
         clients=[owner_client,second_owner];paths=['/staff/manage']*2
-        payloads=[invite(c,f'{case}-{n}-invite@example.invalid') for n,c in enumerate(clients)]
+        payloads=[invite(c,f'{label}-{n}-invite@example.invalid') for n,c in enumerate(clients)]
     elif case=='I02':
         c,p=acceptance();clients=[c,owner_client];paths=['/staff/invite','/staff/manage'];payloads=[p,invite(owner_client,'i02-extra@example.invalid')]
     elif case in ('A01','A02','F02'):
@@ -300,6 +303,8 @@ def race_case(rt, case):
         clients=[owner_client,c];paths=['/staff/manage','/staff/invite'];payloads=[operation,p]
         if case in ('X02','D02'):clients.reverse();paths.reverse();payloads.reverse()
     before=state(rt,owner);rollback=case.startswith('F');proof={}
+    if namespace is not None:
+        require(before['seats']==4 and len(before['staff_membership'])==4 and not before['staff_invitation'], 'continuation-starting-seats-invalid')
     def baseline():
         fresh=state(rt,owner)
         require(fresh['pid'] not in proof['workers']+[proof['observer']],'verifier-backend-not-independent')
