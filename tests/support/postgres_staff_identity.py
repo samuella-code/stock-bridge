@@ -38,17 +38,41 @@ def validate_database(snapshot, phase, expected_tables, expected_identity):
     ssl=snapshot.get('transport_ssl')
     if not isinstance(rules,list) or not rules or type(ssl) is not bool: reject('authentication evidence missing')
     validate_hba(snapshot, name)
+    sequences=snapshot.get('sequences')
+    if not isinstance(sequences,list): reject('sequence evidence missing')
     if phase=='empty':
-        if snapshot.get('tables')!=[] or snapshot.get('all_relations')!=[] or snapshot.get('revision') is not None:
+        if snapshot.get('tables')!=[] or snapshot.get('all_relations')!=[] or sequences!=[] or snapshot.get('indexes')!=[] or snapshot.get('revision') is not None:
             reject('database is not empty')
     elif phase in (V17,V18):
         if (not expected_tables or not isinstance(snapshot.get('tables'),list)
                 or set(snapshot['tables'])!=set(expected_tables) or snapshot.get('revision')!=phase):
             reject('migration/table identity mismatch')
         indexes=snapshot.get('indexes')
-        if (not isinstance(indexes,list) or any(not isinstance(i,dict) or i.get('table') not in expected_tables or not isinstance(i.get('name'),str) for i in indexes)
-                or not isinstance(snapshot.get('all_relations'),list)
-                or set(snapshot['all_relations'])!=set(expected_tables)|{i['name'] for i in indexes}):
+        if (not isinstance(indexes,list) or any(not isinstance(i,dict) or i.get('table') not in expected_tables
+                or not isinstance(i.get('name'),str) or not i['name'].startswith('public.') for i in indexes)):
+            reject('unexpected migrated index')
+        sequence_names=[]
+        owned_columns=[]
+        for sequence in sequences:
+            if (not isinstance(sequence,dict)
+                    or set(sequence)!={'name','owner','table','column','table_kind','dependency','identity','default_reference'}
+                    or not isinstance(sequence['name'],str) or not sequence['name'].startswith('public.')
+                    or sequence['owner']!=name or sequence['table'] not in expected_tables
+                    or not isinstance(sequence['column'],str) or not sequence['column']
+                    or sequence['table_kind'] not in ('r','p')
+                    or type(sequence['default_reference']) is not bool
+                    or not ((sequence['dependency']=='a' and sequence['identity']=='' and sequence['default_reference'] is True)
+                        or (sequence['dependency']=='i' and sequence['identity'] in ('a','d')))):
+                reject('unexpected migrated sequence ownership')
+            sequence_names.append(sequence['name'])
+            owned_columns.append((sequence['table'],sequence['column']))
+        index_names=[i['name'] for i in indexes]
+        relations=snapshot.get('all_relations')
+        approved=list(expected_tables)+index_names+sequence_names
+        if (len(set(sequence_names))!=len(sequence_names) or len(set(owned_columns))!=len(owned_columns)
+                or len(set(approved))!=len(approved) or not isinstance(relations,list)
+                or any(not isinstance(r,str) for r in relations) or len(set(relations))!=len(relations)
+                or set(relations)!=set(approved)):
             reject('unexpected migrated relation')
     else: reject('unknown schema phase')
     return True
@@ -84,11 +108,30 @@ def preflight(environ, *, phase, expected_tables, expected_identity):
                 snapshot['schemas']=[r[0] for r in conn.execute("SELECT nspname FROM pg_namespace WHERE nspname NOT IN ('pg_catalog','pg_toast','information_schema') ORDER BY nspname")]
                 snapshot['tables']=[r[0] for r in conn.execute("""SELECT n.nspname||'.'||c.relname FROM pg_class c
                     JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname NOT IN ('pg_catalog','pg_toast','information_schema')
-                    AND c.relkind IN ('r','p','v','m','f','S') ORDER BY 1""")]
+                    AND c.relkind IN ('r','p') ORDER BY 1""")]
                 snapshot['indexes']=[{'name':r[0],'table':r[1]} for r in conn.execute("""SELECT ni.nspname||'.'||ci.relname, nt.nspname||'.'||ct.relname
                     FROM pg_index ix JOIN pg_class ci ON ci.oid=ix.indexrelid JOIN pg_namespace ni ON ni.oid=ci.relnamespace
                     JOIN pg_class ct ON ct.oid=ix.indrelid JOIN pg_namespace nt ON nt.oid=ct.relnamespace
                     WHERE ni.nspname NOT IN ('pg_catalog','pg_toast','information_schema') ORDER BY 1""")]
+                # LEFT JOIN retains orphan sequences; duplicate ownership rows fail validation.
+                snapshot['sequences']=[dict(zip(
+                    ('name','owner','table','column','table_kind','dependency','identity','default_reference'),r))
+                    for r in conn.execute("""SELECT ns.nspname||'.'||s.relname, pg_get_userbyid(s.relowner),
+                        nt.nspname||'.'||t.relname, a.attname, t.relkind, d.deptype, a.attidentity,
+                        EXISTS (SELECT FROM pg_attrdef ad JOIN pg_depend dd
+                            ON dd.classid='pg_attrdef'::regclass AND dd.objid=ad.oid
+                            AND dd.refclassid='pg_class'::regclass AND dd.refobjid=s.oid
+                            WHERE ad.adrelid=t.oid AND ad.adnum=a.attnum)
+                    FROM pg_class s JOIN pg_namespace ns ON ns.oid=s.relnamespace
+                    LEFT JOIN pg_depend d ON d.classid='pg_class'::regclass AND d.objid=s.oid
+                        AND d.objsubid=0 AND d.refclassid='pg_class'::regclass
+                        AND d.refobjsubid>0 AND d.deptype IN ('a','i')
+                    LEFT JOIN pg_class t ON t.oid=d.refobjid
+                    LEFT JOIN pg_namespace nt ON nt.oid=t.relnamespace
+                    LEFT JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=d.refobjsubid
+                        AND NOT a.attisdropped
+                    WHERE ns.nspname NOT IN ('pg_catalog','pg_toast','information_schema')
+                        AND s.relkind='S' ORDER BY 1,3,4""")]
                 snapshot['backend_pid']=conn.execute('SELECT pg_backend_pid()').fetchone()[0]
                 ssl=conn.execute('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()').fetchone()
                 snapshot['transport_ssl']=ssl[0] if ssl else None

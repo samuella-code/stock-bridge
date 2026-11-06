@@ -81,7 +81,7 @@ def test_explicit_schema_stage_no_revision_spoofing(phase):
     data=snapshot()
     for key in ('database','user','session_user','owner'):data[key]=g.NAME
     tables=[] if phase=='empty' else ['public.user']
-    data.update(tables=tables,all_relations=tables,revision=None if phase=='empty' else phase)
+    data.update(tables=tables,all_relations=tables,sequences=[],revision=None if phase=='empty' else phase)
     assert identity.validate_database(data,phase,tables,(1000,1001))
     assert data['revision']==(None if phase=='empty' else phase)
     bad=deepcopy(data);bad['revision']='unknown'
@@ -96,6 +96,7 @@ def test_explicit_schema_stage_no_revision_spoofing(phase):
 def test_staff_schema_identity_stays_fail_closed(key,value):
     data=snapshot()
     for name in ('database','user','session_user','owner'):data[name]=g.NAME
+    data['sequences']=[]
     data[key]=value
     with pytest.raises(ValueError):identity.validate_database(data,'empty',[],(1000,1001))
 
