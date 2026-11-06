@@ -159,6 +159,18 @@ class Runtime:
         print('STAFF BASELINE SHA256: '+digest)  # Evidence only; no approval generated.
 
 
+
+def require_staff_statuses(case, actual, expected):
+    """Bounded HTTP-code evidence only; never render request/response contents."""
+    from tests.support.postgres_staff_guard import CASES
+    require(type(case) is str and case in CASES
+            and all(type(values) is list and len(values)==2
+                and all(type(code) is int and 100<=code<=599 for code in values)
+                for values in (actual,expected)), 'invalid-staff-status-evidence')
+    if actual!=expected:
+        evidence=dict(case=case,expected=expected,actual=actual)
+        require(False,'unexpected-staff-status:'+json.dumps(evidence,separators=(',',':')))
+
 def migration_case(rt, case):
     rt.preflight(V17);before=rt.baseline();app=rt.app()
     from app import db
@@ -298,7 +310,7 @@ def race_case(rt, case):
     expected={'R01':[302,302],'R02':[302,400],'I01':[200,400],'I02':[302,400],'A01':[302,400],
         'A02':[302,400],'X01':[200,400],'X02':[302,400],'D01':[302,302],'D02':[302,302],
         'D03':[400,302],'F01':[400,200],'F02':[400,302],'F03':[400,302],'F04':[400,302]}
-    require(statuses==expected[case],'unexpected-staff-status')
+    require_staff_statuses(case,statuses,expected[case])
     after=state(rt,owner)
     require(after['pid'] not in proof['workers']+[proof['observer']],'fresh-backend-not-independent')
     roles=after['staff_role'];members=after['staff_membership'];invitations=after['staff_invitation']
