@@ -1,0 +1,89 @@
+{
+  "status": "IMPLEMENTED_DEFAULT_SKIP_LIVE_UNVERIFIED",
+  "live_authorization": false,
+  "integration_commit": "934ea9b732489885bba6e609114da8dbbdba240f",
+  "revision": "staff-manager-v2",
+  "foundation_cases_retained": 18,
+  "manager_cases": [
+    {
+      "id": "G01",
+      "scenario": "Scope/foreign account/name filtering; denied mutations",
+      "responses": "200 GET;400 denied POST;403 foreign account"
+    },
+    {
+      "id": "G02",
+      "scenario": "Self membership/role/revoke/invite/restoration denial",
+      "responses": "six400 responses"
+    },
+    {
+      "id": "G03",
+      "scenario": "Escalation, protected authority fields/role grants and owner mutation denial",
+      "responses": "seven400 responses"
+    },
+    {
+      "id": "G04",
+      "scenario": "Explicit owner grants/removal and denied Manager role edit",
+      "responses": "302,400,302"
+    },
+    {
+      "id": "G05",
+      "scenario": "View+export intersection, financial exclusion; workflow/export disabled",
+      "responses": "service assertions; no HTTP export route"
+    },
+    {
+      "id": "G06",
+      "scenario": "Manager invite/change/revoke/custom-role CRUD; actual actor audit",
+      "responses": "200 then five302 responses"
+    },
+    {
+      "id": "C01",
+      "scenario": "Owner removes staff_admin while Manager change waits",
+      "responses": "302,403"
+    },
+    {
+      "id": "C02",
+      "scenario": "Manager change obtains owner lock before authority removal",
+      "responses": "302,302"
+    },
+    {
+      "id": "C03",
+      "scenario": "Two Managers compete for fifth seat",
+      "responses": "200,400"
+    },
+    {
+      "id": "C04",
+      "scenario": "Two Managers compete for fifth active role",
+      "responses": "302,400"
+    },
+    {
+      "id": "C05",
+      "scenario": "Owner moves Manager scope while employee change waits",
+      "responses": "302,400"
+    },
+    {
+      "id": "C06",
+      "scenario": "Owner expands shared-role employee scope before Manager edit",
+      "responses": "302,400"
+    },
+    {
+      "id": "B01",
+      "scenario": "Manager invite rollback while second Manager waits",
+      "responses": "400,200"
+    },
+    {
+      "id": "B02",
+      "scenario": "Manager role-create rollback while second Manager waits",
+      "responses": "400,302"
+    },
+    {
+      "id": "B03",
+      "scenario": "Owner authority-removal rollback while Manager invite waits",
+      "responses": "400,200"
+    },
+    {
+      "id": "B04",
+      "scenario": "Manager change fails after second audit; waiting owner commits",
+      "responses": "400,302"
+    }
+  ]
+}

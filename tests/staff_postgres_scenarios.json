@@ -1,0 +1,167 @@
+{
+  "status": "IMPLEMENTED_DEFAULT_SKIP_LIVE_UNVERIFIED",
+  "live_authorization": false,
+  "run_id": "7e10a9c42b6d830f",
+  "target": {
+    "host": "127.0.0.1",
+    "port": 55432,
+    "database": "stockbridge_test_7e10a9c42b6d830f",
+    "role": "stockbridge_test_7e10a9c42b6d830f",
+    "postgres_major": 16
+  },
+  "cases": [
+    {
+      "id": "M00",
+      "stage": "migration",
+      "requirement": "Inject failure within 0018; rollback to exact 0017 baseline",
+      "http_statuses": null
+    },
+    {
+      "id": "M01",
+      "stage": "migration",
+      "requirement": "Apply 0018 preserving every pre-existing business/billing/audit record",
+      "http_statuses": null
+    },
+    {
+      "id": "S01",
+      "stage": "schema",
+      "requirement": "Compare new model/schema, constraints and maximum structured audit",
+      "http_statuses": null
+    },
+    {
+      "id": "R01",
+      "stage": "race",
+      "requirement": "Two role creates on fresh owner initialize three templates once",
+      "http_statuses": [
+        302,
+        302
+      ]
+    },
+    {
+      "id": "R02",
+      "stage": "race",
+      "requirement": "Two creates compete for the fifth active role",
+      "http_statuses": [
+        302,
+        400
+      ]
+    },
+    {
+      "id": "I01",
+      "stage": "race",
+      "requirement": "Two invitations compete for the fifth occupied seat",
+      "http_statuses": [
+        200,
+        400
+      ]
+    },
+    {
+      "id": "I02",
+      "stage": "race",
+      "requirement": "Acceptance of fifth pending seat versus another invitation",
+      "http_statuses": [
+        302,
+        400
+      ]
+    },
+    {
+      "id": "A01",
+      "stage": "race",
+      "requirement": "Duplicate acceptance by authenticated verified existing identity",
+      "http_statuses": [
+        302,
+        400
+      ]
+    },
+    {
+      "id": "A02",
+      "stage": "race",
+      "requirement": "Duplicate new-identity acceptance creates only one unverified staff User",
+      "http_statuses": [
+        302,
+        400
+      ]
+    },
+    {
+      "id": "X01",
+      "stage": "race",
+      "requirement": "Resend owns lock first; old-link acceptance rejected",
+      "http_statuses": [
+        200,
+        400
+      ]
+    },
+    {
+      "id": "X02",
+      "stage": "race",
+      "requirement": "Acceptance owns lock first; resend rejected",
+      "http_statuses": [
+        302,
+        400
+      ]
+    },
+    {
+      "id": "D01",
+      "stage": "race",
+      "requirement": "Role removal/reassignment owns lock before acceptance",
+      "http_statuses": [
+        302,
+        302
+      ]
+    },
+    {
+      "id": "D02",
+      "stage": "race",
+      "requirement": "Acceptance owns lock before role removal/reassignment",
+      "http_statuses": [
+        302,
+        302
+      ]
+    },
+    {
+      "id": "D03",
+      "stage": "race",
+      "requirement": "Assigned role removal without replacement rejected atomically",
+      "http_statuses": [
+        400,
+        302
+      ]
+    },
+    {
+      "id": "F01",
+      "stage": "rollback",
+      "requirement": "Failed invite rolls back while waiting invite is held before commit",
+      "http_statuses": [
+        400,
+        200
+      ]
+    },
+    {
+      "id": "F02",
+      "stage": "rollback",
+      "requirement": "Failed new-account acceptance rolls back before waiting acceptance",
+      "http_statuses": [
+        400,
+        302
+      ]
+    },
+    {
+      "id": "F03",
+      "stage": "rollback",
+      "requirement": "Failed resend restores original token before waiting acceptance",
+      "http_statuses": [
+        400,
+        302
+      ]
+    },
+    {
+      "id": "F04",
+      "stage": "rollback",
+      "requirement": "Failed role removal restores assignments before waiting acceptance",
+      "http_statuses": [
+        400,
+        302
+      ]
+    }
+  ]
+}

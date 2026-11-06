@@ -77,7 +77,7 @@ def signup():
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for("main.dashboard"))
+        return redirect(url_for("staff.home" if current_user.staff_only else "main.dashboard"))
 
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
@@ -98,7 +98,7 @@ def login():
         if not user.email_verified_at:
             return redirect(url_for("auth.verification_pending"))
         flash("Welcome back.", "success")
-        return redirect(url_for("main.dashboard"))
+        return redirect(url_for("staff.home" if user.staff_only else "main.dashboard"))
 
     return render_template("auth/login.html")
 
@@ -163,8 +163,8 @@ def reset_password(token):
 @login_required
 def verification_pending():
     if current_user.email_verified_at:
-        return redirect(url_for("main.dashboard"))
-    return render_template("auth/verify_pending.html")
+        return redirect(url_for("staff.home" if current_user.staff_only else "main.dashboard"))
+    return render_template("staff/verify_pending.html" if current_user.staff_only else "auth/verify_pending.html")
 
 
 @auth_bp.get("/verify/<token>")
@@ -186,12 +186,12 @@ def verify_email(token):
         from app.subscriptions.entitlements import start_trial
         start_trial(user)
     db.session.commit()
-    if first_verification:
+    if first_verification and not user.staff_only:
         safely_send(send_welcome_email, user)
     if not current_user.is_authenticated:
         login_user(user)
     flash("Email verified. Welcome to StockBridge.", "success")
-    return redirect(url_for("main.dashboard"))
+    return redirect(url_for("staff.home" if user.staff_only else "main.dashboard"))
 
 
 @auth_bp.post("/resend-verification")
@@ -216,3 +216,11 @@ def logout():
     logout_user()
     flash("You have been logged out.", "success")
     return redirect(url_for("auth.login"))
+
+
+@auth_bp.after_request
+def private_staff_identity_response(response):
+    if current_user.is_authenticated and current_user.staff_only:
+        response.headers['Cache-Control'] = 'private, no-store'
+        response.headers['Referrer-Policy'] = 'no-referrer'
+    return response

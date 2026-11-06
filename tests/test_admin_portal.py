@@ -424,13 +424,15 @@ def test_migration_keeps_customer_and_payment_without_promoting_email(tmp_path):
             VALUES (1,1,'owner@example.com','SB-old','paystack','lifetime',300000,'NGN','success',CURRENT_TIMESTAMP)"""))
         db.session.commit()
         upgrade(revision="0012_product_catalogue")
-        assert User.query.one().role=="user"
+        # Select only columns present at the deliberately pinned 0012 revision.
+        owner=db.session.query(User.role,User.admin_enabled).one()
+        assert owner.role=="user"
         # This fixture deliberately stops at 0012; query its historical schema,
         # rather than selecting nullable columns introduced by later models.
         assert db.session.execute(text("SELECT name FROM business WHERE user_id=1")).scalar()=="Shop"
         assert db.session.query(Payment.amount_kobo).scalar()==300000
         assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()=="0012_product_catalogue"
-        assert User.query.one().admin_enabled is False
+        assert owner.admin_enabled is False
 
 
 def test_security_migration_preserves_dual_role_and_audit_data(tmp_path):
@@ -445,7 +447,7 @@ def test_security_migration_preserves_dual_role_and_audit_data(tmp_path):
             VALUES (1,1,'ADMIN_ACCESS_GRANTED','Granted',CURRENT_TIMESTAMP)"""))
         db.session.commit()
         upgrade(revision="0012_product_catalogue")
-        owner=User.query.one()
+        owner=db.session.query(User.admin_enabled,User.admin_auth_version).one()
         assert owner.admin_enabled and owner.admin_auth_version==0
         assert AuditLog.query.one().description=="Granted"
         assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()=="0012_product_catalogue"
