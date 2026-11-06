@@ -222,5 +222,5 @@ def logout():
 def private_staff_identity_response(response):
     if current_user.is_authenticated and current_user.staff_only:
         response.headers['Cache-Control'] = 'private, no-store'
-        response.headers['Referrer-Policy'] = 'no-referrer'
+        response.headers['Referrer-Policy'] = 'same-origin'
     return response
