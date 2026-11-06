@@ -111,7 +111,8 @@ def home():
 @staff_bp.after_request
 def protect(response):
     response.headers['Cache-Control']='private, no-store'
-    response.headers['Referrer-Policy']='no-referrer'
+    # HTTPS CSRF checks require same-origin Referer; external origins receive none.
+    response.headers['Referrer-Policy']='same-origin'
     response.headers['X-Frame-Options']='DENY'
     response.headers['Content-Security-Policy']="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'"
     return response

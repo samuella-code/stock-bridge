@@ -232,7 +232,7 @@ def test_owner_only_management_csrf_auditing_and_no_token_persistence(app):
     assert response.status_code==200 and b'<h2>Email delivery is off</h2>' in response.data
     assert b'#token=' not in response.data
     assert response.headers['Cache-Control']=='private, no-store'
-    assert response.headers['Referrer-Policy']=='no-referrer'
+    assert response.headers['Referrer-Policy']=='same-origin'
     with client.session_transaction() as state:
         assert not any('token' in k and k != 'csrf_token' for k in state)
     assert b'#token=' not in client.get('/staff/manage').data
