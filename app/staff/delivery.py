@@ -26,7 +26,7 @@ def gate(recipient, config, environ):
                              or value != value.lower() or len(value)>180 for value in recipients):
         return 'configuration_required'
     if not (environ.get('VERCEL') == '1' and environ.get('VERCEL_PROJECT_ID') == STAGING_PROJECT_ID
-            and environ.get('VERCEL_ENV') == 'preview' and environ.get('VERCEL_TARGET_ENV') == 'staging'
+            and environ.get('VERCEL_ENV') == 'preview' and environ.get('VERCEL_TARGET_ENV') == 'preview'
             and environ.get('VERCEL_GIT_COMMIT_REF') == 'release/staging-phase6'
             and isinstance(sha, str) and re.fullmatch(r'[0-9a-f]{40}', sha)
             and sha == config.get('STAFF_INVITATION_EMAIL_APPROVED_SHA')

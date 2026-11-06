@@ -16,7 +16,7 @@ def policy():
         STAFF_INVITATION_EMAIL_ORIGIN='https://'+delivery.STAGING_HOST,
         STAFF_INVITATION_EMAIL_ALLOWED_RECIPIENTS='staff@example.invalid'),
         dict(VERCEL='1', VERCEL_PROJECT_ID=delivery.STAGING_PROJECT_ID, VERCEL_ENV='preview',
-             VERCEL_TARGET_ENV='staging', VERCEL_GIT_COMMIT_REF='release/staging-phase6', VERCEL_GIT_COMMIT_SHA=sha))
+             VERCEL_TARGET_ENV='preview', VERCEL_GIT_COMMIT_REF='release/staging-phase6', VERCEL_GIT_COMMIT_SHA=sha))
 
 
 @pytest.mark.parametrize('key,value', [('STAFF_INVITATION_EMAIL_ENABLED',''),
@@ -221,5 +221,22 @@ def test_acceptance_before_delivery_completion_updates_status_without_reopening_
 def test_documented_staging_contract_and_rejected_identities(environment,target):
     config,environ=policy()
     environ['VERCEL_ENV']=environment;environ['VERCEL_TARGET_ENV']=target
-    expected='ready' if (environment,target)==('preview','staging') else 'configuration_required'
+    expected='ready' if (environment,target)==('preview','preview') else 'configuration_required'
     assert delivery.gate('staff@example.invalid',config,environ)==expected
+
+
+@pytest.mark.parametrize('field,value', [
+    ('VERCEL_PROJECT_ID','prj_ahZe3mfUk4MvejILpj9Md9QPP4fd'),
+    ('VERCEL_GIT_COMMIT_REF','feat/pro-staff-foundation'),
+    ('VERCEL_GIT_COMMIT_REF','main'),
+    ('VERCEL_GIT_COMMIT_SHA','b'*40),
+    ('VERCEL_TARGET_ENV','staging'),
+    ('VERCEL_TARGET_ENV','production'),
+    ('VERCEL_ENV','production')])
+def test_preview_target_does_not_authorize_other_release_identities(field,value):
+    config,environ=policy();environ[field]=value
+    assert delivery.gate('staff@example.invalid',config,environ)=='configuration_required'
+
+def test_preview_target_still_suppresses_other_recipients():
+    config,environ=policy()
+    assert delivery.gate('other@example.invalid',config,environ)=='suppressed'
