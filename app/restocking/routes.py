@@ -1,13 +1,11 @@
 from app.subscriptions.entitlements import selected_business
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
-from uuid import uuid4
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
-from sqlalchemy import func, update
+from sqlalchemy import func
 from app import db
-from app.models import Product, Sale, SaleItem, StockMovement, Restock
-from app.admin.routes import log
+from app.models import Product, Sale, SaleItem, Restock
 from app.transaction_submissions import issue_token, validate_token, claim, complete, SubmissionError, SubmissionConflict, SubmissionIncomplete
 
 restocking_bp = Blueprint("restocking", __name__, url_prefix="/restocking")
@@ -153,41 +151,13 @@ def receive():
         flash('The resulting stock quantity is too large. Check quantities received.', 'error')
         return show_form()
     try:
-        batch = str(uuid4())
-        for pid, qty, cost in sorted(parsed):
-            receipt = Restock(business_id=b.id, product_id=pid, quantity=qty,
-                unit_cost=cost, supplier=supplier, note=note, batch_id=batch)
-            db.session.add(receipt)
-            db.session.flush()
-            result = db.session.execute(update(Product).where(Product.id == pid, Product.business_id == b.id,
-                Product.active.is_(True), Product.stock_quantity <= 2147483647 - qty)
-                .values(stock_quantity=Product.stock_quantity + qty,
-                        buying_price=cost, updated_at=datetime.utcnow(),
-                        supplier_name=supplier or Product.supplier_name))
-            if result.rowcount != 1:
-                db.session.rollback()
-                flash('Stock changed while recording this receipt. Review quantities and try again.', 'error')
-                return show_form()
-            db.session.add(StockMovement(business_id=b.id, product_id=pid, kind="restock",
-                quantity_change=qty, restock_id=receipt.id, occurred_at=receipt.received_at))
-        log("RESTOCK_CREATED", f"Stock receipt {batch} recorded for {len(parsed)} products.", actor=current_user, business_id=b.id)
-        from app.notifications.service import notify
-        message = (f'{products[parsed[0][0]].name} was restocked with {parsed[0][1]} {products[parsed[0][0]].unit}.'
-            if len(parsed) == 1 else f'Stock replenished for {len(parsed)} products ({sum(qty for _, qty, _ in parsed)} units received).')
-        notify(b.id, 'restock_recorded', 'Stock replenished', message, f'restock:{batch}:created')
-        from app.notifications.email_outbox import queue_restock_alert
-        queue_restock_alert(
-            b.id,
-            [
-                {
-                    'name': products[pid].name,
-                    'quantity': qty,
-                    'unit': products[pid].unit,
-                }
-                for pid, qty, _ in sorted(parsed)
-            ],
-            f'restock:{batch}:created',
-        )
+        from app.restocking.ledger import receive_stock, StockChanged
+        try:
+            batch = receive_stock(b, parsed, products, supplier=supplier, note=note, actor=current_user)
+        except StockChanged:
+            db.session.rollback()
+            flash('Stock changed while recording this receipt. Review quantities and try again.', 'error')
+            return show_form()
         complete(submission, batch)
         db.session.commit()
     except Exception:

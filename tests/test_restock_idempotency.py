@@ -34,7 +34,7 @@ def test_restock_replay_preserves_batch_cost_and_events(client, multi):
     for pid in ids:
         p = db.session.get(Product, pid); p.stock_quantity = 8; p.buying_price = 999
     db.session.commit()
-    with patch('app.restocking.routes.uuid4', side_effect=AssertionError('Replay generated new batch')):
+    with patch('app.restocking.ledger.uuid4', side_effect=AssertionError('Replay generated new batch')):
         assert client.post('/restocking/receive', data=data).status_code == 302
     assert Restock.query.count() == len(ids)
     assert [db.session.get(Product, pid).stock_quantity for pid in ids] == [8]*len(ids)
