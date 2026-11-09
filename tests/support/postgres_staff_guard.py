@@ -15,7 +15,10 @@ V18 = '0018_staff_foundation'
 CASES = ('M00','M01','S01','R01','R02','I01','I02','A01','A02','X01','X02','D01','D02','D03','F01','F02','F03','F04')
 REMAINING_CASES = ('I02','A01','A02','X01','X02','D01','D02','D03','F01','F02','F03','F04')
 SALES_CASES = ('SLS01','SLS02','SLS03')
+STOCK_CASES = ('STK01','STK02','STK03')
 MODES = {
+    'stock-state': (V18,V18,()),
+    'stock': (V18,V18,STOCK_CASES),
     'sales-state': (V18,V18,()),
     'sales': (V18,V18,SALES_CASES),
     'staff-remaining-state': (V18,V18,()),
@@ -86,6 +89,11 @@ def authorize(auth, mode, root, files, *, source_commit):
         require(isinstance(auth.get('continuation_namespace'),str) and re.fullmatch(r'sales-cont-[a-f0-9]{8}',auth['continuation_namespace']),'sales-namespace-required')
         if mode=='sales':
             require(isinstance(auth.get('starting_state_sha256'),str) and re.fullmatch('[a-f0-9]{64}',auth['starting_state_sha256']),'sales-starting-state-required')
+    if mode in ('stock-state','stock'):
+        require(auth.get('stock_revision')=='staff-stock-pg-v1','stock-review-required')
+        require(isinstance(auth.get('continuation_namespace'),str) and re.fullmatch(r'stock-cont-[a-f0-9]{8}',auth['continuation_namespace']),'stock-namespace-required')
+        if mode=='stock':
+            require(isinstance(auth.get('starting_state_sha256'),str) and re.fullmatch('[a-f0-9]{64}',auth['starting_state_sha256']),'stock-starting-state-required')
     require(auth.get('package_provenance_approved') is True, 'package-provenance-unapproved')
     require('network_isolation_approved' not in auth and auth.get('isolation_mode') == 'application-guards-only'
             and auth.get('os_outbound_enforcement') == 'unverified'
