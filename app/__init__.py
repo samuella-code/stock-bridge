@@ -66,6 +66,7 @@ def create_app(test_config=None):
     from app.payments.routes import payments_bp
     from app.admin.routes import admin_bp, admin_api_bp
     from app.staff.routes import staff_bp
+    from app.staff import sales_routes  # Register the disabled-by-default sales surface.
 
     for blueprint in (
         auth_bp, main_bp, legal_bp, products_bp, sales_bp,

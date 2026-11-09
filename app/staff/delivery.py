@@ -74,11 +74,14 @@ def deliver(identifier, raw, *, actor_id=None):
     row.delivery_status, row.delivery_attempted_at = 'sending', now
     db.session.commit()  # No open transaction/owner lock during SMTP.
     link = 'https://' + STAGING_HOST + '/staff/invite#token=' + raw
+    from app.staff.sales_access import enabled
+    workflow_note = ('Sales access requires verification, sales permissions and an assigned business. ' if enabled()
+                     else 'Operational staff workflows are not yet enabled. ')
     body = ('You have been invited to StockBridge staff access. Open this private link:\n'
             + link + '\nIt expires within 48 hours and can be used once. '
             'If you do not have an account, choose your own credentials and complete '
             'the separate email-verification flow. No business, billing account or trial '
-            'is created. Operational staff workflows are not yet enabled. '
+            'is created. ' + workflow_note +
             'Ignore this email if unexpected. Do not forward the link.')
     try:
         status = 'sent' if email_service._send_email('Your StockBridge staff invitation', recipient, body) is True else 'failed'
