@@ -158,15 +158,16 @@ def test_arbitrary_race_endpoint_is_rejected_before_hooks_or_workers():
             owner_id=5,membership_id=7,business_id=9,variant='same')
 
 
-@pytest.mark.parametrize('profile_name',['WORKER','STAFF_APPLICATION'])
-def test_sales_state_guard_rejects_application_and_worker_connections(profile_name):
-    import live_guards as guard
-    from unittest.mock import MagicMock
-    from test_live_guards import guards,params
-    instance=guards('sales-state');factory=MagicMock()
-    with pytest.raises(guard.Rejected):
-        instance.connect(factory,**params(getattr(guard,profile_name)))
-    assert not factory.called and instance.attempts==['readonly-required']
+@pytest.mark.parametrize('mode',['sales-state','sales'])
+@pytest.mark.parametrize('field,value',[
+    ('sales_revision',None),('sales_revision','old'),
+    ('continuation_namespace',None),('continuation_namespace','../foreign'),
+    ('cases',['SLS01'])])
+def test_sales_authorization_rejects_incomplete_or_changed_review(tmp_path,mode,field,value):
+    from tests.test_postgres_staff_guards import approval
+    from tests.support import postgres_staff_guard as guard
+    data,files=approval(tmp_path,mode);data[field]=value
+    with pytest.raises(Rejected):guard.authorize(data,mode,tmp_path,files,source_commit='b'*40)
 
 
 @pytest.mark.parametrize('variant',['same','owner-sale','owner-restock','revoke'])
