@@ -78,6 +78,11 @@ def payload_hash(payload):
 
 def claim(token, user_id, business_id, operation, payload):
     binding = validate_token(token, user_id, business_id, operation)
+    return _claim_validated_binding(binding, payload)
+
+
+def _claim_validated_binding(binding, payload):
+    # Internal callers must authenticate and validate their signed scope first.
     digest = payload_hash(payload)
     dialect = db.session.get_bind().dialect.name
     insert = {'postgresql': pg_insert, 'sqlite': sqlite_insert}.get(dialect)

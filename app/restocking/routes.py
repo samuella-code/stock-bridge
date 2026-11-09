@@ -87,6 +87,11 @@ def settings(product_id):
 @login_required
 def receive():
     b = selected_business(current_user)
+    # Staff sales holds this same lock before product rows. The later audit write
+    # updates owner activity, so owner restocking must not reverse that order.
+    from app.staff.service import lock_owner
+    lock_owner(current_user.id)
+    b = selected_business(current_user)
     token = request.form.get('submission_token', '')
     def show_form(status=200):
         return render_restock(b, token, status)

@@ -1,0 +1,27 @@
+{% extends 'staff/base.html' %}{% block content %}
+<h1>Sales · {{ business.name }}</h1>
+<p><a href="{{ url_for('staff.home') }}">Back to my staff access</a></p>
+{% if notice and not error %}<p role="status">{{ notice }}</p>{% endif %}
+{% if request.args.get('recorded') == '1' %}<p role="status">Sale recorded and stock updated.</p>{% endif %}
+{% if can_create %}
+<section><h2>Record a sale</h2><p>Use current product prices. Enter quantities for the items sold. Sales use the current date and time (UTC).</p>
+<form method="GET"><label>Find products<input name="q" maxlength="80" value="{{ query }}"></label><button>Find products</button></form>
+<p>Up to 50 products are shown. Search before filling the sale; searching opens a new form.</p>
+<form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="submission_token" value="{{ submission_token }}">
+{% for product in products %}<label>{{ product.name }} · ₦{{ '{:,.2f}'.format(product.selling_price) }} · {{ product.stock_quantity }} {{ product.unit }} available
+<input type="hidden" name="product_id" value="{{ product.id }}"><input type="number" name="quantity" min="1" max="{{ product.stock_quantity }}" step="1" placeholder="Quantity sold" aria-label="Quantity sold: {{ product.name }}"></label>
+{% else %}<p>No matching active products. Ask the owner to check the catalogue.</p>{% endfor %}
+<label>Payment method<select name="payment_method">{% for method in payment_methods %}<option>{{ method }}</option>{% endfor %}</select></label>
+<label>Note (optional)<input name="note" maxlength="500"></label>
+<p>Submit once. If interrupted, retry the same form; do not create a new sale until its status is known.</p>
+<button {{ 'disabled' if not products }}>Record sale</button></form></section>{% endif %}
+{% if can_view %}<section><h2>Recorded sales</h2>
+{% for sale in history.items %}<article><h3>Sale #{{ sale.id }}</h3><p>{{ sale.sold_at.strftime('%d %b %Y %H:%M') }} UTC · {{ sale.payment_method }}{% if sale.voided_at %} · Voided{% endif %}</p>
+<ul>{% for item in sale.items %}<li>{{ item.product.name }} × {{ item.quantity }} @ ₦{{ '{:,.2f}'.format(item.unit_price) }}</li>{% endfor %}</ul>
+<p>Total: ₦{{ '{:,.2f}'.format(sale.total) }}</p>
+{% if sale.note %}<p>{{ sale.note }}</p>{% endif %}</article>{% else %}<p>No recorded sales.</p>{% endfor %}
+<nav>{% if history.has_prev %}<a href="{{ url_for('staff.sales',membership_id=member.id,business_id=business.id,page=history.prev_num) }}">Previous</a>{% endif %} Page {{ history.page }} {% if history.has_next %}<a href="{{ url_for('staff.sales',membership_id=member.id,business_id=business.id,page=history.next_num) }}">Next</a>{% endif %}</nav>
+</section>{% endif %}
+<p>Voiding sales, costs, profit, reports and exports are not available here.</p>
+{% endblock %}

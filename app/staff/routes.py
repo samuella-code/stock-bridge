@@ -9,6 +9,13 @@ from app.staff import service, roles as role_service, delivery
 staff_bp = Blueprint('staff', __name__, url_prefix='/staff')
 
 
+@staff_bp.app_context_processor
+def staff_workflow_flags():
+    from app.staff.sales_access import enabled
+    return dict(staff_sales_enabled=enabled())
+
+
+
 def actor():
     return current_user._get_current_object()
 
@@ -105,7 +112,8 @@ def home():
     for membership in StaffMembership.query.filter_by(user_id=current_user.id):
         choices = service.member_businesses(membership, actor(), now=now)
         if choices: rows.append((membership, choices))
-    return render_template('staff/home.html', rows=rows, role_names={(m.owner_id,m.role):role_service.resolve(m.owner_id,m.role).name for m,_ in rows}, role_permissions={(m.owner_id,m.role):role_service.resolve(m.owner_id,m.role).permissions for m,_ in rows})
+    from app.staff.sales_access import enabled
+    return render_template('staff/home.html', sales_enabled=enabled(), rows=rows, role_names={(m.owner_id,m.role):role_service.resolve(m.owner_id,m.role).name for m,_ in rows}, role_permissions={(m.owner_id,m.role):role_service.resolve(m.owner_id,m.role).permissions for m,_ in rows})
 
 
 @staff_bp.after_request

@@ -7,7 +7,7 @@ from sqlalchemy import update, func
 from sqlalchemy.orm import selectinload
 from app import db
 from app.models import Product, Sale, SaleItem, StockMovement
-from app.admin.routes import log
+from app.sales.ledger import StockChanged
 from app.transaction_submissions import issue_token, validate_token, claim, complete, SubmissionError, SubmissionConflict, SubmissionIncomplete
 
 sales_bp = Blueprint("sales", __name__, url_prefix="/sales")
@@ -20,6 +20,11 @@ def business():
 @login_required
 def index():
     b = business()
+    if request.method == 'POST':
+        # Match Staff lock order before receipt/product locks and owner audit writes.
+        from app.staff.service import lock_owner
+        lock_owner(current_user.id)
+        b = business()
     token = request.form.get('submission_token', '') if request.method == 'POST' else issue_token(current_user.id, b.id, 'sale')
     def show_form(status=200):
         has_products = Product.query.filter_by(business_id=b.id, active=True).first() is not None
@@ -113,37 +118,15 @@ def index():
                 flash(f"Only {available} units of {name} are currently available.", "error")
                 return show_form()
         try:
-            sale = Sale(business_id=b.id, sold_at=sold_at, payment_method=method,
-                        note=request.form.get("note", "").strip()[:500])
-            db.session.add(sale)
-            db.session.flush()
-            total = Decimal('0')
-            for pid, qty, price in sorted(parsed):
-                product = products[pid]
-                before = product.stock_quantity
-                result = db.session.execute(
-                    update(Product).where(Product.id == pid, Product.business_id == b.id,
-                        Product.active.is_(True), Product.stock_quantity >= qty)
-                    .values(stock_quantity=Product.stock_quantity - qty,
-                            updated_at=datetime.utcnow())
-                    .execution_options(synchronize_session=False))
-                if result.rowcount != 1:
-                    db.session.rollback()
-                    flash(f"Stock changed while recording {product.name}. Please review the sale.", "error")
-                    return show_form()
-                db.session.add(SaleItem(sale_id=sale.id, product_id=pid, quantity=qty,
-                                        unit_price=product.selling_price if price is None else price,
-                                        unit_cost=product.buying_price))
-                db.session.add(StockMovement(business_id=b.id, product_id=pid, kind="sale",
-                    quantity_change=-qty, sale_id=sale.id, occurred_at=sold_at))
-                from app.notifications.service import stock_transition
-                stock_transition(product, before, before - qty, f'sale:{sale.id}:product:{pid}')
-                total += qty * (product.selling_price if price is None else price)
-            from app.notifications.service import notify
-            notify(b.id, 'sale_recorded', 'Sale recorded', f'₦{total:,.2f} sale recorded successfully.', f'sale:{sale.id}:created', sale.id)
-            log("SALE_CREATED", f"Sale {sale.id} created with {len(parsed)} items.", actor=current_user, business_id=b.id)
+            from app.sales.ledger import create_sale
+            sale = create_sale(b, parsed, products, sold_at=sold_at, method=method,
+                               note=note, actor=current_user)
             complete(receipt, f'sale:{sale.id}')
             db.session.commit()
+        except StockChanged:
+            db.session.rollback()
+            flash("Stock changed while recording this sale. Please review it.", "error")
+            return show_form()
         except Exception:
             db.session.rollback()
             raise
