@@ -36,6 +36,8 @@ def approval(tmp_path,mode='staff'):
         data.update(sales_revision='staff-sales-pg-v1',continuation_namespace='sales-cont-00000001')
     if mode in ('stock-state','stock'):
         data.update(stock_revision='staff-stock-pg-v1',continuation_namespace='stock-cont-00000001')
+    if mode in ('operations-state','operations'):
+        data.update(operations_revision='staff-operations-pg-v1',continuation_namespace='ops-cont-00000001')
     return data,files
 
 
