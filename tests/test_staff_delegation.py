@@ -167,10 +167,12 @@ def test_restoration_and_exports_are_denied_before_database_work():
     assert operate() is False
 
 
-def test_templates_and_fixed_limits_are_not_automatically_upgraded():
+def test_manager_finance_default_does_not_grant_team_admin_or_exports():
     tree=ast.parse((ROOT/'app/staff/roles.py').read_text())
     values={n.targets[0].id:ast.literal_eval(n.value) for n in tree.body if isinstance(n,ast.Assign) and isinstance(n.targets[0],ast.Name) and n.targets[0].id in ('MAX_ACTIVE_ROLES','TEMPLATES')}
-    assert values['MAX_ACTIVE_ROLES']==5 and not (set(values['TEMPLATES']['manager'][1])&policy.OWNER_GRANTED)
+    assert values['MAX_ACTIVE_ROLES']==5
+    assert 'financial_view' in values['TEMPLATES']['manager'][1]
+    assert not (set(values['TEMPLATES']['manager'][1])&policy.OWNER_GRANTED)
     service=ast.parse((ROOT/'app/staff/service.py').read_text())
     assert next(ast.literal_eval(n.value) for n in service.body if isinstance(n,ast.Assign) and n.targets[0].id=='SEATS')==5
 

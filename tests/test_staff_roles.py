@@ -12,13 +12,13 @@ from app.staff import roles, service
 from tests.test_staff_foundation import app, seed, issue, accept_new, login, NOW, staff_clock
 
 
-def test_templates_and_get_are_read_only_and_finance_defaults_off(app):
+def test_templates_and_get_are_read_only_and_only_manager_defaults_to_finance(app):
     owner, shops = seed('pro'); client = app.test_client(); login(client, owner)
     response = client.get('/staff/manage')
     assert response.status_code == 200 and b'Salesperson/Cashier' in response.data
     assert b'Inventory/Restocking Officer' in response.data
     assert StaffRole.query.count() == 0 and AuditLog.query.count() == 0
-    assert all('financial_view' not in row['permissions'] for row in roles.options(owner.id).values())
+    assert {key for key,row in roles.options(owner.id).items() if 'financial_view' in row['permissions']} == {'manager'}
     assert service.seat_count(owner.id, now=NOW) == 0
 
 
@@ -200,7 +200,7 @@ def test_complete_catalogue_defaults_and_restocking_example_are_independent(app)
         'products_edit', 'restocking_create', 'restocking_view', 'expenses_view',
         'expenses_create', 'financial_view'}
     assert set(roles.CATALOGUE) == expected
-    assert set(roles.TEMPLATES['manager'][1]) == expected - {'financial_view'}
+    assert set(roles.TEMPLATES['manager'][1]) == expected
     assert set(roles.TEMPLATES['inventory_staff'][1]) == {
         'inventory_view', 'products_create', 'products_edit', 'restocking_create', 'restocking_view'}
     assert roles.TEMPLATES['salesperson'] == ('Salesperson/Cashier', ('sales_view', 'sales_create', 'inventory_view'))
@@ -209,7 +209,7 @@ def test_complete_catalogue_defaults_and_restocking_example_are_independent(app)
     roles._initialize_locked(owner.id); db.session.commit()
     for key, option in choices.items():
         assert set(roles.resolve(owner.id, key).permissions) == set(option['permissions'])
-        assert 'financial_view' not in option['permissions']
+        assert ('financial_view' in option['permissions']) == (key=='manager')
     custom = roles.save(owner, None, 'Restocking only',
         ['inventory_view', 'restocking_create', 'restocking_view'], now=NOW)
     db.session.commit()

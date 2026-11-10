@@ -71,11 +71,20 @@ def contract(html):
 
 
 @pytest.mark.parametrize('state',STATES)
-def test_wording_changes_preserve_reviewed_form_contract(state):
+def test_form_contract_preserves_every_field_except_approved_manager_finance_default(state):
     template,data=context(state);html=environment().get_template(template).render(**data)
     expected=json.loads((ROOT/'tests/fixtures/staff_ui_form_contract.json').read_text())
     assert expected['baseline_commit']=='6a4593c61c852440dfb1fdc2cbf7c7b6b87eba62'
-    assert hashlib.sha256(json.dumps(contract(html),sort_keys=True).encode()).hexdigest()==expected['states'][state]
+    forms=contract(html)
+    # Keep the original contract fixture: only the explicitly approved Manager
+    # financial checkbox default may differ. Every other form field stays exact.
+    for attributes,fields in forms:
+        if (any(values.get('name')=='role_key' and values.get('value')=='manager' for tag,values in fields)
+                and any(values.get('name')=='action' and values.get('value')=='role_save' for tag,values in fields)):
+            finance=[values for tag,values in fields if values.get('name')=='permissions' and values.get('value')=='financial_view']
+            assert len(finance)==1 and 'checked' in finance[0]
+            finance[0].pop('checked')
+    assert hashlib.sha256(json.dumps(forms,sort_keys=True).encode()).hexdigest()==expected['states'][state]
     assert 'original coverage anchor' not in html and 'grant for the current' not in html
     assert 'synthetic-inert' in html  # CSRF fields retained.
 
@@ -102,7 +111,7 @@ def test_email_statuses_use_plain_labels_without_private_links(state,label):
 def test_copy_retains_owner_only_permissions_and_disabled_workflows():
     template,data=context('manage');html=environment().get_template(template).render(**data)
     assert 'Saving permissions does not enable these workflows' in html
-    assert 'Financial visibility starts off' in html
+    assert 'New Manager roles include financial-report access' in html
     assert 'Billing, subscriptions, voids and manual stock adjustments stay owner-only' in html
     assert 'Only you can grant team-administration or export authority' in html
     assert 'Leave product creation, product editing, sales, expenses and financial reports unchecked' in html

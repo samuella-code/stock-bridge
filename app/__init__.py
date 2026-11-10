@@ -68,6 +68,9 @@ def create_app(test_config=None):
     from app.staff.routes import staff_bp
     from app.staff import sales_routes  # Register the disabled-by-default sales surface.
     from app.staff import stock_routes  # Separate disabled-by-default stock surface.
+    from app.staff import operations_routes
+    from app.staff.defaults import register_commands
+    register_commands(app)
 
     for blueprint in (
         auth_bp, main_bp, legal_bp, products_bp, sales_bp,
