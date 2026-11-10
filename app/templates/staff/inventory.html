@@ -1,0 +1,7 @@
+{% extends 'staff/base.html' %}{% block content %}
+<h1>Inventory · {{ business.name }}</h1><p><a href="{{ url_for('staff.home') }}">Back to my staff access</a></p>
+<form method="GET"><label>Find products<input name="q" maxlength="80" value="{{ query }}"></label><button>Find products</button></form>
+<section><h2>Current stock</h2>{% for product in products.items %}<article><h3>{{ product.name }}</h3><p>{{ product.stock_quantity }} {{ product.unit }} available</p></article>{% else %}<p>No matching active products.</p>{% endfor %}
+<nav>{% if products.has_prev %}<a href="{{ url_for('staff.inventory',membership_id=member.id,business_id=business.id,q=query,page=products.prev_num) }}">Previous</a>{% endif %} Page {{ products.page }} {% if products.has_next %}<a href="{{ url_for('staff.inventory',membership_id=member.id,business_id=business.id,q=query,page=products.next_num) }}">Next</a>{% endif %}</nav></section>
+<p>Product editing, stock adjustments, costs, financial reports and exports are not available here.</p>
+{% endblock %}

@@ -77,6 +77,9 @@ def deliver(identifier, raw, *, actor_id=None):
     from app.staff.sales_access import enabled
     workflow_note = ('Sales access requires verification, sales permissions and an assigned business. ' if enabled()
                      else 'Operational staff workflows are not yet enabled. ')
+    from app.staff.stock_access import enabled as stock_enabled
+    if stock_enabled():
+        workflow_note = 'Enabled workflows require verification, matching role permissions and assigned businesses. '
     body = ('You have been invited to StockBridge staff access. Open this private link:\n'
             + link + '\nIt expires within 48 hours and can be used once. '
             'If you do not have an account, choose your own credentials and complete '

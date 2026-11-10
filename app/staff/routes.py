@@ -12,7 +12,8 @@ staff_bp = Blueprint('staff', __name__, url_prefix='/staff')
 @staff_bp.app_context_processor
 def staff_workflow_flags():
     from app.staff.sales_access import enabled
-    return dict(staff_sales_enabled=enabled())
+    from app.staff.stock_access import enabled as stock_enabled
+    return dict(staff_sales_enabled=enabled(), staff_stock_enabled=stock_enabled())
 
 
 
