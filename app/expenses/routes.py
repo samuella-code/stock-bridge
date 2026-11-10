@@ -6,7 +6,6 @@ from flask_login import current_user, login_required
 from sqlalchemy import func
 from app import db
 from app.models import Expense
-from app.admin.routes import log
 from app.transaction_submissions import issue_token, claim, complete, SubmissionError, SubmissionConflict, SubmissionIncomplete
 
 expenses_bp = Blueprint("expenses", __name__, url_prefix="/expenses")
@@ -46,11 +45,9 @@ def index():
                 db.session.rollback()
                 flash("This expense was already recorded. No expense was added again.", "success")
                 return redirect(url_for("expenses.index"))
-            row = Expense(business_id=b.id, description=description, amount=amount,
-                category=category, note=note, spent_at=spent or datetime.utcnow())
-            db.session.add(row)
-            db.session.flush()
-            log("EXPENSE_CREATED", f"Expense {row.id} created.", actor=current_user, business_id=b.id)
+            from app.expenses.ledger import create_expense
+            row = create_expense(b, description=description, amount=amount, category=category,
+                note=note, actor=current_user, spent_at=spent or datetime.utcnow())
             complete(receipt, f"expense:{row.id}")
             db.session.commit()
         except SubmissionIncomplete:

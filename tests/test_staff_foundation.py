@@ -79,13 +79,13 @@ def test_multiple_seats_may_share_roles_duty_and_explicit_assignments(app,role):
         _,raw=issue(owner,shops,email=f'role-{i}@example.invalid',role=role)
         user,member=accept_new(raw)
         assert member.role==role
-        assert 'financial_view' not in s.role_service.resolve(owner.id,member.role).permissions
+        assert ('financial_view' in s.role_service.resolve(owner.id,member.role).permissions) == (role=='manager')
         assert s.member_businesses(member,user,now=NOW)==[shops[0]]
     member=StaffMembership.query.first()
     s.change(owner,member.id,'manager','Stock supervision',False,[shops[1].id],now=NOW)
     db.session.commit()
     assert member.duty_label=='Stock supervision' and member.role=='manager'
-    assert 'financial_view' not in s.role_service.resolve(owner.id,member.role).permissions and not s.can_operate(member)
+    assert 'financial_view' in s.role_service.resolve(owner.id,member.role).permissions and not s.can_operate(member)
     assert [a.business_id for a in StaffMembershipBusiness.query.filter_by(membership_id=member.id)]==[shops[1].id]
     assert AuditLog.query.filter_by(action='STAFF_CHANGED').count()==1
 

@@ -24,7 +24,7 @@ CATALOGUE = {
     'financial_view': 'View financial reports',
 }
 TEMPLATES = {
-    'manager': ('Manager', ('sales_view', 'sales_create', 'inventory_view', 'products_create', 'products_edit', 'restocking_create', 'restocking_view', 'expenses_view', 'expenses_create')),
+    'manager': ('Manager', ('sales_view', 'sales_create', 'inventory_view', 'products_create', 'products_edit', 'restocking_create', 'restocking_view', 'expenses_view', 'expenses_create', 'financial_view')),
     'salesperson': ('Salesperson/Cashier', ('sales_view', 'sales_create', 'inventory_view')),
     'inventory_staff': ('Inventory/Restocking Officer', ('inventory_view', 'products_create', 'products_edit', 'restocking_create', 'restocking_view')),
 }
