@@ -1,6 +1,6 @@
 {% macro nav_link(label, href, active, icon) -%}
 {% from 'components/icons.html' import icon as svg_icon %}
-{% set names = {'Dashboard':'home', 'Products':'box', 'Inventory':'inventory', 'Sales':'sale', 'Restocking':'restock', 'Expenses':'payment', 'Notifications':'bell', 'Reports':'report', 'My Businesses':'business', 'Billing & Plan':'payment', 'Profile & settings':'account', 'Help Centre':'help'} %}
+{% set names = {'Dashboard':'home', 'Products':'box', 'Inventory':'inventory', 'Sales':'sale', 'Restocking':'restock', 'Expenses':'payment', 'Notifications':'bell', 'Reports':'report', 'Business Insights':'trend', 'Staff management':'team', 'Multi-business Overview':'business-grid', 'My Businesses':'business', 'Billing & Plan':'payment', 'Profile & settings':'account', 'Help Centre':'help'} %}
 <a class="nav-link {{ 'active' if active }}" href="{{ href }}" {% if active %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">{{ svg_icon(names.get(label, 'help')) }}</span><span>{{ label }}</span></a>
 {%- endmacro %}
 {% macro help_panel(topic) -%}
