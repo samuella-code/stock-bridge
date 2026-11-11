@@ -1,27 +1,22 @@
 {% extends 'staff/base.html' %}{% block content %}
-<h1>Sales · {{ business.name }}</h1>
-<p><a href="{{ url_for('staff.home') }}">Back to my staff access</a></p>
-{% if notice and not error %}<p role="status">{{ notice }}</p>{% endif %}
-{% if request.args.get('recorded') == '1' %}<p role="status">Sale recorded and stock updated.</p>{% endif %}
+<div class="sales-page">
+<header class="sales-heading"><a class="sales-back" href="{{ url_for('staff.home') }}">← My staff access</a><p class="sales-eyebrow">{{ business.name }}</p><h1>Sales</h1><p>Record items sold and review sales for this business.</p>{% if can_create and can_view %}<a href="#recorded-sales">View recorded sales ↓</a>{% endif %}</header>
+{% if notice and not error %}<p class="sales-feedback" role="status">{{ notice }}</p>{% endif %}
+{% if request.args.get('recorded') == '1' %}<p class="sales-feedback" role="status">Sale recorded and stock updated.</p>{% endif %}
 {% if can_create %}
-<section><h2>Record a sale</h2><p>Use current product prices. Enter quantities for the items sold. Sales use the current date and time (UTC).</p>
-<form method="GET"><label>Find products<input name="q" maxlength="80" value="{{ query }}"></label><button>Find products</button></form>
-<p>Up to 50 products are shown. Search before filling the sale; searching opens a new form.</p>
-<form method="POST">
+<section class="sale-entry" aria-labelledby="record-sale-title"><div class="sale-section-heading"><span class="sale-step" aria-hidden="true">1</span><div><h2 id="record-sale-title">Choose products</h2><p>Enter a quantity beside each item sold. Leave other quantities blank.</p></div></div>
+<form method="GET" class="sale-search"><label for="sale-search">Find a product</label><div class="sale-search-controls"><input id="sale-search" name="q" maxlength="80" value="{{ query }}" placeholder="Search product names"><button>Search</button></div><p class="sale-help">Search before entering quantities. Searching opens a new sale form. Up to 50 products are shown.</p></form>
+<form method="POST" class="sale-form">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="submission_token" value="{{ submission_token }}">
-{% for product in products %}<label>{{ product.name }} · ₦{{ '{:,.2f}'.format(product.selling_price) }} · {{ product.stock_quantity }} {{ product.unit }} available
-<input type="hidden" name="product_id" value="{{ product.id }}"><input type="number" name="quantity" min="1" max="{{ product.stock_quantity }}" step="1" placeholder="Quantity sold" aria-label="Quantity sold: {{ product.name }}"></label>
-{% else %}<p>No matching active products. Ask the owner to check the catalogue.</p>{% endfor %}
-<label>Payment method<select name="payment_method">{% for method in payment_methods %}<option>{{ method }}</option>{% endfor %}</select></label>
-<label>Note (optional)<input name="note" maxlength="500"></label>
-<p>Submit once. If interrupted, retry the same form; do not create a new sale until its status is known.</p>
-<button {{ 'disabled' if not products }}>Record sale</button></form></section>{% endif %}
-{% if can_view %}<section><h2>Recorded sales</h2>
-{% for sale in history.items %}<article><h3>Sale #{{ sale.id }}</h3><p>{{ sale.sold_at.strftime('%d %b %Y %H:%M') }} UTC · {{ sale.payment_method }}{% if sale.voided_at %} · Voided{% endif %}</p>
-<ul>{% for item in sale.items %}<li>{{ item.product.name }} × {{ item.quantity }} @ ₦{{ '{:,.2f}'.format(item.unit_price) }}</li>{% endfor %}</ul>
-<p>Total: ₦{{ '{:,.2f}'.format(sale.total) }}</p>
-{% if sale.note %}<p>{{ sale.note }}</p>{% endif %}</article>{% else %}<p>No recorded sales.</p>{% endfor %}
-<nav>{% if history.has_prev %}<a href="{{ url_for('staff.sales',membership_id=member.id,business_id=business.id,page=history.prev_num) }}">Previous</a>{% endif %} Page {{ history.page }} {% if history.has_next %}<a href="{{ url_for('staff.sales',membership_id=member.id,business_id=business.id,page=history.next_num) }}">Next</a>{% endif %}</nav>
-</section>{% endif %}
-<p>Voiding sales, costs, profit, reports and exports are not available here.</p>
-{% endblock %}
+<div class="sale-product-list">
+{% for product in products %}<div class="sale-product-row"><div class="sale-product-info"><h3><label for="sale-quantity-{{ product.id }}">{{ product.name }}</label></h3><p class="sale-product-price">₦{{ '{:,.2f}'.format(product.selling_price) }} <span>per {{ product.unit }}</span></p><p class="sale-stock">{{ product.stock_quantity }} {{ product.unit }} available</p></div><div class="sale-quantity"><label for="sale-quantity-{{ product.id }}">Quantity sold</label><input type="hidden" name="product_id" value="{{ product.id }}"><input id="sale-quantity-{{ product.id }}" type="number" name="quantity" min="1" max="{{ product.stock_quantity }}" step="1" placeholder="—" aria-label="Quantity sold: {{ product.name }}" inputmode="numeric"></div></div>
+{% else %}<p class="sale-empty">No matching active products. Try another search or ask the owner to check the catalogue.</p>{% endfor %}
+</div>
+<fieldset class="sale-payment"><legend><span class="sale-step" aria-hidden="true">2</span> Payment details</legend><div class="sale-details-grid"><div><label for="sale-payment-method">Payment method</label><select id="sale-payment-method" name="payment_method">{% for method in payment_methods %}<option>{{ method }}</option>{% endfor %}</select></div><div><label for="sale-note">Note <span class="sale-optional">(optional)</span></label><input id="sale-note" name="note" maxlength="500" placeholder="Add a reference or short note"></div></div></fieldset>
+<div class="sale-submit"><div><strong>Ready to record?</strong><p>Check quantities and payment method. Current product prices and the current date and time (UTC) will be used.</p></div><button {{ 'disabled' if not products }}>Record sale</button></div><p class="sale-help">Submit once. If interrupted, retry this same form until its status is known.</p>
+</form></section>{% endif %}
+{% if can_view %}<section id="recorded-sales" class="sales-history" aria-labelledby="recorded-sales-title"><div class="sale-history-heading"><h2 id="recorded-sales-title">Recorded sales</h2><p>Latest sales first · times shown in UTC</p></div>
+{% for sale in history.items %}<article class="sale-history-card"><div class="sale-history-top"><div><h3>Sale #{{ sale.id }}</h3><p>{{ sale.sold_at.strftime('%d %b %Y %H:%M') }} UTC · {{ sale.payment_method }}</p></div>{% if sale.voided_at %}<span class="sale-voided">Voided</span>{% endif %}</div><ul class="sale-history-items">{% for item in sale.items %}<li><span>{{ item.product.name }}</span><span>{{ item.quantity }} × ₦{{ '{:,.2f}'.format(item.unit_price) }}</span></li>{% endfor %}</ul><p class="sale-history-total"><span>Total</span><strong>₦{{ '{:,.2f}'.format(sale.total) }}</strong></p>{% if sale.note %}<p class="sale-history-note">{{ sale.note }}</p>{% endif %}</article>{% else %}<p class="sale-empty">No recorded sales yet.</p>{% endfor %}
+<nav class="sale-pagination" aria-label="Recorded sales pages">{% if history.has_prev %}<a href="{{ url_for('staff.sales',membership_id=member.id,business_id=business.id,page=history.prev_num) }}">← Previous</a>{% endif %}<span>Page {{ history.page }}</span>{% if history.has_next %}<a href="{{ url_for('staff.sales',membership_id=member.id,business_id=business.id,page=history.next_num) }}">Next →</a>{% endif %}</nav></section>{% endif %}
+<p class="sale-help">Voiding sales, costs, profit, reports and exports are not available here.</p>
+</div>{% endblock %}
