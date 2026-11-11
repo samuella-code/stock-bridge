@@ -382,3 +382,38 @@
 /* Page-specific basket padding must not cover the disclosure arrow. */
 .customer-app :is(#sale-form,#restock-form) details.basket-browse>summary{padding-left:30px;color:var(--text)}
 .customer-app details.basket-browse>summary::before{left:16px;top:calc(10px + .75em - 4px)}
+
+/* Shared customer sidebar; retain the existing navigation and mobile drawer. */
+.customer-app .sidebar{background:radial-gradient(ellipse at 10% 10%,#2c5a3e,#112f25 75%);color:#f4faf5;border-color:#21483a}
+.customer-app .sidebar .brand-mark{background:#d4ead5;color:#173a2c}
+.customer-app .sidebar :is(.brand-subtitle,.nav-section,.workspace-label){color:#c2d9c9}
+.customer-app .sidebar :is(.nav-link,.logout-btn){color:#eef8f0}
+.customer-app .sidebar .nav-link{border-inline-start:3px solid transparent}
+.customer-app .sidebar .nav-link.active{background:#ffffff24;color:#fff;border-inline-start-color:#b5deb9}
+.customer-app .sidebar :is(.nav-link,.logout-btn):hover{background:#ffffff1c;color:#fff}
+.customer-app .sidebar :is(a,button):focus-visible{outline:2px solid #c8eed0;outline-offset:2px}
+.customer-app .sidebar .workspace-card{background:#ffffff12;border-color:#ffffff38}
+.customer-app .sidebar .sidebar-close{background:#ffffff12;color:#fff;border-color:#ffffff60}
+
+/* Overview only. Use existing figures, controls and chart. */
+.customer-app .operations-dashboard .operations-board{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:18px;align-items:start}
+.customer-app .operations-dashboard :is(.operations-main,.operations-context){min-width:0;display:grid;gap:18px}
+.customer-app .operations-dashboard .operations-main>.panel-card:first-child{border-top:3px solid #976038}
+.customer-app .operations-dashboard .operations-trading .period-picker{padding:0;margin:0 0 12px;background:transparent;border:0}
+.customer-app .operations-dashboard .operations-trading .metric-grid{display:block;margin:0}
+.customer-app .operations-dashboard .operations-trading .metric-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:baseline;border:0;border-bottom:1px solid var(--line);border-radius:0;box-shadow:none;padding:10px 0}
+.customer-app .operations-dashboard .operations-trading .metric-card strong{font-size:1.1rem;margin:0;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.customer-app .operations-dashboard .operations-trading .metric-card small{grid-column:1/-1}
+.customer-app .operations-dashboard .operations-trading .metric-card:last-child{background:#e9f3eb;border-radius:8px;padding-inline:8px}
+.customer-app .operations-dashboard .operations-trading .metric-secondary{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:12px}
+@media(max-width:960px){.customer-app .operations-dashboard .operations-board{grid-template-columns:minmax(0,1fr)}}
+
+@media (max-width: 820px) {
+  .customer-app .sidebar .sidebar-close {
+    display: flex;
+    width: fit-content;
+    min-height: 44px;
+    gap: 10px;
+    margin-inline-start: auto;
+  }
+}
