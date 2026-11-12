@@ -325,3 +325,42 @@ def test_approved_branch_cannot_activate_staging_mode_in_production(app,staging,
     monkeypatch.setenv('VERCEL_PROJECT_ID',PRODUCTION_PROJECT_ID)
     monkeypatch.setenv('VERCEL_ENV','production');monkeypatch.setenv('VERCEL_TARGET_ENV','production')
     assert policy().mode=='blocked' and dispatch_one()=='disabled' and not staging
+
+
+def test_continuous_staging_delivers_new_alerts_after_one_hour(app, staging):
+    client, _, _ = setup(app)
+    item = product(client)
+    sale(client, item, 3)
+    old = EmailOutbox.query.one()
+    started = (datetime.utcnow() - timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
+    app.config.update(
+        STAGING_INVENTORY_EMAIL_TEST_ENABLED=False,
+        STAGING_INVENTORY_EMAIL_CONTINUOUS_ENABLED=True,
+        STAGING_INVENTORY_EMAIL_CONTINUOUS_STARTED_AT=started,
+    )
+    sale(client, item, 5)
+    restock(client, item, 8)
+    sale(client, item, 3)
+    assert [row.event_type for row in EmailOutbox.query.order_by(EmailOutbox.id)][1:] == [
+        'out_of_stock', 'restock_recorded', 'low_stock',
+    ]
+    for _ in range(3):
+        assert client.post('/notifications/email-dispatch').json == {'result': 'sent'}
+    assert dispatch_one() == 'idle'
+    assert len(staging) == 3
+    assert old.status == 'pending' and old.attempt_count == 0
+
+
+@pytest.mark.parametrize('branch,started', [
+    ('fix/staging-inventory-email-safety', '2020-01-01T00:00:00Z'),
+    ('release/staging-phase6', ''),
+    ('release/staging-phase6', '2999-01-01T00:00:00Z'),
+])
+def test_continuous_staging_rejects_wrong_branch_or_cutover(app, staging, monkeypatch, branch, started):
+    monkeypatch.setenv('VERCEL_GIT_COMMIT_REF', branch)
+    app.config.update(
+        STAGING_INVENTORY_EMAIL_TEST_ENABLED=False,
+        STAGING_INVENTORY_EMAIL_CONTINUOUS_ENABLED=True,
+        STAGING_INVENTORY_EMAIL_CONTINUOUS_STARTED_AT=started,
+    )
+    assert policy().mode == 'blocked'
