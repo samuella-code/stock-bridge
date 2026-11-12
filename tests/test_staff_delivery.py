@@ -54,10 +54,13 @@ def test_committed_digest_before_mock_smtp_results_and_no_secret_persistence(app
     owner, shops = seed('pro'); row, raw = issue(owner, shops)
     config, environ = policy(); app.config.update(config)
     before = (User.query.count(), Business.query.count(), AccountBilling.query.count())
-    def send(subject, recipient, body):
+    def send(subject, recipient, body, *, html):
         assert not db.session().in_transaction()  # owner lock released before transport
         assert recipient == 'staff@example.invalid'
-        assert ('https://'+delivery.STAGING_HOST+'/staff/invite#token='+raw) in body
+        link = 'https://' + delivery.STAGING_HOST + '/staff/invite#token=' + raw
+        assert link in body
+        assert f'href="{link}"' in html
+        assert 'Review invitation' in html
         if outcome == 'exception': raise RuntimeError(raw)
         return outcome == 'success'
     with patch.dict('os.environ', environ, clear=True), patch('app.staff.delivery.email_service._send_email', side_effect=send) as transport:
@@ -128,7 +131,7 @@ def test_delivery_revalidates_current_invitation_and_gate(app, case):
 def test_owner_http_response_contains_status_only_and_resend_requires_owner_csrf(app):
     owner, shops = seed('pro'); client = app.test_client(); login(client, owner)
     config, environ = policy(); app.config.update(config); captured=[]
-    def send(subject, recipient, body): captured.append(body); return True
+    def send(subject, recipient, body, *, html): captured.append(body); return True
     with patch.dict('os.environ', environ, clear=True), patch('app.staff.delivery.email_service._send_email', side_effect=send):
         response = client.post('/staff/manage', data=dict(action='invite', email='staff@example.invalid', role='manager', business_ids=[shops[0].id]))
     assert response.status_code == 200 and b'<h2>Email sent</h2>' in response.data
@@ -164,7 +167,7 @@ def test_http_resend_emails_replacement_only_without_adding_a_seat(app):
     client = app.test_client(); login(client, owner)
     config, environ = policy(); app.config.update(config); bodies=[]
     with patch.dict('os.environ',environ,clear=True), patch('app.staff.delivery.email_service._send_email',
-            side_effect=lambda subject,recipient,body: bodies.append((recipient,body)) or False):
+            side_effect=lambda subject,recipient,body,*,html: bodies.append((recipient,body)) or False):
         response = client.post('/staff/manage',data=dict(action='resend',id=old.id))
     assert response.status_code==200 and b'<h2>Email could not be sent</h2>' in response.data
     assert b'#token=' not in response.data and old.state=='revoked'
@@ -202,7 +205,7 @@ def test_delivery_schema_is_postgresql_compilable_without_migration(app):
 def test_acceptance_before_delivery_completion_updates_status_without_reopening_invite(app):
     owner,shops=seed('pro');row,raw=issue(owner,shops)
     config,environ=policy();app.config.update(config)
-    def send(subject,recipient,body):
+    def send(subject,recipient,body,*,html):
         # Deterministic interleaving, not a real database-concurrency claim.
         service.accept(raw,None,'New staff','staff-password-123','staff-password-123',now=NOW)
         db.session.commit()
