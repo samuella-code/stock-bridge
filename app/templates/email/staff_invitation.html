@@ -1,0 +1,18 @@
+{% extends "email/base.html" %}
+{% block content %}
+<h1 style="margin:0 0 12px;color:#102437;font-size:29px;line-height:1.16;letter-spacing:-0.6px;">You’re invited to join a team</h1>
+<p style="margin:0 0 22px;">You’ve been invited to join a business as a staff member on StockBridge. Open your invitation to review your access before accepting.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
+  <tr><td style="background:#1c5943;border-radius:8px;">
+    <a href="{{ invitation_url }}" style="display:inline-block;border:1px solid #1c5943;border-radius:8px;padding:12px 18px;color:#ffffff;text-decoration:none;font-size:16px;font-weight:bold;">Review invitation</a>
+  </td></tr>
+</table>
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 18px;">
+  <tr><td style="background:#edf5f0;border-left:3px solid #2d7459;padding:13px 15px;color:#214638;font-size:14px;line-height:1.5;">
+    <strong>This link can be used once and expires within 48 hours.</strong><br>
+    Keep it private.
+  </td></tr>
+</table>
+<p style="margin:0 0 14px;color:#40534e;font-size:14px;">New to StockBridge? You’ll be able to create your sign-in details when you accept. Verify your email to start using staff access.</p>
+<p style="margin:0;color:#40534e;font-size:14px;">If you weren’t expecting this invitation, you can ignore this email.</p>
+{% endblock %}

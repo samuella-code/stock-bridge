@@ -90,7 +90,16 @@ def deliver(identifier, raw, *, actor_id=None):
             'is created. ' + workflow_note +
             'Ignore this email if unexpected. Do not forward the link.')
     try:
-        status = 'sent' if email_service._send_email('Your StockBridge staff invitation', recipient, body) is True else 'failed'
+        html = current_app.jinja_env.get_template('email/staff_invitation.html').render(
+            invitation_url=link,
+        )
+    except Exception:
+        # Rendering failed before SMTP was attempted.
+        finish(identifier, digest, 'failed', actor_id=actor_id)
+        return 'failed'
+    try:
+        sent = email_service._send_email('Your StockBridge staff invitation', recipient, body, html=html)
+        status = 'sent' if sent is True else 'failed'
     except Exception:
         # A server may have accepted the message before the error. No retry or
         # exception logging: SMTP already emits sanitized fixed diagnostics.
