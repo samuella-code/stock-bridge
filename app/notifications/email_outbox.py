@@ -12,7 +12,7 @@ import requests
 from app import csrf, db
 from app.models import Business, EmailOutbox, NotificationPreference, User
 from app import email_service
-from app.notifications.staging_email_policy import policy, stamp_test_job, COHORT_KEY
+from app.notifications.staging_email_policy import policy, stamp_test_job
 
 worker_bp = Blueprint('inventory_email_worker', __name__)
 PREFERENCE_FIELDS = ('low_stock_email', 'out_of_stock_email', 'product_added', 'sales', 'restocking')
@@ -246,10 +246,7 @@ def dispatch_one(user_id=None, business_id=None, now=None):
 
         db.session.commit()  # No database locks or open transaction during SMTP.
         current_policy = policy()
-        if (current_policy.mode == 'blocked' or (current_policy.mode == 'staging'
-                and (not current_policy.allows(recipient)
-                     or payload.get(COHORT_KEY) != current_policy.run_id
-                     or not current_policy.started_at <= created_at < current_policy.started_at + timedelta(hours=1)))):
+        if not current_policy.permits_job(recipient, payload, created_at):
             finish(row_id, token, 'suppressed', datetime.utcnow(), last_error=None)
             return 'suppressed'
         if not email_service._send_email(subject, recipient, body, html=html):
