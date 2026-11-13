@@ -39,30 +39,6 @@
   cursor: pointer;
 }
 
-.sb-dashboard-setup progress {
-  display: block;
-  width: 100%;
-  height: var(--sb-2);
-  margin-block-start: var(--sb-2);
-  accent-color: var(--sb-primary);
-}
-.customer-app .sb-dashboard-setup .setup-steps li {
-  display: grid;
-  grid-template-columns: var(--sb-step) minmax(0, 1fr) auto;
-  align-items: start;
-  gap: var(--sb-2);
-  padding-block-end: var(--sb-3);
-}
-.sb-dashboard-setup [data-complete="true"] strong {
-  color: var(--sb-muted);
-  text-decoration: line-through;
-}
-.customer-app .sb-dashboard-setup .setup-steps a {
-  min-width: var(--sb-touch);
-  padding-inline: var(--sb-2);
-  text-decoration: none;
-}
-
 .sb-dashboard-chart-value {
   display: block;
   min-height: var(--sb-6);

@@ -7,7 +7,6 @@ from flask_login import current_user, login_required
 from sqlalchemy import func, case
 from app import db
 from app.models import Expense, Product, Restock, Sale, SaleItem
-from app.main.onboarding import setup_progress
 from app.main.reporting import financial_totals
 
 main_bp = Blueprint("main", __name__)
@@ -139,7 +138,7 @@ def dashboard():
     ).group_by(func.date(Sale.sold_at)).all()
     chart = sales_chart(per_day, week_start)
     return render_template("dashboard.html", business=b, metrics=metrics,
-        setup=setup_progress(b), onboarding_tour=tour,
+        onboarding_tour=tour,
         low_stock_products=low, chart=chart, period=period,
         recent_transactions=recent_activity(b), top=top_products(b, start, end))
 
@@ -153,11 +152,15 @@ def reports():
     report_args = request.args.copy()
     if any(report_args.get(field, "") for field in ("from", "to")):
         report_args["period"] = "custom"
+    now = datetime.utcnow()
+    today = now.date()
+    week_from = (today - timedelta(days=6)).isoformat()
+    week_to = today.isoformat()
     errors = report_date_errors(report_args)
     if errors:
         return render_template("reports.html", business=b, period="custom",
-            report_errors=errors), 400
-    period, start, end = period_dates(report_args)
+            report_errors=errors, week_from=week_from, week_to=week_to), 400
+    period, start, end = period_dates(report_args, now=now)
     metrics = figures(b, start, end)
     cutoff = datetime.utcnow() - timedelta(days=30)
     slow = Product.query.filter(Product.business_id == b.id, Product.active.is_(True),
@@ -167,6 +170,7 @@ def reports():
     ).order_by(Product.stock_quantity.desc()).limit(10).all()
     return render_template("reports.html", business=b, metrics=metrics, period=period,
         start=start, end=end-timedelta(days=1), slow=slow,
+        week_from=week_from, week_to=week_to,
         by_units=top_products(b, start, end), by_revenue=top_products(b, start, end, "revenue"))
 
 

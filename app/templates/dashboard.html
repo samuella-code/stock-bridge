@@ -60,13 +60,11 @@
     <p class="sb-summary-note">{% if period == 'week' %}Showing sales and profit for this calendar week. {% endif %}Voided sales and expenses are excluded from totals.</p>
   </section>
 
-  {% include 'components/setup.html' %}
-
   <div class="sb-overview-grid">
     <section class="sb-card sb-sales-chart" aria-labelledby="sales-chart-title">
-      <h2 id="sales-chart-title">Last 7 days</h2>
+      <h2 id="sales-chart-title">Sales over the last 7 days</h2>
       {% if chart|sum(attribute='total') != 0 %}
-      <output class="sb-dashboard-chart-value" data-dashboard-chart-value aria-live="off">Select a day to see sales.</output>
+      <output class="sb-dashboard-chart-value" data-dashboard-chart-value aria-live="polite">Tap or focus a day to see the sales total.</output>
       <div class="sb-chart" aria-label="Daily sales">
         {% for day in chart %}
         {% set day_value = day.date.strftime('%d/%m/%Y') ~ ': ' ~ naira(day.total) %}

@@ -163,18 +163,6 @@
     font-size: var(--sb-caption);
   }
   .sb-signin-alerts p:last-child { background: var(--sb-warning-bg); color: var(--sb-warning-text); }
-  .sb-signin-controls { display: flex; flex-wrap: wrap; gap: var(--sb-2); margin-block-start: var(--sb-2); }
-  .sb-signin-controls button {
-    min-height: var(--sb-touch);
-    padding: var(--sb-1) var(--sb-2);
-    border: var(--sb-stroke) solid var(--sb-sidebar-label);
-    border-radius: var(--sb-control-radius);
-    background: var(--sb-sidebar-bottom);
-    color: var(--sb-sidebar-text);
-    font: inherit;
-    cursor: pointer;
-  }
-  .sb-signin-controls button:focus-visible { outline-color: var(--sb-lime); }
 }
 @media (width >= 1160px) {
   .sb-signin-intro h2 { font-size: var(--sb-hero); }

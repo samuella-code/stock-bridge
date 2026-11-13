@@ -33,10 +33,9 @@
 .sb-home-demo dd, .sb-home-profit dd { margin: 0; font-weight: 800; }
 .sb-home-progress { margin-top: auto; height: var(--sb-1); background: var(--sb-soft-green); border-radius: var(--sb-pill); overflow: hidden; }
 .sb-home-progress span { display: block; height: 100%; background: var(--sb-primary); transform: scaleX(0); transform-origin: left; }
-.sb-home-alerts, .sb-home-demo-controls { display: flex; flex-wrap: wrap; gap: var(--sb-2); margin-top: var(--sb-3); }
+.sb-home-alerts { display: flex; flex-wrap: wrap; gap: var(--sb-2); margin-top: var(--sb-3); }
 .sb-home-alerts span { padding: var(--sb-1) var(--sb-3); border-radius: var(--sb-pill); background: var(--sb-soft-green); color: var(--sb-primary-hover); font-size: var(--sb-caption); }
 .sb-home-alerts span:last-child { background: var(--sb-warning-bg); color: var(--sb-warning-text); }
-.sb-home-demo-controls button { min-height: var(--sb-touch); padding-inline: var(--sb-2); border: var(--sb-stroke) solid var(--sb-input-border); border-radius: var(--sb-control-radius); background: var(--sb-surface); color: var(--sb-ink); font: inherit; cursor: pointer; }
 .sb-home-ticker { overflow: hidden; background: var(--sb-soft-green); color: var(--sb-primary-hover); padding-block: var(--sb-3); font-weight: 800; }
 .sb-home-ticker-track { display: flex; width: max-content; }
 .sb-home-ticker-track > div { display: flex; gap: var(--sb-6); padding-inline-end: var(--sb-6); }

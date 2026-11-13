@@ -82,9 +82,6 @@
         {% else %}
           {% set preceding = 'Yesterday' if period == 'today' else 'Previous period' %}
           {% set columns = [('revenue','What you sold','Sold'), ('cogs','What the goods cost','Goods cost'), ('expenses','Running costs','Running costs'), ('net_profit','What you kept','Kept')] %}
-          {% if overview.incomplete %}
-            <p class="sb-insights-warning">{{ 'Today’s totals are still in progress.' if period == 'today' else 'This period includes today or future dates.' }} Trends appear once all days in the selected period are complete.</p>
-          {% endif %}
           {% if overview.zero_cost %}
             <p class="sb-insights-warning">Some items sold have a saved cost of zero. Check those costs before comparing profit. The totals use the saved costs.</p>
           {% endif %}

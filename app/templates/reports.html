@@ -10,26 +10,19 @@
 {% endblock %}
 {% block content %}
 {% set report_errors = report_errors|default({}) %}
+{% set rolling_week = period == 'custom' and not report_errors and request.args.get('from') == week_from and request.args.get('to') == week_to %}
 <section class="sb-overview sb-reports" aria-labelledby="reports-title">
   <header class="sb-reports-heading">
     <div><p class="sb-eyebrow">{{ business.name }}</p><h1 id="reports-title">Reports</h1></div>
-    <details class="sb-report-help">
-      <summary><span aria-hidden="true">?</span><span class="sb-report-visually-hidden">Learn about Reports</span></summary>
-      <div class="sb-card">
-        <p><strong>Revenue:</strong> Money earned from completed sales. <strong>Cost of goods sold (COGS):</strong> The cost saved for the products you sold.</p>
-        <p><strong>Profit calculations:</strong> Gross profit is revenue minus the cost saved when each item was sold. Net profit is gross profit minus recorded operating expenses. Inventory purchases are tracked separately; they are not deducted a second time. Inventory value uses current stock × the latest recorded unit cost.</p>
-        <a href="{{ url_for('legal.help_centre') }}#reports">Read the Reports guide</a>
-      </div>
-    </details>
   </header>
 
-  <div class="sb-card sb-report-period">
+  <div class="sb-report-period">
     <nav class="sb-report-presets" aria-label="Reporting period">
-      {% for key, label in [('today','Today'), ('week','This week'), ('month','This month')] %}
-      <a href="{{ url_for('main.reports', period=key) }}"{% if period == key %} aria-current="true"{% endif %}>{{ label }}</a>
-      {% endfor %}
+      <a href="{{ url_for('main.reports', period='today') }}"{% if period == 'today' %} aria-current="true"{% endif %}>Today</a>
+      <a href="{{ url_for('main.reports', period='custom', from=week_from, to=week_to) }}"{% if rolling_week %} aria-current="true"{% endif %}>7 days</a>
+      <a href="{{ url_for('main.reports', period='month') }}"{% if period == 'month' %} aria-current="true"{% endif %}>This month</a>
     </nav>
-    <details class="sb-report-custom"{% if period == 'custom' %} open{% endif %}>
+    <details class="sb-report-custom"{% if period == 'custom' and not rolling_week %} open{% endif %}>
       <summary>Pick dates</summary>
       {% if report_errors %}
       <div class="sb-report-errors" role="alert" aria-labelledby="report-date-error-title">

@@ -1,0 +1,80 @@
+:root { --sb-weight-medium: 500; --sb-weight-semibold: 600; --sb-weight-heading: 700; }
+:is(.sb-home, .sb-signin) :is(h1, h2) { font-weight: var(--sb-weight-heading); }
+.sb-home .sb-home-hero h1, .sb-signin .sb-signin-story h2,
+.sb-signin .sb-signin-form-card h1 { font-weight: var(--sb-weight-heading); }
+:is(.sb-home, .sb-signin) :is(h3, strong, b, label, legend, summary, .sb-eyebrow, .sb-badge, .sb-button, .entry-brand),
+.sb-home :is(.sb-home-ticker, .sb-home-step, .sb-home-notes li, .sb-home-demo dd, .sb-home-profit dd, .sb-pricing-price strong, .sb-comparison-plan strong, .sb-plan-comparison th[scope="row"], .sb-segmented :checked + span),
+.sb-signin :is(.sb-signin-fields label, .sb-signin-preview dd, .sb-signin-link) { font-weight: var(--sb-weight-semibold); }
+.sb-home :is(.sb-home-desktop-nav, .sb-home-footer) a:not(.sb-button) { font-weight: var(--sb-weight-medium); }
+.sb-overview-shell :is(.sidebar .brand-name, .sidebar .nav-section, .sidebar .nav-link, .topbar strong, .topbar .notification-badge),
+.customer-app .sb-overview :is(.sb-eyebrow, .sb-badge, .sb-button, dt, legend, label, summary, .sb-records strong, .sb-segmented [aria-current], .sb-report-presets [aria-current], .sb-segmented :checked + span),
+.customer-app .sb-products-table thead th,
+.sb-assistant-launcher { font-weight: var(--sb-weight-semibold); }
+.sb-home .sb-home-ticker-track > div { min-inline-size: 100vw; box-sizing: border-box; justify-content: space-around; padding-inline: var(--sb-3); }
+.sb-home:not([data-home-playing]) .sb-home-ticker-track > div { min-inline-size: 0; width: 100%; }
+.sb-home[data-home-playing] .sb-home-ticker-track > div { flex: 0 0 auto; }
+.sb-home .sb-home-ticker:hover .sb-home-ticker-track { animation-play-state: paused; }
+.sb-home .sb-home-ticker-track > div { gap: var(--sb-3); }
+.sb-home .sb-home-ticker-track { max-width: none; }
+.customer-app :is(.sb-dashboard, .sb-reports, .sb-insights, .sb-staff-manage, .sb-billing) h2 {
+  color: var(--sb-ink);
+  font: 600 var(--sb-title)/1.25 var(--sb-font);
+  letter-spacing: -.02em;
+  overflow-wrap: anywhere;
+}
+.customer-app .sb-staff-manage :is(h3, strong, legend) { font-weight: 600; }
+.customer-app :is(.sb-catalogue, .sb-dashboard, .sb-reports, .sb-insights, .sb-staff-manage, .sb-billing) h1,
+.customer-app .sb-catalogue-header h1 { font-weight: 650; }
+.customer-app :is(.sb-catalogue-summary, .sb-dashboard, .sb-reports, .sb-insights) .sb-kpi dd:not(.sb-kpi-hint),
+.customer-app .sb-billing .sb-billing-price { font-weight: 650; }
+.customer-app .sb-catalogue-header .sb-button,
+.customer-app .sb-catalogue-filters :is(label, button),
+.customer-app .sb-products-table tbody a { font-weight: 600; }
+.customer-app .sb-staff-manage :is(p, small) { color: var(--sb-muted); }
+.customer-app :is(.sb-reports, .sb-insights, .sb-staff-manage, .sb-billing, .sb-dashboard) {
+  font-family: var(--sb-font);
+  font-size: var(--sb-body);
+}
+.sb-dashboard .sb-dashboard-presets { width: min(100%, calc(2 * var(--sb-sidebar-width))); }
+.sb-reports .sb-report-period { width: min(100%, calc(2 * var(--sb-sidebar-width))); }
+.customer-app .sb-dashboard .sb-overview-grid { grid-template-columns: minmax(0, 1fr); align-items: start; }
+.sb-dashboard .sb-sales-chart { min-width: 0; }
+.sb-dashboard .sb-chart {
+  --sb-plot-height: calc(var(--sb-chart-height) + var(--sb-8));
+  align-items: end;
+  background-image: repeating-linear-gradient(to top, var(--sb-border) 0 var(--sb-stroke), transparent var(--sb-stroke) 25%);
+  background-size: 100% var(--sb-plot-height);
+  background-repeat: no-repeat;
+  background-position: 0 var(--sb-2);
+  padding: 0;
+}
+.sb-dashboard .sb-chart-column {
+  grid-template-rows: var(--sb-plot-height) auto;
+  background: transparent;
+  padding: var(--sb-2) 0 0;
+}
+.sb-dashboard .sb-chart-track {
+  height: 100%;
+  width: min(100%, var(--sb-touch));
+  justify-self: center;
+  background: transparent;
+}
+.sb-dashboard .sb-chart-bar { width: 100%; }
+.sb-dashboard .sb-chart-column:is(:hover, :focus-visible) { background: var(--sb-soft-green); }
+.sb-dashboard .sb-chart-column span:last-child { font-variant-numeric: tabular-nums; }
+@media (width < 640px) {
+  .sb-dashboard .sb-chart { --sb-plot-height: var(--sb-chart-height); }
+  .sb-dashboard .sb-chart-track { width: var(--sb-5); }
+}
+.customer-app .sb-products-table tbody th[scope=row] {
+  background: var(--sb-surface);
+  font-size: var(--sb-body);
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 600;
+}
+.customer-app .sb-products-table tbody :is(th,td) { vertical-align: middle; }
+.customer-app .sb-products-table tbody tr:hover > * { background: var(--sb-soft-green); }
+.customer-app .sb-products-table tbody a:not(.sb-button):is(:hover,:focus-visible) { text-decoration: underline; }
+.sb-home:not([data-home-playing]) .sb-home-ticker-track > div > [aria-hidden] { display: none; }
+.customer-app .sb-multi-overview #overview-business-title { font: 600 var(--sb-title)/1.15 var(--sb-font); color: var(--sb-ink); }

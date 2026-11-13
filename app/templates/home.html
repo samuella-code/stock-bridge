@@ -57,16 +57,12 @@
         <div class="sb-home-progress" aria-hidden="true"><span data-home-progress></span></div>
       </div>
       <div class="sb-home-alerts"><span>✓ Sale recorded</span><span>Fruit Juice: 8 left</span></div>
-      <div class="sb-home-demo-controls" data-home-demo-controls hidden>
-        <button type="button" data-home-next>Next view</button>
-        <button type="button" data-home-motion>Pause motion</button>
-      </div>
     </div>
   </section>
 
   <div class="sb-home-ticker" aria-label="Connected business tools">
     <div class="sb-home-ticker-track">
-      {% for copy in range(2) %}<div{% if not loop.first %} aria-hidden="true"{% endif %}>{% for label in tools %}<span>{{ label }} <span aria-hidden="true">→</span></span>{% endfor %}</div>{% endfor %}
+      {% for copy in range(2) %}<div{% if not loop.first %} aria-hidden="true"{% endif %}>{% for repeat in range(4) %}{% for label in tools %}<span{% if repeat %} aria-hidden="true"{% endif %}>{{ label }} <span aria-hidden="true">→</span></span>{% endfor %}{% endfor %}</div>{% endfor %}
     </div>
   </div>
 

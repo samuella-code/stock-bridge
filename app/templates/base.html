@@ -19,6 +19,9 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/entry.css', v='entry-phase7-1') }}">
 {% if onboarding_tour is defined and onboarding_tour.eligible %}<link rel="stylesheet" href="{{url_for('static',filename='css/tour.css')}}">{% endif %}
 {% block extra_styles %}{% endblock %}
+    {% if request.endpoint in ('main.index', 'auth.login', 'main.dashboard', 'main.reports', 'main.insights', 'main.business_overview', 'staff.manage', 'products.index', 'subscriptions.index') %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/presentation-refinements.css') }}">
+    {% endif %}
 </head>
 {% from 'components/business_avatar.html' import business_avatar %}{% from 'components/icons.html' import icon %}
 <body{% if current_user.is_authenticated %} class="customer-app{% if request.endpoint in ('main.dashboard', 'main.reports', 'main.insights', 'main.business_overview', 'staff.manage', 'products.index', 'sales.index', 'restocking.index', 'restocking.receive', 'notifications.index', 'businesses.index', 'profile.index', 'expenses.index') or (request.endpoint == 'subscriptions.index' and config.SUBSCRIPTIONS_ENABLED) %} sb-overview-shell{% endif %}"{% endif %}>

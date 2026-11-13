@@ -14,32 +14,18 @@
 {% macro margin_percent(value) %}{{ ('%.2f'|format(value)).rstrip('0').rstrip('.') }}%{% endmacro %}
 
 {% block content %}
-{% set margins = namespace(sum=0, count=0, at_cost=0) %}
+{% set margins = namespace(sum=0, count=0) %}
 {% if not is_inventory %}
   {% for product in products if product.active and product.selling_price > 0 %}
     {% set margins.sum = margins.sum + (product.selling_price - product.buying_price) / product.selling_price * 100 %}
     {% set margins.count = margins.count + 1 %}
-    {% if product.selling_price == product.buying_price %}
-      {% set margins.at_cost = margins.at_cost + 1 %}
-    {% endif %}
   {% endfor %}
 {% endif %}
 <section class="sb-overview sb-catalogue{% if is_inventory %} sb-catalogue-inventory{% endif %}" aria-labelledby="catalogue-title">
   <header class="sb-overview-intro sb-catalogue-header">
     <div class="sb-catalogue-intro">
       <p class="sb-catalogue-kicker">{{ 'Stock levels' if is_inventory else 'Your catalogue' }}</p>
-    <div class="sb-catalogue-heading">
       <h1 id="catalogue-title">{{ title }}</h1>
-      <details class="sb-catalogue-help">
-        <summary aria-label="Learn about {{ title }}">?</summary>
-        <div class="sb-card">
-          <p>Opening stock is what you already have when adding a product.</p>
-          <p>Sales and restocks update current stock automatically. Use the stock adjustment form on the product page to correct a count and record the reason.</p>
-          <p>Cost price is what one unit costs you. Selling price is what you charge. The low-stock threshold tells you when stock is running low.</p>
-          <a href="{{ url_for('legal.help_centre', _anchor='inventory' if is_inventory else 'products') }}">Read the {{ title }} guide</a>
-        </div>
-      </details>
-    </div>
       <p>{{ 'What you have, what is running out, and what it is worth.' if is_inventory else 'Names, prices and details for everything you sell.' }}</p>
     </div>
     {% if is_inventory %}
@@ -205,15 +191,14 @@
           </tbody>
         </table>
       </div>
-      {% if margins.at_cost %}
-        <p class="sb-products-at-cost">Selling price equals cost price on {{ margins.at_cost }} {{ 'product' if margins.at_cost == 1 else 'products' }} on this page. Those sales earn no gross profit at the listed price.</p>
-      {% endif %}
     {% endif %}
-    <nav class="sb-catalogue-actions" aria-label="{{ title }} pages">
-      {% if pagination.has_prev %}<a class="sb-button sb-button-secondary" href="{{ url_for('products.index', page=pagination.prev_num, q=query, stock=stock_filter, category=category, sort=sort, view=catalogue_view) }}">Previous</a>{% endif %}
-      <span>Page {{ pagination.page }} of {{ pagination.pages }}</span>
-      {% if pagination.has_next %}<a class="sb-button sb-button-secondary" href="{{ url_for('products.index', page=pagination.next_num, q=query, stock=stock_filter, category=category, sort=sort, view=catalogue_view) }}">Next</a>{% endif %}
-    </nav>
+    {% if pagination.has_prev or pagination.has_next %}
+      <nav class="sb-catalogue-actions" aria-label="{{ title }} pages">
+        {% if pagination.has_prev %}<a class="sb-button sb-button-secondary" href="{{ url_for('products.index', page=pagination.prev_num, q=query, stock=stock_filter, category=category, sort=sort, view=catalogue_view) }}">Previous</a>{% endif %}
+        <span>Page {{ pagination.page }} of {{ pagination.pages }}</span>
+        {% if pagination.has_next %}<a class="sb-button sb-button-secondary" href="{{ url_for('products.index', page=pagination.next_num, q=query, stock=stock_filter, category=category, sort=sort, view=catalogue_view) }}">Next</a>{% endif %}
+      </nav>
+    {% endif %}
   {% else %}
     <div class="sb-card">
       {% if query or stock_filter != 'all' or category %}

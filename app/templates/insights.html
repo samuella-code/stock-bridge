@@ -64,9 +64,6 @@
     </div>
 
     {% if insight %}
-      {% if insight.incomplete %}
-        <p class="sb-insights-warning">{{ 'Today’s totals are still in progress.' if period == 'today' else 'This period includes today or future dates.' }} Trends appear once all days in the selected period are complete.</p>
-      {% endif %}
       {% set preceding = 'Yesterday' if period == 'today' else 'Previous period' %}
       <section class="sb-insights-finances" aria-label="Financial activity" data-insight-results>
         <p class="sb-insights-dates">{{ insight.start.strftime('%d/%m/%Y') }}{% if insight.start != insight.last %} to {{ insight.last.strftime('%d/%m/%Y') }}{% endif %} · {{ preceding }} {{ insight.previous_start.strftime('%d/%m/%Y') }}{% if insight.previous_start != insight.previous_last %} to {{ insight.previous_last.strftime('%d/%m/%Y') }}{% endif %}</p>
