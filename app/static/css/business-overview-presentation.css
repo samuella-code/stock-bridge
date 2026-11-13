@@ -1,0 +1,37 @@
+.sb-multi-scope { margin: 0; }
+.sb-multi-results { display: grid; gap: var(--sb-4); min-width: 0; }
+.sb-multi-net { background: var(--sb-soft-green); }
+.sb-multi-businesses { min-width: 0; }
+.sb-multi-businesses h2 {
+  margin: 0 0 var(--sb-3);
+  font-size: var(--sb-body-large);
+  font-weight: 800;
+}
+.sb-multi-table.sb-card {
+  padding: 0;
+  overflow-x: auto;
+}
+.sb-multi-table:focus-visible {
+  outline: var(--sb-focus) solid var(--sb-primary);
+  outline-offset: var(--sb-focus);
+}
+.customer-app .sb-multi-table table {
+  width: 100%;
+  min-width: var(--sb-comparison-min-width);
+  margin: 0;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.customer-app .sb-multi-table :is(th, td) {
+  padding: var(--sb-3) var(--sb-4);
+  border-block-end: var(--sb-stroke) solid var(--sb-border);
+  text-align: start;
+}
+.customer-app .sb-multi-table thead th {
+  background: var(--sb-segment-bg);
+  color: var(--sb-muted);
+  font-size: var(--sb-caption);
+}
+.customer-app .sb-multi-table tbody th { color: var(--sb-ink); }
+.sb-multi-comparison { color: var(--sb-muted); }
+.sb-multi-comparison small { display: block; }

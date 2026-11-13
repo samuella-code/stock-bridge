@@ -1,4 +1,86 @@
-{% extends 'staff/base.html' %}{% block content %}
-{% if staff_operations_enabled|default(false) %}<h1>My staff access</h1><p>Open the workflows available for your role and assigned businesses below.</p>{% else %}{% if staff_stock_enabled|default(false) %}<h1>My staff access</h1><p>Open the available workflows below for your assigned businesses. Your role controls which actions you can use. Expenses, product editing and financial reports are not available yet.</p>{% else %}<h1>My staff access</h1><p>Your role and businesses can be set up now. {% if sales_enabled|default(false) %}Sales are available below when included in your role. Stock management, expenses and financial reports are not available yet.{% else %}Staff sales, stock, expenses and financial reports are not available yet.{% endif %}</p>{% endif %}{% endif %}
-{% for member, businesses in rows %}<section><h2>{{ role_names[(member.owner_id,member.role)] }}</h2><p>{{ member.duty_label or 'No duty label added' }}</p><h3>Your assigned businesses</h3><ul class="staff-business-list">{% for business in businesses %}<li><h4>{{ business.name }}</h4><div class="staff-workflow-links">{% if sales_enabled|default(false) and ('sales_view' in role_permissions[(member.owner_id,member.role)] or 'sales_create' in role_permissions[(member.owner_id,member.role)]) %}<a href="{{ url_for('staff.sales',membership_id=member.id,business_id=business.id) }}">Sales</a>{% endif %}{% if staff_stock_enabled|default(false) %}{% if 'inventory_view' in role_permissions[(member.owner_id,member.role)] %}<a href="{{ url_for('staff.inventory',membership_id=member.id,business_id=business.id) }}">Inventory</a>{% endif %}{% if 'restocking_view' in role_permissions[(member.owner_id,member.role)] or 'restocking_create' in role_permissions[(member.owner_id,member.role)] %}<a href="{{ url_for('staff.restocking',membership_id=member.id,business_id=business.id) }}">Restocking</a>{% endif %}{% endif %}{% if staff_operations_enabled|default(false) %}{% set permissions=role_permissions[(member.owner_id,member.role)] %}{% if 'products_create' in permissions or 'products_edit' in permissions %}<a href="{{ url_for('staff.products',membership_id=member.id,business_id=business.id) }}">Products</a>{% endif %}{% if 'expenses_view' in permissions or 'expenses_create' in permissions %}<a href="{{ url_for('staff.staff_expenses',membership_id=member.id,business_id=business.id) }}">Expenses</a>{% endif %}{% if 'financial_view' in permissions %}<a href="{{ url_for('staff.staff_reports',membership_id=member.id,business_id=business.id) }}">Financial reports</a>{% endif %}{% endif %}</div></li>{% endfor %}</ul><p>Financial reports: {{ ('available for your assigned businesses' if staff_operations_enabled|default(false) else 'selected for your role, but not available yet') if 'financial_view' in role_permissions[(member.owner_id,member.role)] else 'not included in your role' }}.</p><p>Contact the owner to change your role or business assignments.</p></section>{% else %}<p>No staff assignments are currently available. Ask the owner to check your assignments, their Pro plan and whether your access needs restoring.</p>{% endfor %}
+{% extends 'staff/base.html' %}
+{% block title %}My access · StockBridge{% endblock %}
+{% block body_class %}sb-staff-access{% endblock %}
+{% block styles %}
+  {% for stylesheet in ('design-tokens', 'presentation', 'staff-access-presentation') %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/' ~ stylesheet ~ '.css') }}">
+  {% endfor %}
+{% endblock %}
+{% block staff_header %}
+<header class="sb-card sb-staff-access-header">
+  <strong>StockBridge · Staff</strong>
+  <nav aria-label="Staff navigation">
+    <a href="{{ url_for('staff.home') }}" aria-current="page">My access</a>
+    <a href="#my-businesses">My businesses</a>
+    <a href="{{ url_for('staff.teams') }}">Team management</a>
+    {% if not current_user.staff_only %}
+      <a href="{{ url_for('main.dashboard') }}">Owner dashboard</a>
+      <a href="{{ url_for('staff.manage') }}">Manage staff</a>
+    {% endif %}
+  </nav>
+  <form method="POST" action="{{ url_for('auth.logout') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="sb-button sb-button-secondary" type="submit">Log out</button>
+  </form>
+</header>
+{% endblock %}
+{% block content %}
+  <header class="sb-staff-access-intro">
+    <h1>My access</h1>
+    <p>The businesses you can work in, and what you can do there.</p>
+  </header>
+  <div id="my-businesses" class="sb-staff-access-grid" aria-label="My businesses">
+    {% for member, businesses in rows %}
+      {% set key = (member.owner_id, member.role) %}
+      {% set permissions = role_permissions[key] %}
+      {% for business in businesses %}
+        {% set workflow = namespace(links=[]) %}
+        {% if sales_enabled|default(false) and ('sales_view' in permissions or 'sales_create' in permissions) %}
+          {% set workflow.links = workflow.links + [('Sales', 'staff.sales')] %}
+        {% endif %}
+        {% if staff_stock_enabled|default(false) %}
+          {% if 'inventory_view' in permissions %}{% set workflow.links = workflow.links + [('View stock', 'staff.inventory')] %}{% endif %}
+          {% if 'restocking_view' in permissions or 'restocking_create' in permissions %}{% set workflow.links = workflow.links + [('Restocking', 'staff.restocking')] %}{% endif %}
+        {% endif %}
+        {% if staff_operations_enabled|default(false) %}
+          {% if 'products_create' in permissions or 'products_edit' in permissions %}{% set workflow.links = workflow.links + [('Products', 'staff.products')] %}{% endif %}
+          {% if 'expenses_view' in permissions or 'expenses_create' in permissions %}{% set workflow.links = workflow.links + [('Expenses', 'staff.staff_expenses')] %}{% endif %}
+          {% if 'financial_view' in permissions %}{% set workflow.links = workflow.links + [('Financial reports', 'staff.staff_reports')] %}{% endif %}
+        {% endif %}
+        <article class="sb-card sb-staff-access-business">
+          <div class="sb-staff-access-business-heading">
+            <div>
+              <h2>{{ business.name }}</h2>
+              <p>Role: {{ role_names[key] }}{% if member.duty_label %} · {{ member.duty_label }}{% endif %}</p>
+            </div>
+            {% if workflow.links %}
+              <a class="sb-button sb-button-primary" href="{{ url_for(workflow.links[0][1], membership_id=member.id, business_id=business.id) }}" aria-label="Open {{ workflow.links[0][0] }} for {{ business.name }}">Open</a>
+            {% endif %}
+          </div>
+          {% if workflow.links %}
+            <nav class="sb-staff-access-workflows" aria-label="Workflows for {{ business.name }}">
+              {% for label, endpoint in workflow.links %}
+                <a class="sb-button sb-button-secondary" href="{{ url_for(endpoint, membership_id=member.id, business_id=business.id) }}">{{ label }}</a>
+              {% endfor %}
+            </nav>
+          {% else %}
+            <p>No workflows are available for this role yet.</p>
+          {% endif %}
+        </article>
+      {% endfor %}
+    {% else %}
+      <section class="sb-card sb-staff-access-empty" aria-labelledby="staff-access-empty-title">
+        <span class="sb-staff-access-ring" aria-hidden="true"></span>
+        <h2 id="staff-access-empty-title">No businesses available yet</h2>
+        <p>Ask the business owner to check:</p>
+        <ul>
+          <li>Your business assignments</li>
+          <li>Whether their Pro plan is active</li>
+          <li>Whether your access needs to be restored</li>
+        </ul>
+        <a class="sb-button sb-button-secondary" href="{{ url_for('staff.home') }}">Check again</a>
+      </section>
+    {% endfor %}
+  </div>
+  {% if rows %}<p class="sb-staff-access-note">Contact the owner to change your role or business assignments.</p>{% endif %}
 {% endblock %}

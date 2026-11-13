@@ -1,0 +1,136 @@
+{% from 'components/presentation.html' import naira %}
+
+{% macro pricing_styles() -%}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/design-tokens.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/presentation.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/public-pricing.css') }}">
+{%- endmacro %}
+
+{% macro comparison_status(available) -%}
+<span class="{{ 'sb-comparison-check' if available else 'sb-comparison-dash' }}" aria-hidden="true">{{ '✓' if available else '—' }}</span>
+<span class="sb-pricing-visually-hidden">{{ 'Available' if available else 'Unavailable' }}</span>
+{%- endmacro %}
+
+{% macro plan_comparison(plan_prices) -%}
+{% set plans = ('basic', 'plus', 'pro') %}
+<section class="sb-plan-comparison" aria-labelledby="plan-comparison-heading">
+  <h3 id="plan-comparison-heading">Compare plans</h3>
+  <p id="plan-comparison-description">Every plan includes the same everyday tools. The difference is how many businesses you run.</p>
+  <div class="sb-comparison-scroll" role="region" aria-labelledby="plan-comparison-heading" aria-describedby="plan-comparison-description" tabindex="0">
+    <table>
+      <colgroup><col class="sb-comparison-feature"><col span="3"></colgroup>
+      <thead>
+        <tr>
+          <th scope="col">Features</th>
+          {% for plan in plans %}
+          <th scope="col" class="sb-comparison-plan{% if plan == 'plus' %} sb-comparison-plus{% endif %}">
+            {% if plan == 'plus' %}<span class="sb-badge sb-comparison-popular">Most popular</span>{% endif %}
+            <strong>{{ plan|title }}</strong>
+            <span class="sb-comparison-monthly">{{ naira(plan_prices[plan].monthly) }} / month</span>
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row">Businesses</th>
+          <td>1</td><td class="sb-comparison-plus">Up to 2</td><td>Up to 5</td>
+        </tr>
+        {% for feature, available in (
+          ('Switch between businesses', ('plus', 'pro')),
+          ('Business Insights', ('plus', 'pro')),
+          ('Overview across all businesses', ('pro',))
+        ) %}
+        <tr>
+          <th scope="row">{{ feature }}</th>
+          {% for plan in plans %}
+          <td{% if plan == 'plus' %} class="sb-comparison-plus"{% endif %}>{{ comparison_status(plan in available) }}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+        <tr class="sb-comparison-summary">
+          <td colspan="4">
+            <strong>Included in every plan</strong>
+            <ul aria-label="Everyday tools">
+              {% for feature in ('Products', 'Inventory', 'Sales', 'Restocking', 'Expenses', 'Dashboard', 'Reports') %}
+              <li><span class="sb-comparison-check" aria-hidden="true">✓</span>{{ feature }}</li>
+              {% endfor %}
+            </ul>
+          </td>
+        </tr>
+      </tbody>
+      <tfoot>
+        <tr>
+          <th scope="row">Get started</th>
+          {% for plan in plans %}
+          <td{% if plan == 'plus' %} class="sb-comparison-plus"{% endif %}>
+            <a class="sb-button {{ 'sb-button-primary' if plan == 'plus' else 'sb-button-secondary' }}" href="{{ url_for('auth.signup') }}" aria-label="{{ 'Start free trial' if config.SUBSCRIPTIONS_ENABLED else 'Create account' }} with {{ plan|title }}">{{ 'Start free trial' if config.SUBSCRIPTIONS_ENABLED else 'Create account' }}</a>
+          </td>
+          {% endfor %}
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% set basic = plan_prices.basic %}
+  {% set plus = plan_prices.plus %}
+  {% set pro = plan_prices.pro %}
+  <p class="sb-comparison-saving">Yearly saves {{ naira(basic.monthly * 12 - basic.yearly) }} on Basic, {{ naira(plus.monthly * 12 - plus.yearly) }} on Plus and {{ naira(pro.monthly * 12 - pro.yearly) }} on Pro.</p>
+</section>
+{%- endmacro %}
+
+{% macro public_pricing(plan_prices) -%}
+{% set plan_details = {
+  'basic': ('For owners running one business.', ['1 business', 'Products and inventory', 'Sales and restocking', 'Expenses, dashboard and reports']),
+  'plus': ('For owners managing a second business.', ['Everything in Basic', 'Up to 2 businesses', 'Switch between businesses', 'Business Insights']),
+  'pro': ('For owners who want to see several businesses together.', ['Everything in Plus', 'Up to 5 businesses', 'One overview across all businesses'])
+} %}
+{% set savings = [] %}
+{% for prices in plan_prices.values() %}
+  {% set _ = savings.append(prices.monthly * 12 - prices.yearly) %}
+{% endfor %}
+<section id="pricing" class="sb-public-pricing" aria-labelledby="public-pricing-heading">
+  <div class="sb-pricing-inner">
+    <header class="sb-pricing-heading">
+      <p class="sb-eyebrow">Straightforward pricing</p>
+      <h2 id="public-pricing-heading">Choose the room your business needs.</h2>
+      {% if not config.SUBSCRIPTIONS_ENABLED %}
+      <p>Subscription checkout and trials are unavailable while subscription rollout is off.</p>
+      {% endif %}
+    </header>
+    <fieldset class="sb-pricing-interval">
+      <legend class="sb-pricing-visually-hidden">Displayed billing interval</legend>
+      <div class="sb-segmented">
+        <label><input type="radio" name="public-price-interval" value="monthly"><span>Monthly</span></label>
+        <label><input type="radio" name="public-price-interval" value="yearly" checked><span>Yearly · save up to {{ naira(savings|max) }}</span></label>
+      </div>
+    </fieldset>
+
+    <div class="sb-pricing-grid" aria-live="polite">
+      {% for plan in ('basic', 'plus', 'pro') %}
+      {% set prices = plan_prices[plan] %}
+      {% set audience, features = plan_details[plan] %}
+      <article class="sb-card sb-pricing-card{% if plan == 'plus' %} sb-pricing-recommended{% endif %}" aria-labelledby="public-price-{{ plan }}">
+        {% if plan == 'plus' %}<span class="sb-badge sb-pricing-popular">Most popular</span>{% endif %}
+        <header>
+          <h3 id="public-price-{{ plan }}">{{ plan|title }}</h3>
+          <p>{{ audience }}</p>
+        </header>
+        <div class="sb-pricing-price">
+          <p class="sb-pricing-yearly"><strong>{{ naira(prices.yearly) }}</strong> <span>per year</span></p>
+          <p class="sb-pricing-monthly"><strong>{{ naira(prices.monthly) }}</strong> <span>per month</span></p>
+          <p class="sb-pricing-saving">Save {{ naira(prices.monthly * 12 - prices.yearly) }} yearly, or {{ naira(prices.monthly) }} per month.</p>
+        </div>
+        <ul class="sb-pricing-features">
+          {% for feature in features %}<li><span aria-hidden="true">✓</span>{{ feature }}</li>{% endfor %}
+        </ul>
+        <a class="sb-button {{ 'sb-button-primary' if plan == 'plus' else 'sb-button-secondary' }}" href="{{ url_for('auth.signup') }}" aria-describedby="public-price-{{ plan }}">{{ 'Start free trial' if config.SUBSCRIPTIONS_ENABLED else 'Create account' }}</a>
+      </article>
+      {% endfor %}
+    </div>
+    {% if config.SUBSCRIPTIONS_ENABLED %}
+    <p class="sb-pricing-note">7 days free for eligible verified accounts. No card required. Your records are never deleted if you cancel.</p>
+    {% endif %}
+    {{ plan_comparison(plan_prices) }}
+  </div>
+</section>
+{%- endmacro %}

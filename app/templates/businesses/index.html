@@ -1,20 +1,119 @@
 {% extends 'base.html' %}
-{% block page_title %}My Businesses{% endblock %}
+{% from 'components/presentation.html' import status_badge, empty_message %}
+{% block title %}My businesses · StockBridge{% endblock %}
+{% block topbar_heading %}{% endblock %}
+{% block extra_styles %}
+  {% for stylesheet in ('design-tokens', 'presentation', 'overview', 'businesses-presentation') %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/' ~ stylesheet ~ '.css') }}">
+  {% endfor %}
+{% endblock %}
+
 {% block content %}
-<section class="dashboard-wrap"><h2>My Businesses</h2><p class="muted">Manage access to each business. Products and transactions stay separate.</p>
-{% if choosing %}<div class="panel-card"><h2>Choose the business you want to keep active.</h2><p>Your current entitlement supports one business. All businesses and their records are safely stored. Choose one to continue; Your plan’s allowance determines which businesses are accessible.</p></div>{% endif %}
-{% if businesses and not allowed %}<div class="panel-card" role="status"><h2>No eligible active business available</h2><p>Business records are unavailable under the current account status and plan restrictions. Suspended business records remain preserved.</p></div>{% endif %}
-<div class="business-grid">
-{% for b in businesses %}
-<article class="panel-card business-card {{ 'current' if not choosing and active and active.id == b.id and b.id in allowed }}"><h3>{{ b.name }}</h3>
-<p class="business-status"><span class="status">{% if b.suspended_at %}Suspended{% elif choosing %}Selection required{% elif b.id in allowed %}Available{% else %}Locked — data preserved{% endif %}{% if not choosing and active and active.id == b.id and b.id in allowed %} · Currently viewing{% endif %}</span></p>
-{% if b.id not in allowed and not choosing and not b.suspended_at %}<p>Your products, stock and history are safe. This business is locked by your current plan limit. Plus restores access without recreating it.</p>{% endif %}<p class="muted">Created {{ b.created_at.strftime('%d %b %Y') }}</p>
-{% if b.id in allowed %}<form method="POST" action="{{ url_for('businesses.switch', business_id=b.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="primary-btn">View business</button></form><p><a href="{{ url_for('businesses.edit', business_id=b.id) }}">Edit business</a> · <a href="{{ url_for('businesses.profile', business_id=b.id) }}">Business profile</a></p>{% endif %}
-{% if can_choose and not b.suspended_at %}<form method="POST" action="{{ url_for('businesses.choose', business_id=b.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="secondary-btn">Keep this business active</button></form>{% endif %}
-</article>
-{% else %}<article class="panel-card"><h2>No businesses yet</h2><p>Add your business to start recording stock and sales.</p></article>{% endfor %}
-</div>
-{% if can_add %}<p><a class="primary-btn button-link" href="{{ url_for('businesses.create') }}">Add Business</a></p>{% endif %}
-<p><a href="{{ url_for('subscriptions.index') }}">Manage plan / Review Plus or Pro</a></p>
+{% set limit = billing_access.business_limit if billing_access is defined else 0 %}
+{% set pro_with_room = can_add and billing_access is defined and billing_access.subscription and billing_access.subscription.plan_code == 'pro' %}
+<section class="sb-overview sb-businesses" aria-labelledby="businesses-title">
+  <header class="sb-overview-intro sb-businesses-header">
+    <div>
+      <h1 id="businesses-title">My businesses</h1>
+      <p>Each business has its own products, stock and transactions.</p>
+    </div>
+    {% if pro_with_room %}
+      <a class="sb-button sb-button-primary" href="{{ url_for('businesses.create') }}">Add business</a>
+    {% endif %}
+  </header>
+
+  {% if choosing %}
+    <section class="sb-card sb-business-notice">
+      <h2>Choose the business you want to keep active</h2>
+      <p>Your current plan supports one business. Choose one to continue. Your other businesses and their records are kept.</p>
+    </section>
+  {% elif businesses and not allowed %}
+    <section class="sb-card sb-business-notice" role="status">
+      <h2>No businesses are available right now</h2>
+      <p>Your records are kept. Access depends on your account status and plan.</p>
+    </section>
+  {% endif %}
+
+  <div class="sb-business-grid">
+    {% for b in businesses %}
+      {% set available = b.id in allowed %}
+      {% set open_now = available and not choosing and active and active.id == b.id %}
+      <article class="sb-card sb-business-card">
+        <header>
+          <h2>{{ b.name }}</h2>
+          {% if b.suspended_at %}
+            {{ status_badge('Suspended', 'danger') }}
+          {% elif choosing %}
+            {{ status_badge('Selection required', 'warning') }}
+          {% elif open_now %}
+            {{ status_badge('Open now') }}
+          {% elif available %}
+            {{ status_badge('Available') }}
+          {% else %}
+            {{ status_badge('Locked', 'warning') }}
+          {% endif %}
+        </header>
+        <dl class="sb-business-facts">
+          <div>
+            <dt>Created</dt>
+            <dd><time data-sb-wat="date" datetime="{{ b.created_at.isoformat() }}{% if not b.created_at.tzinfo %}Z{% endif %}">{{ b.created_at.strftime('%d/%m/%Y') }}</time></dd>
+          </div>
+          {% if available %}
+            <div><dt>Products</dt><dd>{{ b.products|length }}</dd></div>
+          {% endif %}
+        </dl>
+        {% if not available and not choosing and not b.suspended_at %}
+          <p>Your products, stock and history are kept. Access depends on your plan’s business limit.</p>
+        {% endif %}
+        <div class="sb-business-actions">
+          {% if available %}
+            <form method="POST" action="{{ url_for('businesses.switch', business_id=b.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="sb-button sb-button-primary" type="submit">Open dashboard</button>
+            </form>
+            {% if b.has_write_access %}
+              <a class="sb-button sb-button-secondary" href="{{ url_for('businesses.edit', business_id=b.id) }}">Edit</a>
+            {% endif %}
+            {% if current_user.email_verified_at %}
+              <a class="sb-button sb-button-secondary" href="{{ url_for('businesses.profile', business_id=b.id) }}">Profile</a>
+            {% endif %}
+          {% endif %}
+          {% if can_choose and not b.suspended_at %}
+            <form method="POST" action="{{ url_for('businesses.choose', business_id=b.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="sb-button sb-button-secondary" type="submit">Keep this business active</button>
+            </form>
+          {% endif %}
+        </div>
+      </article>
+    {% else %}
+      <article class="sb-card">{{ empty_message('Your businesses will appear here when you add them.') }}</article>
+    {% endfor %}
+
+    {% if config.SUBSCRIPTIONS_ENABLED and not pro_with_room %}
+      <article class="sb-card sb-business-add">
+        <h2>{{ 'Add another business' if businesses else 'Add a business' }}</h2>
+        {% if limit > 0 %}
+          <p>Your plan supports {{ 'one business' if limit == 1 else 'up to ' ~ limit ~ ' businesses' }}. You have {{ businesses|length }}.</p>
+        {% else %}
+          <p>Choose a plan to add a business. Plus supports up to two businesses.</p>
+        {% endif %}
+        {% if can_add %}
+          <a class="sb-button sb-button-primary" href="{{ url_for('businesses.create') }}">Add business</a>
+        {% elif limit > businesses|length %}
+          <p>Check your account access before adding a business.</p>
+        {% elif limit <= 1 and businesses|length < 2 %}
+          <a class="sb-button sb-button-secondary" href="{{ url_for('subscriptions.index', _anchor='plan-plus') }}">View Plus</a>
+        {% elif limit < 5 %}
+          <a class="sb-button sb-button-secondary" href="{{ url_for('subscriptions.index', _anchor='plan-pro') }}">View Pro</a>
+        {% endif %}
+      </article>
+    {% endif %}
+  </div>
+  <a class="sb-business-plan" href="{{ url_for('subscriptions.index') }}">Manage plan</a>
 </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/overview-format.js') }}" defer></script>
 {% endblock %}

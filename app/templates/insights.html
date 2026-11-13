@@ -1,58 +1,123 @@
 {% extends "base.html" %}
-{% block page_title %}Business Insights{% endblock %}
-{% block extra_styles %}<link rel="stylesheet" href="{{ url_for('static', filename='css/insights.css') }}">{% endblock %}
+{% from 'components/presentation.html' import naira, product_name, quantity_with_unit %}
+{% block title %}Business Insights · StockBridge{% endblock %}
+{% block topbar_heading %}{% endblock %}
+{% block extra_styles %}
+  {% for stylesheet in ('design-tokens', 'presentation', 'overview', 'reports-presentation', 'insights-presentation') %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/' ~ stylesheet ~ '.css') }}">
+  {% endfor %}
+{% endblock %}
+
+{% macro date_error(error) -%}
+  {{- error|replace('YYYY-MM-DD format', 'day/month/year format')|replace('9999-12-31', '31/12/9999') -}}
+{%- endmacro %}
+
 {% block content %}
-<section class="dashboard-wrap insights-page">
-  <h2>Business Insights</h2>
+<section class="sb-overview sb-insights" aria-labelledby="insights-title">
+  <header class="sb-overview-intro">
+    <div>
+      {% if not insights_denied|default(false) %}<p class="sb-insights-business">{{ business.name }}</p>{% endif %}
+      <h1 id="insights-title">Business Insights</h1>
+      {% if not insights_denied|default(false) %}<p>See what you sold, what it cost, and what to review. Figures are estimates based on your recorded activity.</p>{% endif %}
+    </div>
+  </header>
+
   {% if insights_denied|default(false) %}
-  <div class="panel-card"><h3>Plus or Pro access required</h3><p>Business Insights requires current paid Plus or Pro access to a permitted business. Your existing Reports access is unchanged.</p><a href="{{ url_for('subscriptions.index') }}">Review your plan</a> · <a href="{{ url_for('businesses.index') }}">My Businesses</a></div>
+    <div class="sb-card sb-insights-review">
+      <h2>Plus or Pro access required</h2>
+      <p>Business Insights requires a current paid Plus or Pro plan and access to the business you want to view.</p>
+      <div class="sb-insights-actions">
+        <a class="sb-button sb-button-primary" href="{{ url_for('subscriptions.index') }}">Review your plan</a>
+        <a class="sb-button sb-button-secondary" href="{{ url_for('businesses.index') }}">My businesses</a>
+        <a class="sb-button sb-button-secondary" href="{{ url_for('main.reports') }}">Open Reports</a>
+      </div>
+    </div>
   {% else %}
-  <p class="eyebrow">{{ business.name }}</p>
-  <p>Explanations of this business's recorded activity. These figures are estimates, not complete accounts or forecasts. Only recorded operating expenses are included.</p>
-  <p><a href="{{ url_for('main.reports') }}">Open Reports</a> · Use the business switcher to view another permitted business.</p>
-  {% if report_errors %}
-  <div class="flash flash-error" role="alert" aria-labelledby="insight-error-title"><strong id="insight-error-title">Check your insight dates</strong><p>No insights have been generated. Correct the dates below.</p><ul>{% for field, error in report_errors.items() %}<li><a href="#insight-{{ field }}">{{ error }}</a></li>{% endfor %}</ul></div>
-  {% endif %}
-  <form method="GET" class="period-picker" data-report-period>
-    <label>Period<select name="period">{% for key, label in [('today','Today'),('week','This week'),('month','This month'),('custom','Custom dates')] %}<option value="{{ key }}" {{ 'selected' if period == key }}>{{ label }}</option>{% endfor %}</select></label>
-    {% for field, label in [('from','From'),('to','To')] %}
-    <label for="insight-{{ field }}">{{ label }}<input type="date" id="insight-{{ field }}" name="{{ field }}" value="{{ request.args.get(field, '') }}"{% if field in report_errors %} aria-invalid="true" aria-describedby="insight-{{ field }}-error"{% endif %}>{% if field in report_errors %}<small class="report-field-error" id="insight-{{ field }}-error">{{ report_errors[field] }}{% if request.args.get(field, '') %} Entered value: {{ request.args.get(field) }}{% endif %}</small>{% endif %}</label>
-    {% endfor %}
-    <button class="secondary-btn">Show insights</button>
-  </form>
-  {% if insight %}
-  <section aria-labelledby="insight-financial-title" data-insight-results>
-    <h3 id="insight-financial-title">Selected-period financial activity</h3>
-    <p>{{ insight.start.strftime('%d %b %Y') }} to {{ insight.last.strftime('%d %b %Y') }} inclusive (UTC).</p>
-    <p>Compared with the equal preceding period: {{ insight.previous_start.strftime('%d %b %Y') }} to {{ insight.previous_last.strftime('%d %b %Y') }} inclusive (UTC).</p>
-    {% if insight.incomplete %}<p class="flash flash-warning"><strong>Incomplete period.</strong> Today or future dates are included. Directional trends are withheld.</p>{% endif %}
-    <div class="metric-grid">
-    {% for key, label in [('revenue','Revenue'),('cogs','Cost of goods sold'),('gross_profit','Estimated gross profit'),('expenses','Recorded operating expenses'),('net_profit','Estimated result after recorded expenses')] %}
-      <article class="metric-card"><h4>{{ label }}</h4><strong>₦{{ '{:,.2f}'.format(insight.current[key]) }}</strong>
-      <p>Preceding period: ₦{{ '{:,.2f}'.format(insight.previous[key]) }}</p>
-      {% if key in insight.trends %}{% set trend = insight.trends[key] %}
-        {% if trend.state == 'incomplete' %}<p>Comparison withheld: incomplete period.</p>
-        {% elif trend.state == 'cost-review' %}<p>Profit comparison withheld: review zero saved costs.</p>
-        {% else %}<p>Recorded change: {{ '+' if trend.delta > 0 }}₦{{ '{:,.2f}'.format(trend.delta) }}{% if trend.percent is not none %} ({{ '+' if trend.percent > 0 }}{{ '{:,.1f}'.format(trend.percent) }}%){% endif %}.</p>
-          {% if trend.state == 'no-baseline' %}<p>No positive preceding baseline; a percentage trend cannot be established.</p>{% elif trend.state == 'negative-baseline' %}<p>Preceding value is negative; only the amount change is shown.</p>{% endif %}
+    <div class="sb-report-period sb-insights-period">
+      <nav class="sb-report-presets" aria-label="Insights period">
+        {% for key, label in [('today','Today'), ('week','This week'), ('month','This month')] %}
+          <a href="{{ url_for('main.insights', period=key) }}"{% if period == key %} aria-current="true"{% endif %}>{{ label }}</a>
+        {% endfor %}
+      </nav>
+      <details class="sb-report-custom"{% if period == 'custom' or report_errors %} open{% endif %}>
+        <summary>Pick dates</summary>
+        {% if report_errors %}
+          <div class="sb-report-errors" role="alert" aria-labelledby="insight-error-title">
+            <strong id="insight-error-title">Check your insight dates</strong>
+            <ul>{% for field, error in report_errors.items() %}<li><a href="#insight-{{ field }}">{{ date_error(error) }}</a></li>{% endfor %}</ul>
+          </div>
         {% endif %}
-      {% endif %}</article>
-    {% endfor %}
+        <form method="GET" class="sb-report-date-form">
+          <input type="hidden" name="period" value="custom">
+          <div class="sb-period-dates">
+            <p id="insight-date-format">Day/month/year</p>
+            {% for field, label in [('from','From'),('to','To')] %}
+              <label for="insight-{{ field }}">{{ label }}
+                <input type="date" lang="en-GB" id="insight-{{ field }}" name="{{ field }}" value="{{ request.args.get(field, '') }}" aria-describedby="insight-date-format{% if field in report_errors %} insight-{{ field }}-error{% endif %}"{% if field in report_errors %} aria-invalid="true"{% endif %}>
+                {% if field in report_errors %}<small class="sb-report-field-error" id="insight-{{ field }}-error">{{ date_error(report_errors[field]) }}{% if request.args.get(field, '') %} Entered value: {{ request.args.get(field) }}{% endif %}</small>{% endif %}
+              </label>
+            {% endfor %}
+          </div>
+          <button class="sb-button sb-button-primary" type="submit">Apply</button>
+        </form>
+      </details>
     </div>
-    <div class="panel-card"><h3>What to review</h3>
-      {% for explanation in insight.explanations %}<p>{{ explanation }}</p>{% else %}<p>Review the recorded totals and preceding-period values above before making business decisions.</p>{% endfor %}
-      <p>Revenue uses saved sale prices. COGS uses saved sale-time costs. Estimated gross profit = revenue − COGS; estimated result after recorded expenses = gross profit − operating expenses. Voided sales and expenses are excluded. Stock purchases are separate and are not deducted again.</p>
-    </div>
-  </section>
-  <section class="panel-card" aria-labelledby="insight-stock-title">
-    <h3 id="insight-stock-title">Stock with no recorded sales in 30 complete UTC days</h3>
-    <p><strong>Separate stock review, independent of the selected financial dates.</strong> {{ insight.stock.start.strftime('%d %b %Y') }} up to, but excluding, {{ insight.stock.end.strftime('%d %b %Y') }} UTC. Today's sales are not included.</p>
-    <p>Up to 10 active products, added on or before the start of that window, with stock remaining. Newer products have insufficient history for this list. Current stock quantities are shown.</p>
-    <ul>{% for product in insight.stock.products %}<li>{{ product.name }} · {{ product.stock_quantity }} {{ product.unit }} in stock</li>{% else %}<li>No established products meet this condition. This does not establish demand for newer products.</li>{% endfor %}</ul>
-    <p>Check counts, product visibility and sales recording before purchasing more. This list does not predict future demand or recommend a restock quantity.</p>
-  </section>
-  {% endif %}
+
+    {% if insight %}
+      {% if insight.incomplete %}
+        <p class="sb-insights-warning">{{ 'Today’s totals are still in progress.' if period == 'today' else 'This period includes today or future dates.' }} Trends appear once all days in the selected period are complete.</p>
+      {% endif %}
+      {% set preceding = 'Yesterday' if period == 'today' else 'Previous period' %}
+      <section class="sb-insights-finances" aria-label="Financial activity" data-insight-results>
+        <p class="sb-insights-dates">{{ insight.start.strftime('%d/%m/%Y') }}{% if insight.start != insight.last %} to {{ insight.last.strftime('%d/%m/%Y') }}{% endif %} · {{ preceding }} {{ insight.previous_start.strftime('%d/%m/%Y') }}{% if insight.previous_start != insight.previous_last %} to {{ insight.previous_last.strftime('%d/%m/%Y') }}{% endif %}</p>
+        <dl class="sb-insights-metrics">
+          {% for key, label in [('revenue','What you sold'), ('cogs','What the goods cost'), ('gross_profit','Gross profit'), ('expenses','Running costs'), ('net_profit','What you kept')] %}
+            <div class="sb-kpi sb-card{% if key == 'net_profit' %} sb-insights-net{% endif %}">
+              <dt>{{ label }}</dt>
+              <dd>{{ naira(insight.current[key]) }}</dd>
+              <dd class="sb-kpi-hint">{{ preceding }} {{ naira(insight.previous[key]) }}</dd>
+              {% if key in insight.trends %}
+                {% set trend = insight.trends[key] %}
+                {% if trend.state == 'cost-review' %}
+                  <dd class="sb-kpi-hint">Check items with a saved cost of zero before comparing profit.</dd>
+                {% elif trend.state != 'incomplete' %}
+                  <dd class="sb-kpi-hint">Recorded change {{ '+' if trend.delta > 0 }}{{ naira(trend.delta) }}{% if trend.percent is not none %} ({{ '+' if trend.percent > 0 }}{{ '{:,.1f}'.format(trend.percent) }}%){% endif %}</dd>
+                  {% if trend.state in ('no-baseline', 'negative-baseline') %}<dd class="sb-kpi-hint">A percentage change needs a positive previous value.</dd>{% endif %}
+                {% endif %}
+              {% endif %}
+            </div>
+          {% endfor %}
+        </dl>
+      </section>
+
+      <div class="sb-insights-panels">
+        <section class="sb-card sb-insights-review" aria-labelledby="insight-review-title">
+          <h2 id="insight-review-title">What to review</h2>
+          {% if insight.explanations %}
+            <ul>{% for explanation in insight.explanations %}<li>{{ explanation|replace('selected UTC days', 'selected reporting days') }}</li>{% endfor %}</ul>
+          {% else %}
+            <p>Review the recorded totals and preceding-period values above before making business decisions.</p>
+          {% endif %}
+        </section>
+        <section class="sb-card sb-insights-review" aria-labelledby="insight-stock-title">
+          <h2 id="insight-stock-title">Not selling for 30 days</h2>
+          {% if insight.stock.products %}
+            <ul>{% for product in insight.stock.products %}<li>{{ product_name(product.name) }} · {{ quantity_with_unit(product.stock_quantity, product.unit) }} in stock</li>{% endfor %}</ul>
+            <p>Check stock counts and sales records before purchasing more.</p>
+          {% else %}
+            <p>No eligible products had stock left and zero recorded sales in this period. Newer products may need more sales history.</p>
+          {% endif %}
+        </section>
+      </div>
+
+      <details class="sb-card sb-insights-method">
+        <summary><span>How these numbers work</span><span class="sb-insights-show" aria-hidden="true"></span></summary>
+        <p>Revenue uses saved sale prices. The cost of goods sold uses the cost saved when each item was sold. Gross profit is revenue minus those costs. What you kept is estimated gross profit minus recorded running costs. Voided sales and expenses are excluded. Stock purchases are tracked separately.</p>
+        <p>The stock review uses its own 30 complete reporting days, from {{ insight.stock.start.strftime('%d/%m/%Y') }} up to the start of {{ insight.stock.end.strftime('%d/%m/%Y') }}. Reporting days use a 1:00 am WAT cutoff. The list shows up to 10 active products added by the start of that window that still have stock. Use it to review your records and stock counts.</p>
+        <a class="sb-button sb-button-secondary" href="{{ url_for('main.reports') }}">Open Reports</a>
+      </details>
+    {% endif %}
   {% endif %}
 </section>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='js/report-dates.js') }}" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/overview-format.js') }}" defer></script>{% endblock %}

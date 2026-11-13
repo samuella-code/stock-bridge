@@ -1,0 +1,52 @@
+{% set topics = [
+  ('getting-started', 'Getting started', 'Set up your business with the products and stock you already have.', [
+    'Create your account, verify your email and check your business details.',
+    'Add the products you sell. Enter the quantity you already have as opening stock.',
+    'Open your dashboard and follow the setup checklist for the selected business.'
+  ], 'Record real sales, restocks and expenses. You can complete setup without adding sample transactions.', 'Open dashboard', url_for('main.dashboard')),
+  ('products', 'Products', 'Add products and keep their prices and history easy to find.', [
+    'Enter a clear product name and choose the unit you sell it in.',
+    'Enter the cost per unit, the selling price and the quantity that should trigger a low-stock alert.',
+    'Search or filter Products to find an item. Open its details to see its history.'
+  ], 'Mark products inactive when you stop selling them to keep their history.', 'Open Products', url_for('products.index')),
+  ('inventory', 'Opening stock and inventory', 'Start with what you have on hand, then track stock as it changes.', [
+    'When adding a product, count what you already have and enter it as opening stock.',
+    'Check Inventory to see what is low or out of stock.',
+    'After adding a product, use a stock adjustment to correct its quantity.'
+  ], 'Sales reduce stock and restocking increases it.', 'Open Inventory', url_for('products.index', view='inventory')),
+  ('sales', 'Sales', 'Record what a customer bought and how they paid.', [
+    'Search for a product, add it to the sale and enter the quantity. Check the selling price.',
+    'Add any other products the customer bought to the same sale.',
+    'Check the date, payment method and total, then complete the sale once.'
+  ], 'You can sell up to the quantity you have in stock.', 'Open Sales', url_for('sales.index')),
+  ('restocking', 'Restocking', 'Record goods you receive to sell.', [
+    'Search for and add each product you received.',
+    'Enter the quantity received and what you paid per unit. Add the supplier or a note if useful.',
+    'Check the items and total cost, then complete the restock once.'
+  ], 'Restock history keeps the cost recorded at the time of purchase.', 'Open Restocking', url_for('restocking.index')),
+  ('adjustments', 'Stock adjustments', 'Correct stock after damage, loss, returns or a counting error.', [
+    'Find the product in Inventory. Open its details and choose the stock adjustment action.',
+    'Choose whether stock should go up or down. Enter the quantity and the reason.',
+    'Check the quantity and any notes, then confirm.'
+  ], 'Adjustments stay in stock history. Stock cannot fall below zero.', 'Open Inventory', url_for('products.index', view='inventory')),
+  ('expenses', 'Expenses', 'Record running costs such as rent, electricity and transport.', [
+    'Enter what the expense was for and choose a category.',
+    'Enter the amount and check the date before saving.',
+    'Check Expense history before adding an expense again.'
+  ], 'Record goods bought for resale in Restocking.', 'Open Expenses', url_for('expenses.index')),
+  ('reports', 'Dashboard and reports', 'See what you sold, what it cost and what you kept.', [
+    'Choose a preset period, or pick dates, enter both dates and select Apply.',
+    'Use the Dashboard summary for the selected period. The chart shows the last seven days, with a value for each day.',
+    'If a figure looks unfamiliar, check the reporting period and the transaction history.'
+  ], 'The cost of goods sold and recorded running costs reduce what you keep.', 'Open Reports', url_for('main.reports')),
+  ('interrupted', 'If saving is interrupted', 'Check history first if saving times out or you miss the confirmation.', [
+    'Open the history for the sale, restock or expense. Check whether the original record is there.',
+    'If it saved, leave the record as it is. If you confirm it did not save and the original form is still open, retry it with the same details.',
+    'If the form has expired, confirm the original record is missing before starting a new one.'
+  ], 'An unchanged retry from the same form is protected against duplicates. If the form was already used, changing its details will be rejected. Keep your account details private.', 'Open dashboard', url_for('main.dashboard')),
+  ('businesses', 'Multiple businesses', 'Manage each business and keep its records separate.', [
+    'Open My businesses to manage the businesses your plan supports.',
+    'Use the Working in selector to switch businesses.',
+    'Check which business is selected before recording any activity.'
+  ], 'Basic supports one business. Plus supports up to two, and Pro supports up to five.', 'Open My businesses', url_for('businesses.index'))
+] %}

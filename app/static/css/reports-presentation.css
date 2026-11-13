@@ -1,0 +1,138 @@
+.sb-reports-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--sb-3);
+}
+
+.sb-reports-heading p { margin: 0; }
+.sb-reports-heading h1 {
+  margin: var(--sb-1) 0 0;
+  font: 800 var(--sb-title)/1.15 var(--sb-font);
+}
+
+.sb-report-help { position: relative; flex: none; }
+.sb-report-help summary {
+  display: grid;
+  place-items: center;
+  width: var(--sb-touch);
+  height: var(--sb-touch);
+  border: var(--sb-stroke) solid var(--sb-input-border);
+  border-radius: var(--sb-pill);
+  background: var(--sb-surface);
+  color: var(--sb-primary);
+  font-weight: 800;
+  cursor: pointer;
+}
+.sb-report-help summary::-webkit-details-marker,
+.sb-report-custom summary::-webkit-details-marker { display: none; }
+
+.sb-report-help > .sb-card {
+  position: absolute;
+  z-index: 10;
+  inset-inline-end: 0;
+  inset-block-start: calc(100% + var(--sb-2));
+  width: min(var(--sb-assistant-width), calc(100vw - 2 * var(--sb-page-gutter)));
+  box-shadow: var(--sb-float-shadow);
+}
+.sb-report-help > .sb-card p + p { margin-top: var(--sb-3); }
+.sb-report-help a, .sb-report-errors a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--sb-touch);
+  color: inherit;
+  text-decoration: underline;
+}
+
+.sb-report-visually-hidden {
+  position: absolute;
+  width: var(--sb-stroke);
+  height: var(--sb-stroke);
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/* Place the preset links beside the disclosure trigger. The expanded
+   date fields use the full row and remain usable without JavaScript. */
+.sb-report-period {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  column-gap: var(--sb-1);
+  padding: var(--sb-2);
+  isolation: isolate;
+}
+.sb-report-period::before {
+  content: "";
+  grid-area: 1 / 1 / 2 / -1;
+  align-self: start;
+  height: calc(var(--sb-touch) + 2 * var(--sb-1));
+  border-radius: var(--sb-pill);
+  background: var(--sb-segment-bg);
+}
+.sb-report-presets {
+  grid-area: 1 / 1 / 2 / 4;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-self: start;
+  gap: var(--sb-1);
+  padding: var(--sb-1) 0 var(--sb-1) var(--sb-1);
+  z-index: 1;
+}
+.sb-report-custom {
+  grid-area: 1 / 1 / 2 / -1;
+  min-width: 0;
+  padding: var(--sb-1);
+}
+.sb-report-custom summary {
+  width: calc((100% - 3 * var(--sb-1)) / 4);
+  margin-inline-start: auto;
+}
+.sb-report-presets a, .sb-report-custom summary {
+  display: grid;
+  place-items: center;
+  min-height: var(--sb-touch);
+  padding: var(--sb-1);
+  border-radius: var(--sb-pill);
+  color: var(--sb-ink);
+  font-size: var(--sb-caption);
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+.sb-report-presets [aria-current], .sb-report-custom[open] summary {
+  background: var(--sb-surface);
+  box-shadow: var(--sb-card-shadow);
+  font-weight: 800;
+}
+.sb-report-presets a:focus-visible, .sb-report-custom summary:focus-visible {
+  outline-offset: calc(-1 * var(--sb-focus));
+}
+.sb-report-date-form { display: grid; gap: var(--sb-3); margin-top: var(--sb-4); padding: var(--sb-2); }
+.sb-report-date-form label { min-width: 0; font-weight: 700; }
+.sb-report-date-form [aria-invalid="true"] { border-color: var(--sb-danger); }
+.sb-report-errors {
+  margin: var(--sb-3) var(--sb-2) 0;
+  padding: var(--sb-3);
+  border-radius: var(--sb-control-radius);
+  color: var(--sb-danger);
+  background: var(--sb-danger-bg);
+}
+.sb-report-errors p, .sb-report-errors ul { margin: var(--sb-1) 0 0; }
+.sb-report-field-error { display: block; color: var(--sb-danger); font-size: var(--sb-caption); }
+
+.sb-report-results { display: grid; gap: var(--sb-4); min-width: 0; }
+.sb-report-results > .sb-section-note { margin: 0; }
+.sb-report-headlines, .sb-report-products { display: grid; gap: var(--sb-3); margin: 0; }
+.sb-report-headlines .sb-kpi { padding: var(--sb-5); box-shadow: var(--sb-card-shadow); }
+.sb-report-headlines .sb-kpi-featured { border-color: var(--sb-primary); }
+.sb-report-breakdown summary { display: list-item; min-height: var(--sb-touch); padding-block: var(--sb-2); font-weight: 800; cursor: pointer; }
+.sb-report-breakdown .sb-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sb-report-products .sb-records li > * { min-width: 0; overflow-wrap: anywhere; }
+.sb-report-products h3 { margin: var(--sb-3) 0 0; font-size: var(--sb-body-large); }
+
+@media (width >= 640px) {
+  .sb-report-headlines { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sb-report-products { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sb-report-date-form { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+}

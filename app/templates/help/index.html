@@ -1,18 +1,113 @@
-{% from 'components/public.html' import brand %}{% from 'components/legal_links.html' import legal_links %}
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Help Centre · StockBridge</title><link rel="stylesheet" href="{{ url_for('static', filename='css/entry.css', v='entry-phase7-1') }}"><link rel="stylesheet" href="{{ url_for('static', filename='css/legal.css', v='help-phase7ca-1') }}"></head>
-<body class="legal-public help-public"><a class="policy-skip" href="#help-content">Skip to guides</a><header class="entry-nav policy-header">{{ brand() }}<nav class="policy-site-nav" aria-label="Site navigation"><a href="{{ url_for('main.index') }}">Home</a><a href="{{ url_for('legal.contact') }}">Contact &amp; Support</a></nav><div class="policy-account-nav">{% if current_user.is_authenticated and current_user.role == 'user' and not session.get('admin_session') %}<a href="{{ url_for('main.dashboard') }}">Back to Dashboard</a>{% else %}<a href="{{ url_for('auth.login') }}">Sign In</a>{% endif %}</div></header>
-<main class="policy-page" id="help-content" tabindex="-1"><header class="policy-intro"><p class="eyebrow">Practical business guides</p><h1>Help Centre</h1><p class="policy-lead">Learn what to record, where to find it and how your records connect.</p></header>
-<nav class="policy-navigation" aria-label="Guide topics"><div class="policy-links">{% for key,title in [('getting-started','Getting started'),('products','Products'),('inventory','Opening stock & inventory'),('sales','Sales'),('restocking','Restocking'),('adjustments','Stock adjustments'),('expenses','Expenses'),('reports','Dashboard & reports'),('interrupted','Interrupted submissions'),('businesses','Multiple businesses')] %}<a href="#{{ key }}">{{ title }}</a>{% endfor %}</div></nav>
-<article class="policy-content">
-<section id="getting-started"><h2>Getting started</h2><p>Create your account, verify your email and review your business details. Add the products you sell and their existing quantities as opening stock. The dashboard checklist recommends next steps for the selected business.</p><p>Record only genuine sales, restocks and expenses. You do not need to invent transactions to complete setup.</p><a href="{{ url_for('main.dashboard') }}">Open dashboard</a></section>
-<section id="products"><h2>Creating and managing products</h2><p>Enter a clear product name, unit, purchase cost, selling price and low-stock threshold. Search and filter the catalogue to find products; use product details to review their history. Mark products inactive when appropriate rather than discarding history.</p><a href="{{ url_for('products.index') }}">Open Products</a></section>
-<section id="inventory"><h2>Opening stock and inventory</h2><p>Opening stock is the quantity you already have when registering a product. Sales reduce stock; restocking increases it. Review low-stock and out-of-stock indicators in Inventory. After registration, correct quantities through stock adjustments instead of editing current stock directly.</p><a href="{{ url_for('products.index', view='inventory') }}">Open Inventory</a></section>
-<section id="sales"><h2>Recording sales</h2><p>Search for a product, add it to the basket, enter the quantity and review the selling price. Add further products to the same sale, then review the date, payment method and total before submitting once. JavaScript is required for the basket. Available stock limits the quantities you can sell.</p><a href="{{ url_for('sales.index') }}">Open Sales</a></section>
-<section id="restocking"><h2>Restocking products</h2><p>Record goods received for resale. Add the received products to the basket, enter quantities and purchase costs per unit, and include supplier details or notes where useful. Review the basket before submitting once. Restocking history preserves purchase costs.</p><a href="{{ url_for('restocking.index') }}">Open Restocking</a></section>
-<section id="adjustments"><h2>Stock adjustments</h2><p>Open a product’s details and choose its stock adjustment action. Select an increase or decrease and enter a genuine reason, such as damage, loss, returns or a correction. Review the quantity and notes before confirming. Adjustments must not make stock negative and remain in stock history.</p><a href="{{ url_for('products.index', view='inventory') }}">Choose a product in Inventory</a></section>
-<section id="expenses"><h2>Recording expenses</h2><p>Record operating costs such as rent, electricity and transport with the correct amount, category and date. Goods bought for resale belong in Restocking. Review expense history before adding an expense again.</p><a href="{{ url_for('expenses.index') }}">Open Expenses</a></section>
-<section id="reports"><h2>Dashboard and reports</h2><p>Choose Today, Week, Month or Custom and select Apply. For Custom, enter both dates first. Dashboard summary cards follow the selected period; the revenue chart shows the last seven days with a readable daily breakdown.</p><p>Sales revenue is not profit. Product costs and operating expenses affect the reported profit. Review the reporting period and transaction history when figures need explanation.</p><a href="{{ url_for('main.reports') }}">Open Reports</a></section>
-<section id="interrupted"><h2>After an interrupted submission</h2><p>If saving times out or the response is lost, check the relevant transaction history before recording anything again. A retry using the same submission reference and unchanged contents is protected against duplication. Changing contents under an already used reference is rejected.</p><p>If the form expires or the outcome is uncertain, do not immediately create a fresh transaction. Confirm the original outcome in history first. Refresh the form for a genuinely new transaction only after checking. Never share submission tokens or account credentials.</p></section>
-<section id="businesses"><h2>Managing multiple businesses</h2><p>Where your account plan permits it, use My Businesses to manage businesses and the Working in selector to choose the active one. Basic supports one business; Plus supports up to two; Pro supports up to five. Each business keeps separate records. Confirm the active business before recording activity.</p><a href="{{ url_for('businesses.index') }}">Open My Businesses</a></section>
-<p>These guides do not provide a support submission service. Official contact details remain pending approval on the <a href="{{ url_for('legal.contact') }}">draft Contact &amp; Support page</a>.</p>
-</article></main><footer class="entry-footer">{{ brand() }}{{ legal_links() }}</footer>{% include 'components/assistant.html' %}</body></html>
+{% from 'components/public.html' import brand %}
+{% from 'components/legal_links.html' import legal_links %}
+{% from 'help/topics.html' import topics with context %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Help Centre · StockBridge</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap">
+  {% for stylesheet in ('design-tokens', 'presentation', 'help-presentation') %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/' ~ stylesheet ~ '.css') }}">
+  {% endfor %}
+</head>
+<body class="sb-help" data-help-centre>
+  <a class="sb-help-skip sb-button sb-button-secondary" href="#help-content">Skip to guides</a>
+  <header class="sb-help-header">
+    <div class="sb-help-wrap">
+      {{ brand() }}
+      <nav aria-label="Site navigation">
+        <a href="{{ url_for('main.index') }}">Home</a>
+        <a href="{{ url_for('legal.contact') }}">Contact and support</a>
+      </nav>
+      {% if current_user.is_authenticated and current_user.role == 'user' and not session.get('admin_session') %}
+        <a href="{{ url_for('main.dashboard') }}">Back to dashboard</a>
+      {% else %}
+        <a href="{{ url_for('auth.login') }}">Sign in</a>
+      {% endif %}
+    </div>
+  </header>
+  <main class="sb-help-wrap sb-help-main" id="help-content" tabindex="-1">
+    <header class="sb-help-intro">
+      <p class="sb-eyebrow">Practical business guides</p>
+      <h1>Help Centre</h1>
+      <div class="sb-help-search" role="search" hidden data-help-search>
+        <label for="help-search">Search the guides</label>
+        <input id="help-search" type="search" placeholder="Try opening stock or expenses" autocomplete="off" aria-controls="help-results">
+        <p data-help-search-status role="status"></p>
+        <ul id="help-results" class="sb-help-results" hidden>
+          {% for key, title, summary, steps, tip, label, href in topics %}
+            <li><a href="#{{ key }}">{{ title }}</a></li>
+          {% endfor %}
+        </ul>
+      </div>
+    </header>
+
+    <div class="sb-help-grid">
+      <nav class="sb-card sb-help-topics" aria-label="Guide topics">
+        <div class="sb-help-topic-picker">
+          <label for="help-topic">Guide topic</label>
+          <select id="help-topic" data-help-picker>
+            {% for key, title, summary, steps, tip, label, href in topics %}
+              <option value="{{ key }}">{{ title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <ul class="sb-help-topic-links">
+          {% for key, title, summary, steps, tip, label, href in topics %}
+            <li><a href="#{{ key }}">{{ title }}</a></li>
+          {% endfor %}
+        </ul>
+      </nav>
+
+      <div class="sb-help-articles">
+        {% for key, title, summary, steps, tip, label, href in topics %}
+          {% set index = loop.index0 %}
+          <article class="sb-card sb-help-article" id="{{ key }}" aria-labelledby="topic-{{ key }}" data-help-article>
+            <p class="sb-help-counter">Topic {{ loop.index }} of {{ loop.length }}</p>
+            <h2 id="topic-{{ key }}" tabindex="-1">{{ title }}</h2>
+            <p class="sb-help-summary">{{ summary }}</p>
+            <ol class="sb-help-steps" role="list">
+              {% for step in steps %}
+                <li><span aria-hidden="true">{{ loop.index }}</span>{{ step }}</li>
+              {% endfor %}
+            </ol>
+            <section class="sb-help-tip">
+              <h3>Good to know</h3>
+              <p>{{ tip }}</p>
+            </section>
+            <a class="sb-button sb-button-primary" href="{{ href }}">{{ label }}</a>
+
+            <fieldset class="sb-help-feedback" data-help-feedback hidden>
+              <legend>Was this helpful?</legend>
+              <button class="sb-button sb-button-secondary" type="button" aria-pressed="false">Yes</button>
+              <button class="sb-button sb-button-secondary" type="button" aria-pressed="false">Not really</button>
+              <p role="status"></p>
+            </fieldset>
+            <nav class="sb-help-neighbours" aria-label="Topics near {{ title }}">
+              {% if not loop.first %}<a href="#{{ topics[index - 1][0] }}">Previous <span>{{ topics[index - 1][1] }}</span></a>{% endif %}
+              {% if not loop.last %}<a href="#{{ topics[index + 1][0] }}">Next <span>{{ topics[index + 1][1] }}</span></a>{% endif %}
+            </nav>
+          </article>
+        {% endfor %}
+      </div>
+    </div>
+
+    <section class="sb-card sb-help-contact" aria-labelledby="help-contact-title">
+      <h2 id="help-contact-title">Still stuck?</h2>
+      <p>These guides do not provide a support submission service. Official contact details remain pending approval on the <a href="{{ url_for('legal.contact') }}">draft Contact &amp; Support page</a>.</p>
+    </section>
+  </main>
+  <footer class="sb-help-footer">
+    <div class="sb-help-wrap">
+      <div>{{ brand() }}<p>Stock, sales and profit in one workspace.</p></div>
+      <div><h2>Product</h2><a href="{{ url_for('main.index', _anchor='features') }}">Features</a><a href="{{ url_for('main.index', _anchor='how-it-works') }}">How it works</a><a href="{{ url_for('subscriptions.index') }}">Pricing</a></div>
+      <div><h2>Company</h2><a href="{{ url_for('legal.help_centre') }}">Help Centre</a><a href="{{ url_for('auth.login') }}">Sign in</a></div>
+      <div><h2>Legal</h2>{{ legal_links() }}</div>
+    </div>
+  </footer>
+  <script src="{{ url_for('static', filename='js/help-presentation.js') }}" defer></script>
+  {% include 'components/assistant.html' %}
+</body>
+</html>

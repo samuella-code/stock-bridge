@@ -30,6 +30,7 @@
             badge.textContent = count > 99 ? '99+' : String(count);
           }
         }
+        form.dispatchEvent(new CustomEvent('notification:opened', {bubbles: true, detail: count}));
         window.location.assign(target.href);
       } catch (_) {
         error.textContent = 'Could not open this notification. Please try again.';

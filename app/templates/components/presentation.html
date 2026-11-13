@@ -1,0 +1,31 @@
+{% macro naira(value) -%}
+  {{- ('₦{:,.2f}'.format(value)).removesuffix('.00') -}}
+{%- endmacro %}
+
+{% macro kpi(label, value, hint, money=false, featured=false) -%}
+  <div class="sb-kpi{% if featured %} sb-kpi-featured{% endif %}">
+    <dt>{{ label }}</dt>
+    <dd>{{ naira(value) if money else value }}</dd>
+    {% if hint %}<dd class="sb-kpi-hint">{{ hint }}</dd>{% endif %}
+  </div>
+{%- endmacro %}
+
+{% macro status_badge(label, tone='healthy') -%}
+  <span class="sb-badge sb-badge-{{ tone }}">{{ label }}</span>
+{%- endmacro %}
+
+{% macro empty_message(message, href='', action='') -%}
+  <div class="sb-empty">
+    <p>{{ message }}</p>
+    {% if href and action %}<a class="sb-button sb-button-secondary" href="{{ href }}">{{ action }}</a>{% endif %}
+  </div>
+{%- endmacro %}
+
+{% macro product_name(value) -%}{{ value[:1]|upper }}{{ value[1:] }}{%- endmacro %}
+
+{% macro quantity_with_unit(quantity, unit) -%}
+  {%- set singular = {'unit':'unit', 'bottle':'bottle', 'pack':'pack', 'piece':'piece', 'box':'box', 'bag':'bag', 'carton':'carton', 'tin':'tin', 'can':'can', 'sachet':'sachet', 'crate':'crate', 'pair':'pair', 'dozen':'dozen', 'litre':'litre', 'kilogram':'kilogram'} -%}
+  {%- set plural = {'box':'boxes', 'dozen':'dozen'} -%}
+  {%- set key = unit|lower|trim -%}
+  {{- quantity }} {% if key in singular %}{{ key if quantity == 1 else plural.get(key, key ~ 's') }}{% else %}{{ unit }}{% endif -%}
+{%- endmacro %}

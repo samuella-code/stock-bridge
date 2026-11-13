@@ -1,18 +1,72 @@
 {% extends 'base.html' %}
-{% block page_title %}Notifications{% endblock %}
+{% block title %}Notifications · StockBridge{% endblock %}
+{% block topbar_heading %}{% endblock %}
+{% block extra_styles %}
+  {% for stylesheet in ('design-tokens', 'presentation', 'overview', 'notifications-presentation') %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/' ~ stylesheet ~ '.css') }}">
+  {% endfor %}
+{% endblock %}
+
 {% block content %}
-<section class="dashboard-wrap notifications-page">
-<div class="page-header"><div><p class="eyebrow">{{ business.name }}</p><h2>Notifications</h2><p class="muted">Activity and stock alerts for this business.</p></div>
-<form method="POST" action="{{ url_for('notifications.read_all') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="secondary-btn" type="submit">Mark all as read</button></form></div>
-<div class="notification-list">
-{% for notification in notifications.items %}
-<article data-notification-item class="panel-card notification-row {{ 'notification-unread' if not notification.read_at else '' }}">
-<div><span class="notification-state">{{ 'Unread' if not notification.read_at else 'Read' }}</span><p>{{ notification.body }}</p><time datetime="{{ notification.created_at.isoformat() }}Z">{{ notification.created_at.strftime('%d %b %Y · %H:%M') }} UTC</time><form data-notification-open method="POST" action="{{ url_for('notifications.open_notification', notification_id=notification.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="secondary-btn" type="submit" aria-label="Open {{ notification.title }} and mark as read">{{ notification.title }} — View {{ 'product' if notification.kind in ['product_created', 'low_stock', 'out_of_stock'] else 'sales' if notification.kind == 'sale_recorded' else 'restocking' }}</button><span class="muted" data-notification-error role="status"></span></form></div>
-{% if not notification.read_at %}<form method="POST" action="{{ url_for('notifications.read', notification_id=notification.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="secondary-btn" type="submit" aria-label="Mark {{ notification.title }} as read">Mark as read</button></form>{% endif %}
-</article>
-{% else %}<div class="panel-card"><h3>{{ 'No notifications yet' if notifications.total == 0 else 'No notifications on this page' }}</h3><p>Add products, record sales and restock. Important activity and stock alerts will appear here.</p></div>{% endfor %}
-</div>
-{% if notifications.pages > 1 %}<nav class="page-actions notification-pagination" aria-label="Notification pages">{% if notifications.has_prev %}<a class="secondary-btn" href="{{ url_for('notifications.index', page=notifications.prev_num) }}">Newer</a>{% endif %}<span>Page {{ notifications.page }} of {{ notifications.pages }}</span>{% if notifications.has_next %}<a class="secondary-btn" href="{{ url_for('notifications.index', page=notifications.next_num) }}">Older</a>{% endif %}</nav>{% endif %}
-{% include 'notifications/preferences.html' %}
+<section class="sb-overview sb-notifications" aria-labelledby="notifications-title" data-notifications>
+  <header class="sb-overview-intro sb-notifications-header">
+    <h1 id="notifications-title">Notifications</h1>
+    <form method="POST" action="{{ url_for('notifications.read_all') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="sb-button sb-button-secondary" type="submit">Mark all as read</button>
+    </form>
+  </header>
+
+  <fieldset class="sb-segmented sb-notification-filters" data-notification-filters hidden>
+    <legend class="sb-notification-sr">Filter notifications on this page</legend>
+    <label><input type="radio" name="notification_filter" value="all" checked><span>All</span></label>
+    <label><input type="radio" name="notification_filter" value="unread"><span>Unread{% if notification_unread is defined %} (<b data-notification-unread-count>{{ notification_unread }}</b>){% endif %}</span></label>
+    <label><input type="radio" name="notification_filter" value="stock"><span>Stock alerts</span></label>
+  </fieldset>
+  {% if notifications.pages > 1 %}<p class="sb-notification-meta" data-notification-filter-scope hidden>Filters apply to this page.{% if notification_unread is defined %} The unread count covers all pages.{% endif %}</p>{% endif %}
+
+  <div class="sb-notification-list">
+    {% for notification in notifications.items %}
+      {% set stock_alert = notification.kind in ('low_stock', 'out_of_stock') %}
+      {% if stock_alert or notification.kind == 'product_created' %}
+        {% set action = 'View product' %}
+      {% elif notification.kind == 'sale_recorded' %}
+        {% set action = 'View sale' %}
+      {% else %}
+        {% set action = 'View restock' %}
+      {% endif %}
+      <article class="sb-card sb-notification-card{% if not notification.read_at %} notification-unread{% endif %}" data-notification-item{% if stock_alert %} data-stock-alert{% endif %}>
+        <div class="sb-notification-copy">
+          <p>{{ notification.body }}</p>
+          <div class="sb-notification-meta">
+            <span class="notification-state">{{ 'Unread' if not notification.read_at else 'Read' }}</span>
+            <time data-sb-wat="time" datetime="{{ notification.created_at.isoformat() }}{% if not notification.created_at.tzinfo %}Z{% endif %}">{{ notification.created_at.strftime('%d/%m/%Y') }}</time>
+          </div>
+        </div>
+        <form data-notification-open method="POST" action="{{ url_for('notifications.open_notification', notification_id=notification.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="sb-button sb-button-secondary" type="submit" aria-label="{{ action }} for {{ notification.title }}">{{ action }}</button>
+          <span data-notification-error role="status"></span>
+        </form>
+      </article>
+    {% else %}
+      <p class="sb-card" data-notification-default-empty>{{ 'Activity and stock alerts will appear here.' if notifications.total == 0 else 'There are no notifications on this page.' }}</p>
+    {% endfor %}
+    <p class="sb-card" data-notification-empty role="status" hidden></p>
+  </div>
+
+  {% if notifications.pages > 1 %}
+    <nav class="sb-notification-pages" aria-label="Notification pages">
+      {% if notifications.has_prev %}<a class="sb-button sb-button-secondary" href="{{ url_for('notifications.index', page=notifications.prev_num) }}">Newer</a>{% endif %}
+      <span>Page {{ notifications.page }} of {{ notifications.pages }}</span>
+      {% if notifications.has_next %}<a class="sb-button sb-button-secondary" href="{{ url_for('notifications.index', page=notifications.next_num) }}">Older</a>{% endif %}
+    </nav>
+  {% endif %}
+  <a class="sb-notification-settings-link" href="{{ url_for('profile.index', _anchor='notificationPreferences') }}">Choose which alerts you get in Settings.</a>
 </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/overview-format.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/notification-filters.js') }}" defer></script>
 {% endblock %}

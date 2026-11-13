@@ -1,0 +1,106 @@
+.sb-dashboard .sb-dashboard-date {
+  color: var(--sb-muted);
+  font-size: var(--sb-caption);
+}
+.sb-dashboard .sb-overview-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.sb-dashboard .sb-overview-actions .sb-button-primary { grid-column: 1 / -1; }
+.sb-dashboard .sb-overview-actions svg { flex-shrink: 0; }
+
+.sb-dashboard .sb-dashboard-presets {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.sb-dashboard-presets a {
+  display: grid;
+  place-items: center;
+  min-height: var(--sb-touch);
+  padding: var(--sb-1) var(--sb-2);
+  border-radius: var(--sb-pill);
+  color: var(--sb-ink);
+  text-align: center;
+  text-decoration: none;
+  font-weight: 600;
+}
+.sb-dashboard-presets a[aria-current] {
+  background: var(--sb-surface);
+  box-shadow: var(--sb-card-shadow);
+  font-weight: 800;
+}
+.sb-dashboard .sb-dashboard-presets a:focus-visible {
+  outline-offset: calc(-1 * var(--sb-focus));
+}
+.sb-dashboard-custom summary {
+  display: list-item;
+  min-height: var(--sb-touch);
+  padding-block: var(--sb-3);
+  color: var(--sb-primary);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sb-dashboard-setup progress {
+  display: block;
+  width: 100%;
+  height: var(--sb-2);
+  margin-block-start: var(--sb-2);
+  accent-color: var(--sb-primary);
+}
+.customer-app .sb-dashboard-setup .setup-steps li {
+  display: grid;
+  grid-template-columns: var(--sb-step) minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--sb-2);
+  padding-block-end: var(--sb-3);
+}
+.sb-dashboard-setup [data-complete="true"] strong {
+  color: var(--sb-muted);
+  text-decoration: line-through;
+}
+.customer-app .sb-dashboard-setup .setup-steps a {
+  min-width: var(--sb-touch);
+  padding-inline: var(--sb-2);
+  text-decoration: none;
+}
+
+.sb-dashboard-chart-value {
+  display: block;
+  min-height: var(--sb-6);
+  color: var(--sb-muted);
+  font-size: var(--sb-caption);
+  font-variant-numeric: tabular-nums;
+}
+.sb-dashboard .sb-chart {
+  grid-template-columns: repeat(7, minmax(var(--sb-touch), 1fr));
+  gap: var(--sb-1);
+  margin-block: var(--sb-2) 0;
+  padding: var(--sb-1);
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+.sb-dashboard .sb-chart-column {
+  min-width: var(--sb-touch);
+  min-height: var(--sb-touch);
+  padding: var(--sb-1);
+  border: 0;
+  border-radius: var(--sb-control-radius);
+  background: var(--sb-surface);
+  font-family: inherit;
+  cursor: pointer;
+}
+.sb-dashboard .sb-chart-column:focus-visible {
+  outline-offset: calc(-1 * var(--sb-focus));
+}
+.sb-dashboard .sb-chart-column:is(:hover, :focus-visible) .sb-chart-bar {
+  background: var(--sb-primary-hover);
+}
+
+@media (width < 640px) {
+  .sb-dashboard .sb-sales-chart { padding-inline: var(--sb-2); }
+  .sb-dashboard .sb-chart { gap: 0; padding-inline: 0; }
+}
+
+@media (width >= 640px) {
+  .sb-dashboard .sb-overview-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sb-dashboard .sb-overview-actions .sb-button-primary { grid-column: auto; }
+}

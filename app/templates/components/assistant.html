@@ -1,16 +1,61 @@
 {% from 'components/icons.html' import icon %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/assistant.css', v='assistant-1') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/design-tokens.css', v='assistant-2') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/assistant.css', v='assistant-2') }}">
 <div class="sb-assistant" data-assistant{% if request is defined and request.endpoint == 'main.reports' %} data-assistant-page="reports"{% elif request is defined and request.endpoint == 'main.index' %} data-assistant-page="home"{% endif %} hidden>
   <button type="button" class="sb-assistant-launcher" aria-controls="sb-assistant-panel" aria-expanded="false" aria-label="Open StockBridge Assistant">{{ icon('help') }} <span>Help</span></button>
   <section id="sb-assistant-panel" class="sb-assistant-panel" role="region" aria-labelledby="sb-assistant-title" hidden>
-    <header><div><h2 id="sb-assistant-title">StockBridge Assistant</h2><p>Automated guided help</p></div><div class="sb-assistant-controls"><button type="button" data-assistant-minimize aria-label="Minimize assistant">−</button><button type="button" data-assistant-close aria-label="Close assistant">×</button></div></header>
-    <p class="sb-assistant-disclosure">Predefined answers, not generative AI. Please do not share passwords, payment details or private business information.</p>
-    <div class="sb-assistant-history" tabindex="0" aria-label="Conversation"></div>
-    <div class="sb-assistant-suggestions" aria-label="Suggested questions"></div>
-    <div class="sb-assistant-compose"><label for="sb-assistant-question">Ask about StockBridge</label><div><input id="sb-assistant-question" type="text" maxlength="300" autocomplete="off" placeholder="How do I record a sale?"><button type="button" data-assistant-send>Send</button></div></div>
-    <footer><button type="button" data-assistant-clear>Clear conversation</button><a href="{{ url_for('legal.help_centre') }}">Help Centre</a></footer>
-    <span class="sb-assistant-status" role="status" aria-live="polite" aria-atomic="true"></span>
+    <header class="sb-assistant-header">
+      <div class="sb-assistant-brand"><span aria-hidden="true">SB</span> StockBridge</div>
+      <button class="sb-assistant-close" type="button" data-assistant-close aria-label="Close help">×</button>
+      <h2 id="sb-assistant-title" tabindex="-1">Hi, how can we help?</h2>
+    </header>
+    <div class="sb-assistant-scroll" data-assistant-scroll>
+      <div class="sb-assistant-home" data-assistant-home>
+        <section class="sb-assistant-card" aria-labelledby="sb-assistant-popular">
+          <h3 id="sb-assistant-popular">Popular questions</h3>
+          {% for key, question in [('inventory','How do I enter opening stock?'), ('sales','How do I record a sale?'), ('plans','What do Basic, Plus and Pro cost?')] %}
+            <button type="button" class="sb-assistant-row" data-assistant-topic="{{ key }}">{{ question }} <span aria-hidden="true">→</span></button>
+          {% endfor %}
+        </section>
+        <section class="sb-assistant-card" aria-labelledby="sb-assistant-topics">
+          <h3 id="sb-assistant-topics">Help topics</h3>
+          {% for key, label, glyph in [('products','Products','box'), ('restocking','Restocking','restock'), ('reports','Dashboard and reports','trend')] %}
+            <button type="button" class="sb-assistant-row" data-assistant-topic="{{ key }}">{{ icon(glyph) }} <span>{{ label }}</span><span aria-hidden="true">→</span></button>
+          {% endfor %}
+          <div class="sb-assistant-topic-actions">
+            <button type="button" data-assistant-search>Search</button>
+            <a href="{{ url_for('legal.help_centre') }}">Show all topics</a>
+          </div>
+        </section>
+        <a class="sb-assistant-card sb-assistant-contact" href="{{ url_for('legal.contact') }}">
+          {{ icon('help') }}
+          <span><strong>Talk to a person on WhatsApp</strong><small>WhatsApp contact details coming soon.</small></span>
+          <span aria-hidden="true">→</span>
+        </a>
+      </div>
+      <div data-assistant-conversation hidden>
+        <div class="sb-assistant-history" aria-label="Conversation"></div>
+        <p class="sb-assistant-typing" aria-hidden="true" hidden><span></span><span></span><span></span></p>
+        <div class="sb-assistant-suggestions" hidden>
+          <p data-assistant-suggestion-heading>You might also ask</p>
+          <div data-assistant-chips></div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-assistant-bottom">
+      <form class="sb-assistant-compose">
+        <label class="sb-assistant-sr" for="sb-assistant-question">Ask about StockBridge</label>
+        <input id="sb-assistant-question" type="text" maxlength="300" autocomplete="off" placeholder="Ask a question">
+        <button type="submit" aria-label="Send question"><span aria-hidden="true">↑</span></button>
+      </form>
+      <p class="sb-assistant-disclosure">Guided answers, not AI. I can’t see your records. Please don’t share passwords or payment details.</p>
+      <footer data-assistant-footer hidden>
+        <button type="button" data-assistant-clear>Clear chat</button>
+        <a href="{{ url_for('legal.help_centre') }}">Help Centre</a>
+      </footer>
+    </div>
+    <span class="sb-assistant-sr" role="status" aria-live="polite" aria-atomic="true"></span>
   </section>
   <script type="application/json" data-assistant-config>{{ {'subscriptions': config.SUBSCRIPTIONS_ENABLED|default(false), 'provider': config.BILLING_PROVIDER_ENABLED|default(false), 'scope': 'customer' if current_user.is_authenticated else 'public', 'links': {'help': url_for('legal.help_centre'), 'signup': url_for('auth.signup'), 'login': url_for('auth.login'), 'verify': url_for('auth.verification_pending'), 'reset': url_for('auth.forgot_password'), 'plans': url_for('subscriptions.index'), 'products': url_for('products.index'), 'inventory': url_for('products.index', view='inventory'), 'sales': url_for('sales.index'), 'restocking': url_for('restocking.index'), 'expenses': url_for('expenses.index'), 'reports': url_for('main.reports'), 'dashboard': url_for('main.dashboard'), 'businesses': url_for('businesses.index'), 'notifications': url_for('notifications.index')}}|tojson }}</script>
 </div>
-<script src="{{ url_for('static', filename='js/assistant.js', v='assistant-1') }}" defer></script>
+<script src="{{ url_for('static', filename='js/assistant.js', v='assistant-2') }}" defer></script>

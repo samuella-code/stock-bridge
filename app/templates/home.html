@@ -1,37 +1,185 @@
+{% extends 'base.html' %}
+{% from 'components/public_pricing.html' import public_pricing, pricing_styles with context %}
+{% from 'components/public.html' import brand with context %}
 {% from 'components/icons.html' import icon %}
-{% from 'components/legal_links.html' import legal_links, billing_links %}
-{% extends 'base.html' %}{% from 'components/public.html' import brand, price_toggle, pricing_cards with context %}
-{% from 'components/marketing_preview.html' import preview %}
+{% from 'components/legal_links.html' import legal_links %}
 {% block title %}StockBridge · Know your stock. Understand your profit.{% endblock %}
-{% block content %}{% set signup_cta = "Start Free Trial" if config.SUBSCRIPTIONS_ENABLED else "Create Account" %}<div class="entry-home">
-<header class="entry-nav">{{ brand() }}<nav class="entry-desktop-nav" aria-label="Site navigation"><a href="#features">Features</a><a href="#how-it-works">How It Works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></nav><div class="entry-nav-actions"><a href="{{ url_for('auth.login') }}">Sign In</a><a class="primary-btn" href="{{ url_for('auth.signup') }}">{{ signup_cta }}</a></div><details class="entry-mobile-nav"><summary>Menu</summary><nav aria-label="Mobile site navigation"><a href="#features">Features</a><a href="#how-it-works">How It Works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a><a href="{{ url_for('auth.login') }}">Sign In</a><a href="{{ url_for('auth.signup') }}">{{ signup_cta }}</a></nav></details></header>
-<section class="entry-hero"><div class="hero-copy"><p class="eyebrow hero-eyebrow"><span aria-hidden="true">●</span> Your everyday business, connected</p><h1>Know what you have.<br>Know what you sold.<br><span>Know what you made.</span></h1><p class="entry-lead">Stock, sales, expenses and profit. Connected in one clear workspace, so you can see how your business is really doing.</p><div class="entry-actions"><a class="primary-btn" href="{{ url_for('auth.signup') }}">{{ signup_cta }}</a><a class="secondary-btn" href="{{ url_for('auth.login') }}">Sign In</a></div><p class="entry-trial-note">{% if config.SUBSCRIPTIONS_ENABLED %}7-day free trial · No card required<br><small>Your trial begins after email verification when eligible.</small>{% else %}Create an account, verify your email and explore StockBridge.<br><small>Subscription checkout is not currently available.</small>{% endif %}</p><div class="hero-connection" aria-label="StockBridge connects stock, sales, expenses and profit"><span>Stock</span><i aria-hidden="true">→</i><span>Sales</span><i aria-hidden="true">→</i><span>Expenses</span><i aria-hidden="true">→</i><span>Profit</span></div></div>{% include 'components/hero_showcase.html' %}</section>
-<section id="features" class="entry-section connection-story"><p class="eyebrow">One business. One connected picture.</p><h2>Every record has<br><span>a ripple effect.</span></h2><div class="connection-line" aria-label="Connected business workflow"><span>Products & Inventory</span><i aria-hidden="true">→</i><span>Sales & Restocking</span><i aria-hidden="true">→</i><span>Expenses & Profit</span></div><p class="connection-copy">Record your daily activity once. Follow its effect through stock, costs and the numbers you use to make decisions.</p></section>
-<section class="entry-section profit-signature" data-profit-story><div class="profit-intro"><p class="eyebrow">The number that really matters</p><h2>Don't confuse<br><em>sales</em> with <em>profit.</em></h2><p>A busy day is a good start. Knowing what remains after the cost of goods sold and recorded expenses gives you the full picture.</p><p class="demo-note">Representative figures · not customer data</p></div><div class="profit-composition"><div class="profit-waterfall" aria-label="Sales to net profit calculation">
-{% for label,amount,display in [('Sales revenue',150000,'₦150,000'),('− Cost of goods sold',80000,'− ₦80,000'),('Gross profit',70000,'₦70,000'),('− Recorded expenses',25000,'− ₦25,000'),('Net profit',45000,'₦45,000')] %}<div class="profit-line {{ 'profit-result' if loop.last }}" data-profit-line><span><small>0{{ loop.index }}</small>{{ label }}</span><strong><span data-count="{{ amount }}" data-prefix="{{ '− ' if loop.index in [2,4] else '' }}" aria-hidden="true">{{ display }}</span><span class="marketing-sr">{{ display }}</span></strong></div>{% endfor %}
-<button class="profit-skip" data-profit-skip type="button" hidden>Show full breakdown</button></div><div class="profit-report">{{ preview('Reports') }}<p class="demo-note">Sales − COGS = gross profit. Gross profit − expenses = net profit.</p></div></div></section>
-<section id="how-it-works" class="entry-section product-journey" data-product-journey><div class="journey-heading"><p class="eyebrow">How StockBridge works</p><h2>From your first product<br>to your next decision.</h2><p>Explore the everyday work behind a clearer business.</p></div><div class="journey-layout"><div class="journey-steps" role="group" aria-label="Explore StockBridge workflows">
-{% for label,view,copy in [('Add Products','Products','Set opening stock, cost price and selling price.'),('Track Inventory','Inventory','Know what remains and what is running low.'),('Record Sales','Record Sale','Record a sale. Inventory reduces automatically.'),('Restock','Restocking','Bring stock back in and preserve purchase history.'),('Record Expenses','Expenses','Include the everyday costs of running your business.'),('See Your Profit & Reports','Reports','Understand revenue, COGS, expenses and net profit.')] %}<button type="button" data-journey-step="{{ loop.index0 }}" aria-controls="journey-panel-{{ loop.index0 }}" aria-pressed="{{ 'true' if loop.first else 'false' }}" disabled><span class="journey-number">0{{ loop.index }}</span><span><strong>{{ label }}</strong><small>{{ copy }}</small></span><span class="journey-arrow" aria-hidden="true">↗</span></button>{% endfor %}</div><div class="journey-preview">
-{% for view in ['Products','Inventory','Record Sale','Restocking','Expenses','Reports'] %}<div data-journey-panel id="journey-panel-{{ loop.index0 }}" {% if not loop.first %}hidden{% endif %}>{{ preview(view) }}</div>{% endfor %}<p class="demo-note">Illustrative StockBridge screens · explore using the steps</p></div></div></section>
-<section class="entry-section transformation"><div class="transformation-heading"><p class="eyebrow">Less guesswork. More clarity.</p><h2>Same business.<br>A clearer way to run it.</h2></div><div class="transformation-layout"><div class="before-scene"><span class="scene-label">Before StockBridge</span><div class="paper-record paper-one"><small>STOCK NOTES</small><strong>How many are left?</strong><span>Coke: 100? 90?</span></div><div class="paper-record paper-two"><small>SALES BOOK</small><strong>₦5,000 sold</strong><span>Costs noted elsewhere…</span></div><div class="paper-record paper-three"><small>EXPENSES</small><strong>Missing receipt</strong><span>Was that included?</span></div><p>Separate records.<br>An incomplete picture.</p></div><div class="after-scene"><span class="scene-label">With StockBridge</span><div class="connected-record"><div class="connected-record-heading"><span class="brand-mark">SB</span><strong>One connected workspace</strong></div>{% for label,copy in [('Inventory','Products and remaining quantities in one place'),('Sales','Every recorded sale affects stock'),('Restocking','Incoming quantities and purchase costs recorded'),('Expenses','Operating costs included in profit'),('Dashboard & Reports','See your recorded business performance')] %}<div><span class="record-check" aria-hidden="true">✓</span><p><strong>{{ label }}</strong><small>{{ copy }}</small></p></div>{% endfor %}</div><p>Records that connect.<br>Numbers you can understand.</p></div></div></section>
-{% if config.SUBSCRIPTIONS_ENABLED %}<section class="entry-section plus-feature"><div><p class="eyebrow">Room to grow · StockBridge Plus</p><h2>Two businesses.<br>Two clear pictures.</h2><p>Switch between up to two businesses. Each keeps its own products, inventory, sales, expenses and reports. Business Insights explains recorded sales, estimated gross profit and operating expenses for the selected business.</p></div><div class="business-pair"><div class="pair-connection" aria-hidden="true"><span></span>{{ icon('switch') }}<span></span></div><div><span class="business-monogram">M</span><strong>Example Mini Mart</strong><small>Its stock. Its sales. Its reports.</small></div><div><span class="business-monogram">F</span><strong>Example Fashion Shop</strong><small>Separate records. The same account.</small></div></div></section>
-{% endif %}<section id="pricing" class="entry-section">{% if config.SUBSCRIPTIONS_ENABLED %}<div class="section-heading"><p class="eyebrow">Straightforward pricing</p><h2>Choose the room your business needs.</h2><p>Everyday tools for one business with Basic, up to two with Plus, up to five with Pro. Plus and Pro add Business Insights; Pro also adds Multi-business Overview.</p>{{ price_toggle() }}</div>{{ pricing_cards(plan_prices) }}<p class="entry-pricing-note">7 days free for eligible verified accounts. No card required to start. Existing valid account access remains protected.</p><h3 class="compare-heading">Compare plans</h3><div class="plan-comparison" role="region" aria-label="Basic, Plus and Pro comparison" tabindex="0"><table><thead><tr><th scope="col">Included</th><th scope="col">Basic</th><th scope="col">Plus</th><th scope="col">Pro</th></tr></thead><tbody><tr><th scope="row">Businesses</th><td>1</td><td>Up to 2</td><td>Up to 5</td></tr>{% for feature in ['Products','Inventory','Sales','Restocking','Expenses','Dashboard','Reports'] %}<tr><th scope="row">{{ feature }}</th><td>Included</td><td>Included</td><td>Included</td></tr>{% endfor %}<tr><th scope="row">Business switching</th><td>One business</td><td>Between two businesses</td><td>Between up to five businesses</td></tr><tr><th scope="row">Business Insights</th><td>Not included</td><td>Included</td><td>Included</td></tr><tr><th scope="row">Multi-business Overview</th><td>Not included</td><td>Not included</td><td>Included</td></tr></tbody></table></div>{% else %}<div class="section-heading"><p class="eyebrow">Straightforward access</p><h2>Explore StockBridge. Unlock the tools when ready.</h2><p>Basic supports one business; Plus supports up to two; Pro supports up to five. Subscription checkout is not currently available.</p></div>{{ price_toggle() }}{{ pricing_cards(plan_prices) }}<a class="secondary-btn" href="{{ url_for('subscriptions.index') }}">View plans</a>{% endif %}</section>
-<section id="faq" class="entry-section faq-section"><div class="section-heading"><p class="eyebrow">Questions, answered</p><h2>Before you get started.</h2></div>{% for question,answer in [
-('What is StockBridge?','A workspace for products, inventory, sales, restocking, expenses, profit and reports.'),
-('Who can use StockBridge?','Small businesses that need a clear record of stock, daily sales and costs.'),
-('How does the 7-day free trial work?','Eligible accounts start a seven-day trial after email verification. Returning users do not receive a new trial.'),
-('Do I need a card for the trial?','No. You can start the trial without card details. It does not automatically charge you.'),
-('What happens when my trial ends?','Your records remain available to view. Choose a plan to continue recording new business activity.'),
-('What is the difference between Basic, Plus and Pro?','Basic supports one business, Plus up to two and Pro up to five, with switching and separate records. The core business tools are the same. Plus and Pro include Business Insights for the selected business. Pro also includes Multi-business Overview across permitted businesses.'),
-('Can I manage multiple businesses?','Yes. Plus supports up to two businesses and Pro up to five. Each business has its own products, inventory, sales, expenses and reports.'),
-('What happens to my data if my subscription expires?','Records are preserved. If your business allowance drops from two to one, you explicitly choose which business to access. The other stays locked, with its records stored.'),
-('Can I upgrade my plan?','Yes. Review the plan and billing interval in Billing & Plan. Immediate upgrades with the same interval start a new full-price checkout; other changes follow the existing paid-period rules.'),
-('Can I cancel my subscription?','You can stop renewal from Billing & Plan. Already-paid access lasts until the paid period ends.'),
-('Does StockBridge delete my data when I cancel?','Cancellation does not delete your businesses or their records. Customers with existing access retain their one-business entitlement after optional Plus or Pro ends.'),
-('How does StockBridge calculate profit?','Gross profit is sales revenue minus recorded cost of goods sold. Net profit subtracts recorded expenses from gross profit.')
-] %}{% if config.SUBSCRIPTIONS_ENABLED or question in ['What is StockBridge?', 'Who can use StockBridge?', 'How does StockBridge calculate profit?'] %}<details><summary>{{ question }}</summary><p>{{ answer }}</p></details>{% endif %}{% endfor %}<p><a href="{{ url_for('legal.help_centre') }}">Read practical guides in the Help Centre</a></p></section>
-<section class="entry-final"><p class="eyebrow">Clarity starts with your next record</p><h2>Stop guessing.<br>Start knowing your numbers.</h2><p>Track stock, sales, expenses and profit with StockBridge.</p><div class="entry-actions"><a class="primary-btn" href="{{ url_for('auth.signup') }}">{{ "Start Your 7-Day Free Trial" if config.SUBSCRIPTIONS_ENABLED else "Create Your Account" }}</a><a class="secondary-btn" href="{{ url_for('auth.login') }}">Sign In</a></div><p class="final-note">{% if config.SUBSCRIPTIONS_ENABLED %}No card required · Eligible accounts begin after email verification.{% else %}Verify your email to explore. Subscription checkout is not currently available.{% endif %}</p></section><p class="entry-pricing-note"><a href="{{ url_for('legal.help_centre') }}">Help Centre: learn how to use StockBridge</a></p><footer class="entry-footer">{{ brand() }}<p>Products → Inventory → Sales → Restocking → Expenses → Profit & Reports</p><a href="{{ url_for('auth.login') }}">Sign In</a>{{ legal_links() }}</footer>
-</div>{% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='js/showcase.js', v='hero-10a') }}" defer></script><script src="{{ url_for('static', filename='js/marketing.js', v='marketing-10a') }}" defer></script>{% endblock %}
+{% block extra_styles %}
+{{ pricing_styles() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/legal.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/home-presentation.css') }}">
+{% endblock %}
+{% block content %}
+{% set signup_cta = 'Start 7-day free trial' if config.SUBSCRIPTIONS_ENABLED else 'Create an account' %}
+{% set nav = [('features','Features'),('how-it-works','How it works'),('pricing','Pricing'),('help','Help')] %}
+{% set tools = ('Products','Inventory','Sales','Restocking','Expenses','Profit') %}
+<div class="sb-home" data-stockbridge-home>
+  <header class="sb-home-header">
+    <div class="sb-home-wrap">
+      {{ brand() }}
+      <nav aria-label="Site navigation" class="sb-home-desktop-nav">
+        {% for id, label in nav %}<a href="#{{ id }}">{{ label }}</a>{% endfor %}
+      </nav>
+      <div class="sb-home-account"><a href="{{ url_for('auth.login') }}">Sign in</a><a class="sb-button sb-button-primary" href="{{ url_for('auth.signup') }}">{{ signup_cta }}</a></div>
+      <details class="entry-mobile-nav sb-home-mobile-nav">
+        <summary>Menu</summary>
+        <nav aria-label="Mobile site navigation">
+          {% for id, label in nav %}<a href="#{{ id }}">{{ label }}</a>{% endfor %}
+          <a href="{{ url_for('auth.login') }}">Sign in</a>
+          <a class="sb-button sb-button-primary" href="{{ url_for('auth.signup') }}">{{ signup_cta }}</a>
+        </nav>
+      </details>
+    </div>
+  </header>
 
-{% block extra_styles %}<link rel="stylesheet" href="{{ url_for('static', filename='css/legal.css') }}">{% endblock %}
+  <section class="sb-home-wrap sb-home-section sb-home-hero sb-home-split" aria-labelledby="home-title">
+    <div class="sb-home-copy">
+      <p class="sb-eyebrow"><span class="sb-home-live" aria-hidden="true"></span>Your everyday business, connected</p>
+      <h1 id="home-title">Know what you have.<br>Know what you sold.<br><span>Know what you made.</span></h1>
+      <p class="sb-home-lead">Track stock, sales and expenses in one place. See what’s on your shelves and what your business kept.</p>
+      <div class="sb-home-actions"><a class="sb-button sb-button-primary" href="{{ url_for('auth.signup') }}">{{ signup_cta }}</a><a class="sb-button sb-button-secondary" href="#how-it-works">Watch how it works</a></div>
+      <p class="sb-home-caption">{% if config.SUBSCRIPTIONS_ENABLED %}No card needed. Trial begins after email verification for eligible accounts.{% else %}Create an account, verify your email and explore StockBridge. Subscription checkout is not currently available.{% endif %}</p>
+    </div>
+    <div class="sb-home-demo" data-home-demo aria-label="Example StockBridge workspace">
+      <div class="sb-card sb-home-demo-card">
+        <div class="sb-home-demo-title"><strong>Example Mini Mart</strong><span>Sample figures</span></div>
+        {% for title, rows in [
+          ('Dashboard today', [('Sales','₦150,000'),('Profit you kept','₦45,000'),('Stock left','90 bottles of Coke')]),
+          ('Record sale', [('Coke × 10','₦5,000'),('Paid by','Cash'),('Stock updated','100 → 90 bottles')]),
+          ('Restock', [('Coke +50','50 bottles received'),('Stock now','90 → 140 bottles')]),
+          ('Reports', [('Sold','₦150,000'),('Costs','₦105,000'),('What you kept','₦45,000')])
+        ] %}
+        <section data-home-slide{% if not loop.first %} hidden{% endif %}>
+          <h3>{{ title }}</h3>
+          <dl>{% for label, value in rows %}<div><dt>{{ label }}</dt><dd>{{ value }}</dd></div>{% endfor %}</dl>
+        </section>
+        {% endfor %}
+        <div class="sb-home-progress" aria-hidden="true"><span data-home-progress></span></div>
+      </div>
+      <div class="sb-home-alerts"><span>✓ Sale recorded</span><span>Fruit Juice: 8 left</span></div>
+      <div class="sb-home-demo-controls" data-home-demo-controls hidden>
+        <button type="button" data-home-next>Next view</button>
+        <button type="button" data-home-motion>Pause motion</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="sb-home-ticker" aria-label="Connected business tools">
+    <div class="sb-home-ticker-track">
+      {% for copy in range(2) %}<div{% if not loop.first %} aria-hidden="true"{% endif %}>{% for label in tools %}<span>{{ label }} <span aria-hidden="true">→</span></span>{% endfor %}</div>{% endfor %}
+    </div>
+  </div>
+
+  <section id="how-it-works" class="sb-home-wrap sb-home-section" aria-labelledby="ripple-title">
+    <h2 id="ripple-title">Every record has a ripple effect.</h2>
+    <p class="sb-home-caption">Example sale</p>
+    <ol class="sb-home-grid sb-home-ripple">
+      {% for title, amount, copy in [('Record a sale','Coke × 10','Save what the customer bought.'),('Stock drops','100 → 90 bottles','See what’s left on the shelf.'),('Profit updates','₦2,000 gross profit','See what remains after the cost of the goods sold.')] %}
+      <li class="sb-card"><span class="sb-home-step">{{ loop.index }}</span><h3>{{ title }}</h3><strong>{{ amount }}</strong><p>{{ copy }}</p></li>
+      {% endfor %}
+    </ol>
+  </section>
+
+  <section class="sb-home-dark" aria-labelledby="profit-title">
+    <div class="sb-home-wrap sb-home-section sb-home-split">
+      <div><h2 id="profit-title">Don’t confuse sales with profit.</h2><p>See how the cost of goods sold and recorded expenses change what you kept.</p><p class="sb-home-caption">Sample figures</p></div>
+      <dl class="sb-home-profit" data-home-profit>
+        {% for label, value in [('Sales revenue','₦150,000'),('Cost of goods sold','− ₦80,000'),('Gross profit','₦70,000'),('Recorded expenses','− ₦25,000'),('Net profit','₦45,000')] %}
+        <div{% if loop.last %} class="sb-home-net"{% endif %}><dt>{{ label }}</dt><dd>{{ value }}</dd></div>
+        {% endfor %}
+      </dl>
+    </div>
+  </section>
+
+  <section id="features" class="sb-home-wrap sb-home-section" aria-labelledby="features-title">
+    <h2 id="features-title">One app for the whole day.</h2>
+    <div class="sb-home-grid sb-home-features">
+      {% for title, symbol, copy in [
+        ('Products','box','Keep product names, cost prices and selling prices together.'),
+        ('Inventory','inventory','See what’s available and what’s running low.'),
+        ('Sales','sale','Record what customers buy and update stock as you go.'),
+        ('Restocking','restock','Record stock coming in and what you paid for it.'),
+        ('Expenses','payment','Keep track of the day-to-day costs of running your business.'),
+        ('Reports','report','See how sales, stock and costs add up.')
+      ] %}
+      <article class="sb-card">
+        <div class="sb-home-feature-art" aria-hidden="true">
+          {{ icon(symbol) }}
+          {% if title == 'Inventory' %}<span class="sb-home-low"><span></span></span>{% endif %}
+          {% if title == 'Reports' %}<span class="sb-home-bars">{% for height in (30,55,42,76,90) %}<i style="--sb-demo-bar:{{ height }}%"></i>{% endfor %}</span>{% endif %}
+        </div>
+        <h3>{{ title }}</h3><p>{{ copy }}</p>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="sb-home-wrap sb-home-section" aria-labelledby="before-title">
+    <h2 id="before-title">From scattered notes to clear records.</h2>
+    <div class="sb-home-split">
+      <div><h3>Before StockBridge</h3><ul class="sb-home-notes"><li>How many are left?</li><li>₦5,000 sold</li><li>Missing receipt</li></ul></div>
+      <div class="sb-card sb-home-after"><h3>With StockBridge</h3><ul>{% for label in ('Inventory','Sales','Restocking','Expenses','Reports') %}<li><span aria-hidden="true">✓</span> {{ label }}</li>{% endfor %}</ul></div>
+    </div>
+  </section>
+
+  {% if config.SUBSCRIPTIONS_ENABLED %}
+  <section class="sb-home-wrap sb-home-section" aria-labelledby="businesses-title">
+    <h2 id="businesses-title">Two businesses. Two clear pictures.</h2>
+    <p>On Plus, switch between up to two businesses and keep each business’s records separate.</p>
+    <div class="sb-home-split sb-home-businesses">
+      {% for name, symbol, copy in [('Example Mini Mart','box','Its own products, inventory and sales.'),('Example Fashion Shop','business','Its own expenses, stock and reports.')] %}
+      <article class="sb-card"><div class="sb-home-feature-art" aria-hidden="true">{{ icon(symbol) }}</div><h3>{{ name }}</h3><p>{{ copy }}</p></article>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="sb-home-wrap sb-home-section" aria-labelledby="trust-title">
+    <h2 id="trust-title">Business owner stories</h2>
+    <div class="sb-home-split"><div class="sb-card"><p>Customer figures coming soon.</p></div><div class="sb-card"><p>Customer stories coming soon.</p></div></div>
+  </section>
+
+  {{ public_pricing(plan_prices) }}
+
+  <section id="help" class="sb-home-wrap sb-home-section" aria-labelledby="help-title">
+    <h2 id="help-title">Find the help you need.</h2>
+    <div class="sb-home-grid">
+      <article class="sb-card"><h3>Help Centre</h3><p>Find guides for setting up and using StockBridge.</p><a class="sb-button sb-button-secondary" href="{{ url_for('legal.help_centre') }}">Read the guides</a></article>
+      <article class="sb-card"><h3>WhatsApp support</h3><p>WhatsApp contact details coming soon.</p></article>
+      <article class="sb-card"><h3>Business tips</h3><p>Practical tips for keeping stock and sales records.</p><a class="sb-button sb-button-secondary" href="{{ url_for('legal.help_centre') }}#getting-started">Browse tips</a></article>
+    </div>
+  </section>
+
+  <section id="faq" class="sb-home-wrap sb-home-section sb-home-faq" aria-labelledby="faq-title">
+    <h2 id="faq-title">Frequently asked questions</h2>
+    {% for question, answer, requires_subscriptions in [
+      ('How does the 7-day free trial work?','Eligible accounts start a seven-day trial after email verification. Returning users do not receive a new trial.',true),
+      ('Do I need a card to start?','No. You can start the trial without card details. It does not automatically charge you.',true),
+      ('What happens to my records if I cancel?','Cancellation does not delete your businesses or their records. Customers with existing access retain their one-business entitlement after optional Plus or Pro ends.',true),
+      ('Which plan do I need?','Basic supports one business, Plus up to two and Pro up to five, with switching and separate records. The core business tools are the same. Plus and Pro include Business Insights for the selected business. Pro also includes Multi-business Overview across permitted businesses.',true),
+      ('How is profit calculated?','Gross profit is sales revenue minus recorded cost of goods sold. Net profit subtracts recorded expenses from gross profit.',false),
+      ('Can I run more than one business?','Yes. Plus supports up to two businesses and Pro up to five. Each business has its own products, inventory, sales, expenses and reports.',true)
+    ] %}
+    {% if config.SUBSCRIPTIONS_ENABLED or not requires_subscriptions %}<details><summary>{{ question }}</summary><p>{{ answer }}</p></details>{% endif %}
+    {% endfor %}
+  </section>
+
+  <section class="sb-home-wrap sb-home-section" aria-labelledby="home-cta-title">
+    <div class="sb-home-close sb-home-dark">
+      <h2 id="home-cta-title">Get a clearer picture of your business.</h2>
+      <p>Start with the stock you have and the sales you make today.</p>
+      <a class="sb-button sb-button-secondary" href="{{ url_for('auth.signup') }}">{{ signup_cta }}</a>
+    </div>
+  </section>
+
+  <footer class="sb-home-footer">
+    <div class="sb-home-wrap">
+      <div>{{ brand() }}<p>Stock, sales and profit in one workspace.</p></div>
+      <div><h3>Product</h3><a href="#features">Features</a><a href="#how-it-works">How it works</a><a href="#pricing">Pricing</a></div>
+      <div><h3>Company</h3><a href="{{ url_for('legal.help_centre') }}">Help Centre</a><a href="{{ url_for('auth.login') }}">Sign in</a></div>
+      <div><h3>Legal</h3>{{ legal_links() }}</div>
+    </div>
+  </footer>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/home-presentation.js') }}" defer></script>{% endblock %}

@@ -11,17 +11,17 @@
     ['registration','How do I create an account?', ['register','registration','sign up','signup','create account','create an account','email verification','verify email','verify my email','verification'], 'Create an account and verify your email using the verification message. Sign in to review verification instructions; do not share verification links or tokens here.', 'signup'],
     ['account-access','How do I recover account access?', ['forgot password','reset password','reset my password','login','log in','sign in','cannot access','cant access'], 'Use Sign In to access your account. If you forgot your password, use password recovery. Never enter your password, reset token or verification token in this assistant.', 'reset'],
     ['trial','Is there a free trial?', ['free trial','trial','seven days','7 days','7 day','free account'], () => config.subscriptions === true ? 'Eligible verified accounts can start a 7-day free trial under the existing account rules. No card is required to start and the trial does not automatically charge you. Not every account is eligible; this assistant cannot check your account.' : 'Subscription rollout is currently disabled here. Create and verify an account to explore StockBridge; do not assume a free trial or subscription checkout is currently available.', 'plans'],
-    ['plans','What are the Basic, Plus and Pro prices?', ['price','prices','pricing','cost','basic','plus','pro','plan','plans','subscription','pay','payment'], () => 'Basic: ₦3,000 monthly or ₦30,000 yearly, for one business. Plus: ₦5,000 monthly or ₦50,000 yearly, for up to two businesses. Pro: ₦10,000 monthly or ₦100,000 yearly, for up to five businesses. ' + (config.subscriptions !== true ? 'Subscription checkout is not currently available here.' : config.provider !== true ? 'Billing-provider rollout is disabled here; subscription checkout is not currently available.' : 'Review Billing & Plan for current checkout availability and your account options. This assistant cannot verify payment-provider readiness or account eligibility.'), 'plans'],
+    ['plans','What do Basic, Plus and Pro cost?', ['price','prices','pricing','cost','basic','plus','pro','plan','plans','subscription','pay','payment'], () => 'Basic: ₦3,000 monthly or ₦30,000 yearly, for one business. Plus: ₦5,000 monthly or ₦50,000 yearly, for up to two businesses. Pro: ₦10,000 monthly or ₦100,000 yearly, for up to five businesses. ' + (config.subscriptions !== true ? 'Subscription checkout is not currently available here.' : config.provider !== true ? 'Billing-provider rollout is disabled here; subscription checkout is not currently available.' : 'Review Billing & Plan for current checkout availability and your account options. This assistant cannot verify payment-provider readiness or account eligibility.'), 'plans'],
     ['products','How do I manage products?', ['product','products','catalogue','catalog','add item','selling price'], 'Add a clear product name, unit, purchase cost, selling price and low-stock threshold. Search and filter Products to find items. Use product details to review history; mark products inactive when appropriate.', 'products'],
     ['inventory','How do I enter opening stock?', ['opening stock','initial stock','current stock','inventory','stock quantity','quantity remaining'], 'Opening stock is the quantity you already have when registering a product. Sales reduce stock and restocking increases it. After registration, use stock adjustments to correct quantities rather than directly editing current stock.', 'inventory'],
-    ['sales','How do I record a sale?', ['sale','sales','sell','sold','record sale','record a sale'], 'Search for products, add them to the sales basket, review quantities and selling prices, then submit once. JavaScript is required. Available stock limits what you can sell; check history before retrying after an uncertain response.', 'sales'],
+    ['sales','How do I record a sale?', ['sale','sales','sell','sold','record sale','record a sale'], 'Search for products, add them to the sales basket, review quantities and selling prices, then submit once. Available stock limits what you can sell; check history before retrying after an uncertain response.', 'sales'],
     ['restocking','How do I restock products?', ['restock','restocking','received goods','purchase stock','buy stock','add stock','supplier'], 'Record goods received for resale in Restocking. Add products to the basket, enter quantities and purchase costs per unit, and include supplier details or notes where useful. Review before submitting once; history preserves purchase costs.', 'restocking'],
     ['adjustments','How do I adjust stock?', ['stock adjustment','stock adjustments','adjust stock','damaged','expired','lost stock','stock correction','returns'], 'Open a product’s details and use its stock adjustment action. Choose increase or decrease, enter the quantity and a genuine reason and notes. Adjustments cannot make stock negative and remain in stock history.', 'help','adjustments'],
     ['expenses','How do I record expenses?', ['expense','expenses','rent','electricity','transport','operating cost'], 'Record genuine operating costs with the correct amount, category and date. Goods bought for resale belong in Restocking. Check expense history before recording an expense again.', 'expenses'],
-    ['reports','How do I read the dashboard and reports?', ['dashboard','report','reports','profit','revenue','chart','filter','custom dates'], 'Choose Today, Week, Month or Custom, then select Apply. Enter both dates for Custom. Dashboard summary cards follow the selected period; the revenue chart shows the last seven days. Gross profit subtracts recorded product costs from revenue; net profit also subtracts operating expenses.', 'reports'],
+    ['reports','How do I read the dashboard and reports?', ['dashboard','report','reports','profit','revenue','chart','filter','custom dates'], 'Choose a preset period or enter both dates and select Apply. Dashboard summary cards follow the selected period; the revenue chart shows the last seven days. Gross profit subtracts recorded product costs from revenue; net profit also subtracts operating expenses.', 'reports'],
     ['businesses','How do I switch businesses?', ['five businesses','5 businesses','multiple businesses','two businesses','2 businesses','second business','switch business','switch between businesses','active business','my businesses'], 'Where your account plan permits it, manage businesses in My Businesses and switch using Working in. Basic supports one business; Plus supports up to two; Pro supports up to five. Records are separate. Check the active business before recording activity.', 'businesses'],
-    ['notifications','How do notifications work?', ['notification','notifications','low stock','out of stock','stock alert','email alert','restocking email'], 'The Notification Centre shows business activity and supports marking notifications read. Preferences distinguish product-added and sales in-app notifications from low-stock, out-of-stock and restocking email alerts. Email delivery depends on configured services and account restrictions; this assistant cannot check delivery.', 'notifications'],
-    ['interrupted','What if saving was interrupted?', ['interrupted','timeout','timed out','duplicate','submission','retry','saved twice','save failed','uncertain'], 'Check the relevant transaction history before recording anything again. Same-reference, unchanged retries are protected against duplication; changed contents under a used reference are rejected. If the form expires or the outcome is uncertain, check history before refreshing for a new transaction. This assistant cannot confirm whether saving succeeded.', 'help','interrupted'],
+    ['notifications','How do notifications work?', ['notification','notifications','low stock','out of stock','stock alert','email alert','restocking email'], 'The Notification Centre shows business activity and supports marking notifications read. In Profile & settings, Alerts distinguish product-added and sales in-app notifications from low-stock, out-of-stock and restocking email alerts. Email delivery depends on configured services and account restrictions; this assistant cannot check delivery.', 'notifications'],
+    ['interrupted','What if saving was interrupted?', ['interrupted','timeout','timed out','duplicate','submission','retry','saved twice','save failed','uncertain'], 'Check the relevant transaction history before recording anything again. Retrying the same form with unchanged details is protected against duplicates. If the form was already used, changing its details will be rejected. If the form expires or the outcome is uncertain, check history before refreshing for a new transaction. This assistant cannot confirm whether saving succeeded.', 'help','interrupted'],
     ['help','Where can I find help?', ['help','support','contact','guide','guides'], 'The Help Centre contains practical guides for StockBridge. Official contact details remain pending approval; there is no support submission service in this assistant.', 'help']
   ];
   const topics = new Map(catalogue.map(([id,label,phrases,answer,link,anchor]) => [id,{id,label,phrases,answer,link,anchor}]));
@@ -32,81 +32,246 @@
     const best = Math.max(...scored.map(item => item.score));
     return best ? scored.filter(item => item.score === best).map(item => item.id) : [];
   }
-  const panel=root.querySelector('.sb-assistant-panel'), launcher=root.querySelector('.sb-assistant-launcher');
-  const input=root.querySelector('input'), history=root.querySelector('.sb-assistant-history');
-  const suggestions=root.querySelector('.sb-assistant-suggestions'), status=root.querySelector('[role=status]');
-  const storageKey='stockbridge:assistant:v1:'+(config.scope==='customer'?'customer':'public');
-  const LIMIT=10, TTL=30*60*1000;
-  let ids=[];
+  const panel = root.querySelector('.sb-assistant-panel');
+  const launcher = root.querySelector('.sb-assistant-launcher');
+  const title = root.querySelector('h2');
+  const input = root.querySelector('input');
+  const scroll = root.querySelector('[data-assistant-scroll]');
+  const home = root.querySelector('[data-assistant-home]');
+  const conversation = root.querySelector('[data-assistant-conversation]');
+  const history = root.querySelector('.sb-assistant-history');
+  const typing = root.querySelector('.sb-assistant-typing');
+  const suggestions = root.querySelector('.sb-assistant-suggestions');
+  const suggestionHeading = root.querySelector('[data-assistant-suggestion-heading]');
+  const chips = root.querySelector('[data-assistant-chips]');
+  const footer = root.querySelector('[data-assistant-footer]');
+  const status = root.querySelector('[role=status]');
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const storageKey = 'stockbridge:assistant:v1:' + (config.scope === 'customer' ? 'customer' : 'public');
+  const LIMIT = 10, TTL = 30 * 60 * 1000;
+  const defaultChips = ['inventory', 'sales', 'plans'];
+  const destinations = {
+    help: 'Help Centre', signup: 'Create an account', reset: 'Password recovery',
+    plans: 'Billing & Plan', products: 'Products', inventory: 'Inventory',
+    sales: 'Sales', restocking: 'Restocking', expenses: 'Expenses', reports: 'Reports',
+    businesses: 'My businesses', notifications: 'Notifications',
+  };
+  let ids = [];
+  let pending;
+
   function persist() {
-    try { window.sessionStorage.setItem(storageKey,JSON.stringify({v:1,at:Date.now(),topics:ids.slice(-LIMIT)})); } catch (_) { /* In-memory help remains available. */ }
+    try {
+      window.sessionStorage.setItem(storageKey, JSON.stringify({v: 1, at: Date.now(), topics: ids}));
+    } catch (_) { /* In-memory help remains available. */ }
   }
+
   function restore() {
     try {
-      const raw=window.sessionStorage.getItem(storageKey);
+      const raw = window.sessionStorage.getItem(storageKey);
       if (!raw) return;
-      if (raw.length>1500) throw new Error('Invalid state');
-      const saved=JSON.parse(raw);
-      if(saved.v!==1 || !Number.isFinite(saved.at) || Date.now()-saved.at>TTL || saved.at>Date.now() || !Array.isArray(saved.topics) || saved.topics.length>LIMIT || saved.topics.some(id=>typeof id!=='string'||!topics.has(id))) throw new Error('Invalid state');
-      ids=saved.topics;
-    } catch (_) { try { window.sessionStorage.removeItem(storageKey); } catch (_) {} }
+      if (raw.length > 1500) throw new Error('Invalid state');
+      const saved = JSON.parse(raw);
+      if (saved.v !== 1 || !Number.isFinite(saved.at) || Date.now() - saved.at > TTL
+        || saved.at > Date.now() || !Array.isArray(saved.topics) || saved.topics.length > LIMIT
+        || saved.topics.some(id => !topics.has(id))) throw new Error('Invalid state');
+      ids = saved.topics;
+    } catch (_) { forget(); }
   }
-  function message(speaker,text,topic) {
-    const item=document.createElement('div');item.className='sb-assistant-message';item.dataset.speaker=speaker;
-    const label=document.createElement('strong');label.textContent=speaker==='user'?'You':'StockBridge Assistant';
-    const p=document.createElement('p');p.textContent=text;item.append(label,p);
-    if(topic){
-      const href=config.links?.[topic.link];
-      // Accept only fixed same-origin application paths, never browser input or storage URLs.
-      if(typeof href==='string' && /^\/(?!\/)/.test(href) && !/[\\\s]/.test(href)) {
-        const a=document.createElement('a');a.href=href+(topic.anchor?'#'+topic.anchor:'');a.textContent='Open '+(topic.link==='help'?'Help Centre guide':topic.link==='plans'?'Billing & Plan':topic.link);item.append(a);
+
+  function forget() {
+    try { window.sessionStorage.removeItem(storageKey); } catch (_) { /* Storage can be disabled. */ }
+  }
+
+  function showConversation(active) {
+    home.hidden = active;
+    conversation.hidden = footer.hidden = !active;
+    panel.toggleAttribute('data-conversation', active);
+    title.textContent = active ? 'StockBridge Assistant' : 'Hi, how can we help?';
+  }
+
+  function scrollToLatest() { scroll.scrollTop = scroll.scrollHeight; }
+
+  function answer(topic) {
+    const text = typeof topic.answer === 'function' ? topic.answer() : topic.answer;
+    const steps = text.match(/.+?(?:[.!?](?=\s|$)|$)/g) || [text];
+    return steps.map(step => step.trim());
+  }
+
+  function message(speaker, text, topic) {
+    const item = document.createElement('div');
+    item.className = 'sb-assistant-message';
+    item.dataset.speaker = speaker;
+    const label = document.createElement('strong');
+    label.className = 'sb-assistant-sr';
+    label.textContent = speaker === 'user' ? 'You' : 'StockBridge Assistant';
+    item.append(label);
+    if (Array.isArray(text)) {
+      const steps = document.createElement('ol');
+      for (const step of text) {
+        const li = document.createElement('li');
+        li.textContent = step;
+        steps.append(li);
+      }
+      item.append(steps);
+    } else {
+      const copy = document.createElement('p');
+      copy.textContent = text;
+      item.append(copy);
+    }
+
+    if (topic) {
+      const href = config.links?.[topic.link];
+      // Use only fixed same-origin app paths from the rendered configuration.
+      if (typeof href === 'string' && /^\/(?!\/)/.test(href) && !/[\\\s]/.test(href)) {
+        const link = document.createElement('a');
+        link.className = 'sb-assistant-open-page';
+        link.href = href + (topic.anchor ? '#' + topic.anchor : '');
+        link.textContent = 'Open ' + destinations[topic.link];
+        item.append(link);
       }
     }
     history.append(item);
-    while(history.children.length>24) history.firstElementChild.remove();
-    history.scrollTop=history.scrollHeight;
+    while (history.children.length > 24) history.firstElementChild.remove();
   }
-  function choices(values) {
-    suggestions.replaceChildren();
-    values.forEach(id=>{const button=document.createElement('button');button.type='button';button.textContent=topics.get(id).label;button.addEventListener('click',()=>{respond(id,true);input.focus();});suggestions.append(button);});
+
+  function choices(values, heading = 'You might also ask') {
+    suggestionHeading.textContent = heading;
+    chips.replaceChildren();
+    for (const id of values) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.assistantTopic = id;
+      button.textContent = topics.get(id).label;
+      chips.append(button);
+    }
+    suggestions.hidden = values.length === 0;
   }
-  function defaults(){choices(['overview','inventory','sales','plans']);}
-  function answer(topic){return typeof topic.answer==='function'?topic.answer():topic.answer;}
-  function respond(id,withQuestion){
-    const topic=topics.get(id);if(!topic)return;
-    if(withQuestion)message('user',topic.label);
-    message('assistant',answer(topic),topic);ids.push(id);ids=ids.slice(-LIMIT);persist();defaults();
-    status.textContent=answer(topic);
+
+  function respond(id, question) {
+    const topic = topics.get(id);
+    if (!topic || pending !== undefined) return;
+    showConversation(true);
+    if (question) message('user', question);
+    choices([]);
+    const finish = () => {
+      pending = undefined;
+      typing.hidden = true;
+      const steps = answer(topic);
+      message('assistant', steps, topic);
+      ids = [...ids, id].slice(-LIMIT);
+      persist();
+      choices(defaultChips.filter(other => other !== id));
+      status.textContent = steps.join(' ');
+      scrollToLatest();
+    };
+    if (reducedMotion.matches) { finish(); return; }
+    typing.hidden = false;
+    status.textContent = 'Finding a guided answer.';
+    scrollToLatest();
+    pending = window.setTimeout(finish, 360);
   }
-  function resetView(){history.replaceChildren();message('assistant','Welcome! Ask about StockBridge or choose a question below. I provide predefined guided help and cannot access your records or perform transactions.');ids.forEach(id=>{const t=topics.get(id);message('user',t.label);message('assistant',answer(t),t);});defaults();}
-  function send(){
-    const text=input.value.trim().slice(0,300);if(!text)return;
-    input.value='';message('user',text);
-    const matches=match(text);
-    if(matches.length===1)respond(matches[0],false);
-    else if(matches.length>1){const reply='Which topic did you mean? Choose a question below.';message('assistant',reply);choices(matches);status.textContent=reply;}
-    else {const reply='I couldn’t confidently match that question. Choose a topic or visit the Help Centre. Please don’t share passwords, payment details or private business information.';message('assistant',reply,topics.get('help'));defaults();status.textContent=reply;}
-    input.focus();
+
+  function send() {
+    const text = input.value.trim().slice(0, 300);
+    if (!text || pending !== undefined) return;
+    input.value = '';
+    showConversation(true);
+    message('user', text);
+    const matches = match(text);
+    if (matches.length === 1) {
+      respond(matches[0]);
+    } else {
+      const reply = matches.length
+        ? 'Which topic did you mean?'
+        : 'I couldn’t find a matching guide. Try a question below or open the Help Centre.';
+      message('assistant', reply, matches.length ? null : topics.get('help'));
+      choices(matches.length ? matches : defaultChips, matches.length ? 'Choose a topic' : undefined);
+      status.textContent = reply;
+      scrollToLatest();
+    }
   }
-  function setOpen(open,restoreFocus=true){
-    if(document.body.classList.contains('navigation-open'))open=false;
-    root.toggleAttribute('data-assistant-open',open);
-    panel.hidden=!open;launcher.hidden=open;launcher.setAttribute('aria-expanded',String(open));
-    if(open)input.focus();else if(restoreFocus)launcher.focus();
+
+  function clearChat() {
+    window.clearTimeout(pending);
+    pending = undefined;
+    ids = [];
+    forget();
+    history.replaceChildren();
+    input.value = '';
+    typing.hidden = true;
+    choices([]);
+    showConversation(false);
+    status.textContent = 'Chat cleared.';
+    scroll.scrollTop = 0;
+    title.focus();
   }
-  launcher.addEventListener('click',()=>setOpen(true));
-  root.querySelector('[data-assistant-close]').addEventListener('click',()=>setOpen(false));
-  root.querySelector('[data-assistant-minimize]').addEventListener('click',()=>setOpen(false));
-  root.querySelector('[data-assistant-clear]').addEventListener('click',()=>{ids=[];try{window.sessionStorage.removeItem(storageKey);}catch(_){}resetView();status.textContent='Conversation cleared.';input.focus();});
-  root.querySelector('[data-assistant-send]').addEventListener('click',send);
-  input.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.isComposing){event.preventDefault();send();}});
-  root.addEventListener('keydown',event=>{if(event.key==='Escape'&&!panel.hidden){event.preventDefault();setOpen(false);}});
-  const body=document.body;
-  const observer=new MutationObserver(()=>{if(body.classList.contains('navigation-open'))setOpen(false,false);});
-  observer.observe(body,{attributes:true,attributeFilter:['class']});
-  document.addEventListener('focusin',event=>{root.toggleAttribute('data-field-focus',!root.contains(event.target)&&event.target.matches('input,textarea,select'));});
-  function viewport(){if(window.visualViewport){root.toggleAttribute('data-compact-height',window.visualViewport.height<440);root.style.setProperty('--assistant-viewport-height',window.visualViewport.height+'px');root.style.bottom=Math.max(12,window.innerHeight-window.visualViewport.height-window.visualViewport.offsetTop+12)+'px';}}
-  window.visualViewport?.addEventListener('resize',viewport);window.visualViewport?.addEventListener('scroll',viewport);viewport();
-  window.addEventListener('pageshow',()=>{if(document.body.classList.contains('navigation-open'))setOpen(false,false);});
-  restore();resetView();root.hidden=false;document.body.classList.add('sb-assistant-enabled');
+
+  function setOpen(open, restoreFocus = true) {
+    if (document.body.classList.contains('navigation-open')) open = false;
+    root.toggleAttribute('data-assistant-open', open);
+    panel.hidden = !open;
+    launcher.hidden = open;
+    launcher.setAttribute('aria-expanded', String(open));
+    if (open) {
+      title.focus();
+      if (ids.length) scrollToLatest();
+    } else if (restoreFocus) launcher.focus();
+  }
+
+  launcher.addEventListener('click', () => setOpen(true));
+  root.querySelector('[data-assistant-close]').addEventListener('click', () => setOpen(false));
+  root.querySelector('[data-assistant-clear]').addEventListener('click', clearChat);
+  root.querySelector('[data-assistant-search]').addEventListener('click', () => input.focus());
+  root.querySelector('form').addEventListener('submit', event => {
+    event.preventDefault();
+    send();
+  });
+  root.addEventListener('click', event => {
+    const choice = event.target.closest('[data-assistant-topic]');
+    if (!choice || pending !== undefined) return;
+    respond(choice.dataset.assistantTopic, topics.get(choice.dataset.assistantTopic)?.label);
+    title.focus({preventScroll: true});
+  });
+  root.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !panel.hidden) {
+      event.preventDefault();
+      setOpen(false);
+    }
+  });
+
+  const body = document.body;
+  const observer = new MutationObserver(() => {
+    if (body.classList.contains('navigation-open')) setOpen(false, false);
+  });
+  observer.observe(body, {attributes: true, attributeFilter: ['class']});
+  document.addEventListener('focusin', event => {
+    root.toggleAttribute('data-field-focus', !root.contains(event.target) && event.target.matches('input,textarea,select'));
+  });
+
+  function viewport() {
+    const current = window.visualViewport;
+    if (!current) return;
+    root.toggleAttribute('data-compact-height', current.height < 440);
+    root.style.setProperty('--assistant-viewport-height', current.height + 'px');
+    const offset = Math.max(0, window.innerHeight - current.height - current.offsetTop);
+    root.style.setProperty('--sb-keyboard-offset', offset + 'px');
+  }
+  window.visualViewport?.addEventListener('resize', viewport);
+  window.visualViewport?.addEventListener('scroll', viewport);
+  window.addEventListener('pageshow', () => {
+    if (body.classList.contains('navigation-open')) setOpen(false, false);
+  });
+  viewport();
+  restore();
+  if (ids.length) {
+    showConversation(true);
+    for (const id of ids) {
+      const topic = topics.get(id);
+      message('user', topic.label);
+      message('assistant', answer(topic), topic);
+    }
+    choices(defaultChips.filter(id => id !== ids.at(-1)));
+  }
+  root.hidden = false;
+  body.classList.add('sb-assistant-enabled');
 })();

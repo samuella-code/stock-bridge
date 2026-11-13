@@ -1,27 +1,130 @@
-{% extends "base.html" %}{% block title %}Dashboard · StockBridge{% endblock %}{% block page_title %}Dashboard{% endblock %}{% block content %}
-<section class="dashboard-wrap operations-dashboard"><div class="welcome-row">{% from 'components/business_avatar.html' import business_avatar %}<div class="dashboard-business-heading">{{ business_avatar(business) }}<div><p class="eyebrow">{{business.name}}</p><h2>Operations board</h2><p class="muted">See what needs attention and how your business is trading.</p></div></div></div>
-<div class="quick-actions"><a class="primary-btn button-link" href="{{url_for('sales.index')}}">Record Sale</a><a class="secondary-btn button-link" href="{{url_for('products.create')}}">Add Product</a><a class="secondary-btn button-link" href="{{url_for('restocking.index')}}">Restock</a><a class="secondary-btn button-link" href="{{url_for('expenses.index')}}">Add Expense</a></div>
-{% include 'components/setup.html' %}
-<div class="operations-board">
-<div class="operations-main">
-<article class="panel-card"><h3>Stock needing attention</h3>{% for p in low_stock_products %}<p><a href="{{url_for('products.detail',product_id=p.id)}}">{{p.name}}</a> · {{p.stock_quantity}} {{p.unit}} · {{p.stock_status}}</p>{% else %}<p>No products need restocking right now.</p>{% endfor %}</article>
-<article class="panel-card"><h3>Recent activity</h3>{% for row in recent_transactions %}<div class="transaction-row"><div><strong>{{row.title}}</strong><span>{{row.date.strftime('%d %b, %H:%M')}}</span></div><strong>{{row.amount}}</strong></div>{% else %}<p>No activity yet. Add a product to get started.</p>{% endfor %}</article>
-<article class="panel-card"><h3>Best-selling products by units</h3>{% for p,units,revenue in top %}<p>{{p.name}} · {{units}} units · ₦{{'{:,.2f}'.format(revenue)}}</p>{% else %}<p>No sales in this period.</p>{% endfor %}<a href="{{url_for('main.reports')}}">View reports</a></article>
-</div>
-<div class="operations-context">
-<section class="panel-card operations-trading" aria-labelledby="trading-summary"><h3 id="trading-summary">Trading summary</h3>
-<form class="period-picker" method="GET"><label>Show <select name="period">{% for key,label in [('today','Today'),('week','This week'),('month','This month'),('custom','Custom dates')] %}<option value="{{key}}" {{'selected' if period==key}}>{{label}}</option>{% endfor %}</select></label><label>From <input type="date" name="from" value="{{request.args.get('from','')}}"></label><label>To <input type="date" name="to" value="{{request.args.get('to','')}}"></label><button class="secondary-btn">Apply</button></form>
-<div class="metric-grid">{% for label,value,explanation in [
-('Sales',metrics.revenue,'Revenue from completed sales'),
-('Estimated gross profit',metrics.gross_profit,'Sales minus cost of products sold'),
-('Operating expenses',metrics.expenses,'Running costs recorded'),
-('Estimated net profit',metrics.net_profit,'Gross profit minus operating expenses'),
-('Number of sales',metrics.number_of_sales,'Customer transactions'),
-('Units sold',metrics.units_sold,'Products sold'),
-('Products running low',metrics.low_stock_count,'Above zero, at or below alert threshold'),
-('Out of stock',metrics.out_stock_count,'No units available')] %}{% if loop.index == 5 %}</div><div class="metric-secondary">{% endif %}<article class="{{ 'metric-card' if loop.index <= 4 else 'mini-stat' }}"><div class="metric-top"><span>{{label}}</span></div><strong>{{'₦{:,.0f}'.format(value) if label in ['Sales','Estimated gross profit','Operating expenses','Estimated net profit'] else value}}</strong><small>{{explanation}}</small></article>{% endfor %}</div>
+{% extends "base.html" %}
+{% from 'components/icons.html' import icon %}
+{% from 'components/presentation.html' import naira, kpi, status_badge, empty_message, product_name, quantity_with_unit %}
+{% block title %}Dashboard · StockBridge{% endblock %}
+{% block topbar_heading %}{% endblock %}
+{% block extra_styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/design-tokens.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/presentation.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/overview.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard-presentation.css') }}">
+{% endblock %}
+{% block content %}
+{% set first_name = current_user.full_name.split()|first|default('') %}
+{% set week_from = chart[0].date.isoformat() %}
+{% set week_to = chart[-1].date.isoformat() %}
+{% set rolling_week = period == 'custom' and request.args.get('from') == week_from and request.args.get('to') == week_to %}
+<section class="sb-overview sb-dashboard" aria-labelledby="dashboard-greeting" data-dashboard>
+  <header class="sb-overview-intro">
+    <div>
+      <p class="sb-dashboard-date"><time data-dashboard-date datetime="{{ week_to }}">{{ chart[-1].date.strftime('%d/%m/%Y') }}</time></p>
+      <h1 id="dashboard-greeting"><span data-dashboard-greeting>Hello</span>{% if first_name %}, {{ first_name }}{% endif %}</h1>
+      <p>Here is how {{ business.name }} is doing today.</p>
+    </div>
+    <nav class="sb-overview-actions" aria-label="Quick actions">
+      <a class="sb-button sb-button-primary" href="{{ url_for('sales.index') }}">{{ icon('sale') }} Record sale</a>
+      <a class="sb-button sb-button-secondary" href="{{ url_for('restocking.index') }}">{{ icon('restock') }} Restock</a>
+      <a class="sb-button sb-button-secondary" href="{{ url_for('expenses.index') }}">{{ icon('payment') }} Add expense</a>
+    </nav>
+  </header>
+
+  <section class="sb-card sb-summary" aria-labelledby="trading-summary">
+    <h2 id="trading-summary">Trading summary</h2>
+    <nav class="sb-segmented sb-dashboard-presets" aria-label="Reporting period">
+      <a href="{{ url_for('main.dashboard', period='today') }}"{% if period == 'today' %} aria-current="true"{% endif %}>Today</a>
+      <a href="{{ url_for('main.dashboard', period='custom', from=week_from, to=week_to) }}"{% if rolling_week %} aria-current="true"{% endif %}>7 days</a>
+      <a href="{{ url_for('main.dashboard', period='month') }}"{% if period == 'month' %} aria-current="true"{% endif %}>This month</a>
+    </nav>
+    <details class="sb-dashboard-custom"{% if period == 'custom' and not rolling_week %} open{% endif %}>
+      <summary>Pick dates</summary>
+      <form class="sb-period" method="GET">
+        <input type="hidden" name="period" value="custom">
+        <div class="sb-period-dates">
+          <p id="overview-date-format">Day/month/year</p>
+          <label for="overview-from">From
+            <input id="overview-from" lang="en-GB" type="date" name="from" value="{{ request.args.get('from','') }}" aria-describedby="overview-date-format">
+          </label>
+          <label for="overview-to">To
+            <input id="overview-to" lang="en-GB" type="date" name="to" value="{{ request.args.get('to','') }}" aria-describedby="overview-date-format">
+          </label>
+        </div>
+        <button class="sb-button sb-button-secondary" type="submit">Apply</button>
+      </form>
+    </details>
+    <dl class="sb-kpis sb-kpis-money">
+      {{ kpi('Sales today' if period == 'today' else 'Sales', metrics.revenue, 'Sales revenue', money=true) }}
+      {{ kpi('Profit you kept', metrics.net_profit, 'Estimated net profit', money=true, featured=true) }}
+      {{ kpi('Stock value', metrics.inventory_value, 'Current stock', money=true) }}
+      {{ kpi('Running low', metrics.low_stock_count, 'Products low on stock') }}
+    </dl>
+    <p class="sb-summary-note">{% if period == 'week' %}Showing sales and profit for this calendar week. {% endif %}Voided sales and expenses are excluded from totals.</p>
+  </section>
+
+  {% include 'components/setup.html' %}
+
+  <div class="sb-overview-grid">
+    <section class="sb-card sb-sales-chart" aria-labelledby="sales-chart-title">
+      <h2 id="sales-chart-title">Last 7 days</h2>
+      {% if chart|sum(attribute='total') != 0 %}
+      <output class="sb-dashboard-chart-value" data-dashboard-chart-value aria-live="off">Select a day to see sales.</output>
+      <div class="sb-chart" aria-label="Daily sales">
+        {% for day in chart %}
+        {% set day_value = day.date.strftime('%d/%m/%Y') ~ ': ' ~ naira(day.total) %}
+        <button class="sb-chart-column" type="button" aria-label="{{ day_value }}" title="{{ day_value }}" data-dashboard-chart-day="{{ day_value }}">
+          <span class="sb-chart-track" aria-hidden="true"><span class="sb-chart-bar" style="--sb-bar-height: {{ day.height if day.total else 0 }}%"></span></span>
+          <span aria-hidden="true">{{ day.date.strftime('%d') }}</span>
+        </button>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="sb-section-note">No sales yet. Record a sale and it will show here.</p>
+      {% endif %}
+    </section>
+
+    <section class="sb-card" aria-labelledby="recent-activity">
+      <h2 id="recent-activity">Recent activity</h2>
+      {% if recent_transactions %}
+      <ul class="sb-records">
+        {% for row in recent_transactions %}
+        <li>
+          <div>
+            {% if row.title == 'Sale · 1 units' %}{% set activity_title = 'Sale · 1 unit' %}
+            {% elif row.title.startswith('Restock · ') %}
+              {% set restock = row.title['Restock · '|length:].rsplit(' +', 1) %}
+              {% set activity_title = 'Restocked ' ~ product_name(restock[0]) %}
+            {% else %}{% set activity_title = row.title %}{% endif %}
+            <strong>{{ activity_title }}</strong>
+            {% if row.title.startswith('Restock · ') and restock|length == 2 %}<small>{{ restock[1] }} {{ 'unit' if restock[1] == '1' else 'units' }}</small>{% endif %}
+            <time data-sb-wat="time" datetime="{{ row.date.isoformat() }}{% if not row.date.tzinfo %}Z{% endif %}">{{ row.date.strftime('%d/%m/%Y') }}</time>
+          </div>
+          <strong class="sb-record-amount">{{ row.amount.removesuffix('.00') }}</strong>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      {{ empty_message('Your latest sales, restocks and expenses will appear here.', url_for('products.create'), 'Add product') }}
+      {% endif %}
+    </section>
+
+    {% if low_stock_products %}
+    <section class="sb-card sb-stock" aria-labelledby="stock-attention">
+      <h2 id="stock-attention">Needs attention</h2>
+      <ul class="sb-records">
+        {% for product in low_stock_products %}
+        <li>
+          <div><a href="{{ url_for('products.detail', product_id=product.id) }}">{{ product_name(product.name) }}</a>
+            <small>{{ quantity_with_unit(product.stock_quantity, product.unit) }}</small>
+          </div>
+          {{ status_badge(product.stock_status, 'warning' if product.stock_quantity else 'danger') }}
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </div>
 </section>
-<article class="panel-card chart-card"><h3>Sales in the last 7 days</h3><p class="muted">Daily revenue, independent of the reporting period selected above (UTC).</p><div class="empty-chart" aria-hidden="true"><div class="chart-bars real-chart">{% for day in chart %}<span style="height:{{day.height}}%" title="{{day.label}}: ₦{{'{:,.2f}'.format(day.total)}}"><small class="chart-label-desktop">{{day.label}}</small><small class="chart-label-mobile">{{day.date.strftime('%d')}}</small></span>{% endfor %}</div></div><dl class="daily-revenue">{% for day in chart %}<div><dt><time datetime="{{day.date.isoformat()}}">{{day.date.strftime('%d %b %Y')}}</time></dt><dd>₦{{'{:,.2f}'.format(day.total)}}</dd></div>{% endfor %}</dl>{% if chart|sum(attribute='total') == 0 %}<p>No sales recorded in the last 7 days.</p>{% endif %}</article>
-</div>
-</div>
-</section>{% endblock %}
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/overview-format.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/dashboard-presentation.js') }}" defer></script>
+{% endblock %}

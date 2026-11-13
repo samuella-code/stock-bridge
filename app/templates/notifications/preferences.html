@@ -1,8 +1,28 @@
-<section id="notificationPreferences" class="panel-card notification-preferences">
-<h3>Notification preferences</h3><p class="muted">For {{ business.name }}. Other businesses keep their own settings. Stock warnings stay visible in the Notification Center. Your choices apply to future activity.</p>{% if not config.INVENTORY_EMAILS_ENABLED %}<p class="muted">Email delivery is not available yet. You can save your preferences now.</p>{% endif %}
-<form class="form-stack" method="POST" action="{{ url_for('notifications.preferences') }}">
-<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-{% for field, label in [('low_stock_email','Low-stock email alerts'), ('out_of_stock_email','Out-of-stock email alerts'), ('product_added','Product-added in-app notifications'), ('sales','Sales in-app notifications'), ('restocking','Restocking email alerts')] %}
-<label><input type="checkbox" name="{{ field }}" {% if preferences is none or preferences|attr(field) %}checked{% endif %}> {{ label }}</label>
-{% endfor %}<button class="secondary-btn" type="submit">Save notification preferences</button></form>
+<section id="notificationPreferences" class="sb-card sb-notification-preferences" aria-labelledby="alert-settings-title">
+  <h2 id="alert-settings-title">Alerts</h2>
+  <p class="sb-notification-meta">For {{ business.name }}. Your choices apply to future activity for this business.</p>
+  <p class="sb-notification-meta">Low-stock and out-of-stock alerts stay on in the app.</p>
+  {% if not config.INVENTORY_EMAILS_ENABLED %}
+    <p class="sb-notification-meta">Email delivery is not available yet. You can save your preferences now.</p>
+  {% endif %}
+  <form method="POST" action="{{ url_for('notifications.preferences') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% for field, label, description in [
+      ('low_stock_email', 'Low stock', 'Get an email when a product drops to its low-stock threshold.'),
+      ('out_of_stock_email', 'Out of stock', 'Get an email when a product runs out.'),
+      ('restocking', 'Restock reminders', 'Get an email when a restock is recorded.'),
+      ('sales', 'Sales', 'Get an in-app alert when a sale is recorded.'),
+      ('product_added', 'New products', 'Get an in-app alert when a product is added.')
+    ] %}
+      <label class="sb-alert-setting">
+        <input type="checkbox" role="switch" name="{{ field }}" aria-labelledby="setting-{{ field }}-label" aria-describedby="setting-{{ field }}-description"{% if preferences is none or preferences|attr(field) %} checked{% endif %}>
+        <span class="sb-alert-switch" aria-hidden="true"></span>
+        <span class="sb-settings-alert-copy">
+          <strong id="setting-{{ field }}-label">{{ label }}</strong>
+          <small id="setting-{{ field }}-description">{{ description }}</small>
+        </span>
+      </label>
+    {% endfor %}
+    <button class="sb-button sb-button-secondary" type="submit">Save alerts</button>
+  </form>
 </section>

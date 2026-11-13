@@ -1,10 +1,86 @@
+{% extends 'base.html' %}
 {% from 'components/password_field.html' import password_field %}
-{% from 'components/legal_links.html' import legal_links, billing_links %}
-{% extends 'base.html' %}{% from 'components/public.html' import brand, auth_visual, social_buttons with context %}
+{% from 'components/public.html' import brand with context %}
+
 {% block title %}Sign In · StockBridge{% endblock %}
-{% block content %}<section class="entry-auth">{{ auth_visual() }}<div class="entry-form"><div class="auth-form-card">{{ brand() }}<p class="eyebrow">Welcome back</p><h1>Sign in to StockBridge</h1><p class="muted">Continue managing your business.</p>{{ social_buttons() }}
-<form method="POST" class="form-stack"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Email address<input type="email" name="email" autocomplete="email" value="{{ request.form.get('email', '') }}" required></label>{{ password_field('login-password', 'Password') }}<a class="auth-recovery" href="{{ url_for('auth.forgot_password') }}">Forgot your password?</a><button class="primary-btn full-width" type="submit">Sign In</button></form>{{ legal_links() }}<p class="auth-switch">New to StockBridge? <a href="{{ url_for('auth.signup') }}">Create an account</a></p></div></div></section>{% endblock %}
+{% block content %}
+<section class="sb-signin" aria-labelledby="signin-title">
+  <aside class="sb-signin-story" data-signin-story aria-labelledby="signin-story-title">
+    <div class="sb-signin-brand">{{ brand() }}<span class="sb-signin-live" aria-hidden="true"></span></div>
+    <div class="sb-signin-intro">
+      <h2 id="signin-story-title">Less guesswork.<br>More clarity.</h2>
+      <p>Stock, sales and profit. One connected workspace.</p>
+    </div>
+    <div class="sb-signin-demo" data-signin-demo>
+      <div class="sb-signin-preview">
+        <p class="sb-eyebrow">Example workspace</p>
+        <section data-signin-slide aria-label="Reports">
+          <h3>Reports</h3>
+          <dl><div><dt>Sales revenue</dt><dd>₦1,200</dd></div><div><dt>Reporting period</dt><dd>Today</dd></div></dl>
+        </section>
+        <section data-signin-slide aria-label="Record sale" hidden>
+          <h3>Record sale</h3>
+          <dl><div><dt>Payment</dt><dd>Cash</dd></div><div><dt>Sale total</dt><dd>₦1,200</dd></div></dl>
+        </section>
+        <section data-signin-slide aria-label="Dashboard" hidden>
+          <h3>Dashboard</h3>
+          <dl><div><dt>Sales today</dt><dd>₦1,200</dd></div><div><dt>Fruit Juice</dt><dd>8 left</dd></div></dl>
+        </section>
+        <div class="sb-signin-progress" aria-hidden="true"><span data-signin-progress></span></div>
+      </div>
+      <div class="sb-signin-alerts">
+        <p>Sale recorded <span aria-hidden="true">✓</span> <strong>₦1,200</strong></p>
+        <p>Fruit Juice: <strong>8 left</strong></p>
+      </div>
+      <div class="sb-signin-controls" data-signin-controls hidden>
+        <button type="button" data-signin-next>Next view</button>
+        <button type="button" data-signin-play>Pause animation</button>
+      </div>
+    </div>
+  </aside>
 
-{% block scripts %}<script src="{{ url_for('static', filename='js/password_visibility.js', v='10a-1') }}" defer></script><script src="{{ url_for('static', filename='js/marketing.js', v='marketing-10a') }}" defer></script>{% endblock %}
+  <div class="sb-signin-side">
+    <div class="sb-signin-form-card">
+      <div class="sb-signin-mobile-brand">{{ brand() }}</div>
+      <h1 id="signin-title">Welcome back</h1>
+      <div class="sb-signin-social">
+        <form method="POST" action="{{ url_for('auth.social_start', provider='google') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="sb-button sb-button-secondary" type="submit"{% if not social_ready.google %} disabled aria-describedby="social-availability"{% endif %}><span aria-hidden="true">G</span> Continue with Google</button>
+        </form>
+        {% if not social_ready.google %}
+        <p class="sb-signin-caption" id="social-availability">Google sign-in is not available yet. You can continue with email.</p>
+        {% endif %}
+      </div>
+      <p class="sb-signin-divider">or use your email</p>
+      <form method="POST" class="sb-signin-fields">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div>
+          <label for="login-email">Email address</label>
+          <div class="sb-signin-email"><input id="login-email" type="email" name="email" autocomplete="email" value="{{ request.form.get('email', '') }}" required></div>
+        </div>
+        {{ password_field('login-password', 'Password') }}
+        <a class="sb-signin-link" href="{{ url_for('auth.forgot_password') }}">Forgot your password?</a>
+        <button class="sb-button sb-button-primary" type="submit">Sign in</button>
+      </form>
+      <p class="sb-signin-switch">New to StockBridge? <a class="sb-signin-link" href="{{ url_for('auth.signup') }}">Create an account</a></p>
+      <nav class="sb-signin-legal" aria-label="Legal and support">
+        {% for endpoint, label in [('privacy','Privacy'), ('terms','Terms'), ('refunds','Refunds'), ('subscriptions','Subscription terms'), ('contact','Contact')] %}
+        <a href="{{ url_for('legal.' ~ endpoint) }}">{{ label }}</a>
+        {% endfor %}
+      </nav>
+    </div>
+  </div>
+</section>
+{% endblock %}
 
-{% block extra_styles %}<link rel="stylesheet" href="{{ url_for('static', filename='css/legal.css') }}">{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/password_visibility.js', v='10a-1') }}" defer></script>
+<script src="{{ url_for('static', filename='js/signin-presentation.js') }}" defer></script>
+{% endblock %}
+
+{% block extra_styles %}
+{% for stylesheet in ('legal', 'design-tokens', 'presentation', 'signin-presentation') %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/' ~ stylesheet ~ '.css') }}">
+{% endfor %}
+{% endblock %}

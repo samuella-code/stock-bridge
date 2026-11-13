@@ -1,11 +1,170 @@
-{% extends "base.html" %}{% block extra_styles %}<link rel="stylesheet" href="{{url_for('static',filename='css/restocking.css',v='restock-ux-1')}}">{% endblock %}{% block page_title %}Restocking{% endblock %}{% block content %}{% from 'components/ui.html' import help_panel, empty_state %}
-<section class="dashboard-wrap"><div class="welcome-row"><div><p class="eyebrow">Inventory purchases</p><h2>Restock Products</h2><p class="muted">Add goods received. Purchase costs are preserved in each receipt; these purchases are separate from operating expenses.</p></div></div>
-{% call help_panel('Restocking') %}<p>Sale = stock goes down. Restock = stock goes up.</p><p>Search for received products, enter the quantity received and purchase cost per unit, then review the basket before confirming. Each receipt keeps its purchase cost.</p>{% endcall %}<div class="data-layout"><form class="panel-card form-stack" id="restock-form" method="POST" action="{{url_for('restocking.receive')}}">
-<input type="hidden" name="submission_token" value="{{ submission_token }}">
-{% if submitted_items %}<script type="application/json" class="restock-restore">{{ submitted_items|tojson }}</script>{% endif %}
-{% set mode='restock' %}{% include 'products/basket.html' %}
-<label>Supplier (optional)<input name="supplier" maxlength="140" value="{{ request.form.get('supplier', '') }}"></label><label>Note (optional)<input name="note" maxlength="500" value="{{ request.form.get('note', '') }}"></label><p class="muted">If saving was interrupted, check restocking history before creating another restock. Retrying this form uses the same submission reference. Review products, quantities, unit costs and purchase total below before saving. Receipt time is recorded when saved (UTC).</p><button type="submit" class="primary-btn" {{'disabled' if not has_products}}>Complete restock</button>{% if not has_products %}<p><a href="{{url_for('products.create')}}">Add a product first.</a></p>{% endif %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
-<div class="panel-card"><h3>Recent restocks</h3>{% if restocks.items %}<div class="restock-receipts">{% for receipt in restocks.items %}<details class="restock-receipt ui-disclosure"><summary>{{receipt.received_at.strftime('%d %b %Y')}} · {{receipt.item_count}} {{'item' if receipt.item_count == 1 else 'items'}} · ₦{{'{:,.2f}'.format(receipt.total)}}</summary><p class="muted">Restock Reference: {{receipt.reference.split(':',1)[1]}}</p><div class="table-wrap"><table class="responsive-table"><tr><th>Product</th><th>Quantity</th><th>Unit cost</th><th>Line total</th><th>Supplier / note</th></tr>{% for r in receipt['items'] %}<tr><td>{{r.product.name}}</td><td>+{{r.quantity}}</td><td>₦{{'{:,.2f}'.format(r.unit_cost)}}</td><td>₦{{'{:,.2f}'.format(r.quantity*r.unit_cost)}}</td><td>{{r.supplier or '—'}}{% if r.note %}<p>{{r.note}}</p>{% endif %}</td></tr>{% endfor %}</table></div></details>{% endfor %}</div><nav class="pager">{% if restocks.has_prev %}<a href="{{url_for('restocking.index',page=restocks.prev_num,insight_page=product_page.page,q=query)}}">Previous</a>{% endif %} Page {{restocks.page}} of {{restocks.pages}} {% if restocks.has_next %}<a href="{{url_for('restocking.index',page=restocks.next_num,insight_page=product_page.page,q=query)}}">Next</a>{% endif %}</nav>{% else %}{{ empty_state('No restocks recorded yet', 'When new stock arrives, record a restock to increase inventory automatically.', '#restock-form' if has_products else url_for('products.create'), 'Restock Products' if has_products else 'Add Product') }}{% endif %}</div></div>
-<div class="panel-card"><h3>Restocking insights</h3><form method="GET" class="inventory-toolbar"><input type="hidden" name="page" value="{{restocks.page}}"><input name="q" type="search" value="{{query}}" aria-label="Search restocking insights" placeholder="Find a product in insights"><button class="secondary-btn">Search</button></form><p class="muted">Estimates use sales recorded in the past 30 days. Products without sales data have no prediction.</p><div class="table-wrap"><table class="product-table responsive-table"><tr class="table-head-row"><th>Product</th><th>Average/day</th><th>Current</th><th>Reorder point</th><th>Estimated days left</th><th>Suggested</th><th>Status</th><th>Settings</th></tr>{% for r in recommendations %}<tr><td><a href="{{url_for('products.detail',product_id=r.product.id)}}">{{r.product.name}}</a></td><td>{{'%.1f'|format(r.avg) if r.avg is not none else 'Not enough sales history yet'}}</td><td>{{r.product.stock_quantity}}</td><td>{{'%.0f'|format(r.point) if r.point is not none else '—'}}</td><td>{{'%.1f'|format(r.days) if r.days is not none else '—'}}</td><td>{{r.suggested if r.suggested is not none else '—'}}</td><td>{{r.priority}}</td><td><details class="ui-disclosure"><summary>Edit</summary><form class="inline-settings" method="POST" action="{{url_for('restocking.settings',product_id=r.product.id)}}"><label>Lead days<input type="number" min="0" name="supplier_lead_time" value="{{r.product.supplier_lead_time}}"></label><label>Safety stock<input type="number" min="0" name="safety_stock" value="{{r.product.safety_stock}}"></label><label>Minimum<input type="number" min="0" name="minimum_stock_level" value="{{r.product.minimum_stock_level}}"></label><button class="primary-btn">Save</button><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form></details></td></tr>{% else %}<tr><td colspan="8">{% if query %}No products match your search. <a href="{{url_for('restocking.index',page=restocks.page)}}">Clear filters</a>{% else %}Add products to see stock status.{% endif %}</td></tr>{% endfor %}</table></div><nav class="pager">{% if product_page.has_prev %}<a href="{{url_for('restocking.index',insight_page=product_page.prev_num,q=query,page=restocks.page)}}">Previous insights</a>{% endif %} Page {{product_page.page}} of {{product_page.pages}} {% if product_page.has_next %}<a href="{{url_for('restocking.index',insight_page=product_page.next_num,q=query,page=restocks.page)}}">Next insights</a>{% endif %}</nav></div></section>
+{% extends "base.html" %}
+{% from 'components/presentation.html' import naira, status_badge, empty_message, product_name, quantity_with_unit %}
+{% block title %}Restocking · StockBridge{% endblock %}
+{% block topbar_heading %}{% endblock %}
+{% block extra_styles %}
+  {% for stylesheet in ('design-tokens', 'presentation', 'overview', 'sale-presentation', 'restock-presentation') %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/' ~ stylesheet ~ '.css') }}">
+  {% endfor %}
 {% endblock %}
-{% block scripts %}<script src="{{url_for('static',filename='js/basket.js',v='basket-7cc-1')}}" defer></script>{% endblock %}
+
+{% block content %}
+<section class="sb-overview sb-sale sb-restock" aria-labelledby="restock-title">
+  <header class="sb-overview-intro">
+    <h1 id="restock-title">Restocking</h1>
+    <details class="sb-restock-help">
+      <summary aria-label="Learn about restocking">?</summary>
+      <div class="sb-card">
+        <p>Recording a sale reduces stock. Recording a restock increases it.</p>
+        <p>Search for the products you received, enter the quantity and cost per unit, then review the items before saving. Each receipt keeps its purchase cost.</p>
+      </div>
+    </details>
+  </header>
+
+  <div class="sb-sale-layout">
+    <form class="sb-card sb-sale-form" id="restock-form" method="POST" action="{{ url_for('restocking.receive') }}" aria-label="Record restock" data-restock-redesign>
+      <input type="hidden" name="submission_token" value="{{ submission_token }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <section aria-labelledby="restock-items-heading">
+        <h2 class="sb-sale-step" id="restock-items-heading"><span aria-hidden="true">1</span> What did you receive?</h2>
+        {% if has_products %}
+          <noscript><p>Enable JavaScript in your browser to add products and record a restock.</p></noscript>
+        {% endif %}
+        <div class="basket" data-mode="restock" data-lookup="{{ url_for('products.lookup') }}">
+          <label for="restock-search">Search products by name, SKU or category</label>
+          <input type="search" id="restock-search" class="basket-search" autocomplete="off" aria-controls="restock-results" placeholder="Start typing a product"{% if not has_products %} disabled{% endif %}>
+          <div class="basket-results" id="restock-results" aria-live="polite"></div>
+          <p class="basket-message" aria-live="polite"></p>
+          {% if has_products %}<p class="basket-empty">Tap a product to add it to this restock.</p>{% endif %}
+          <p class="basket-count" aria-live="polite">0 products selected</p>
+          <div class="basket-lines"></div>
+          {% if selected %}
+            <script type="application/json" class="basket-initial">{{ {'id': selected.id, 'name': selected.name, 'stock': selected.stock_quantity, 'unit': selected.unit, 'cost': selected.buying_price|string}|tojson }}</script>
+          {% endif %}
+        </div>
+        {% if submitted_items %}<script type="application/json" class="restock-restore">{{ submitted_items|tojson }}</script>{% endif %}
+        {% if not has_products %}
+          {{ empty_message('Add a product to start receiving stock.', url_for('products.create'), 'Add a product') }}
+        {% endif %}
+      </section>
+
+      <fieldset class="sb-sale-payment sb-restock-supplier">
+        <legend class="sb-sale-step"><span aria-hidden="true">2</span> Who supplied it?</legend>
+        <label for="restock-supplier">Supplier (optional)</label>
+        <input id="restock-supplier" name="supplier" maxlength="140" value="{{ request.form.get('supplier', '') }}">
+        <details class="sb-sale-options"{% if request.form.get('note') %} open{% endif %}>
+          <summary>Add note</summary>
+          <label for="restock-note">Note (optional)</label>
+          <input id="restock-note" name="note" maxlength="500" value="{{ request.form.get('note', '') }}">
+        </details>
+      </fieldset>
+
+      <p class="sb-section-note">If saving did not finish, check Recent restocks before trying again.</p>
+      <footer class="sb-sale-footer">
+        <div class="sb-sale-totals">
+          <span class="sb-sale-step-number" aria-hidden="true">3</span>
+          <div>
+            <strong class="basket-total" aria-live="polite">Total cost: ₦0</strong>
+            <small data-restock-stock aria-live="polite">Add a product to preview its stock change.</small>
+          </div>
+        </div>
+        <button type="submit" class="sb-button sb-button-primary"{% if not has_products %} disabled{% endif %}>Complete restock</button>
+      </footer>
+    </form>
+
+    <div class="sb-restock-aside">
+      <section class="sb-card" aria-labelledby="recent-restocks">
+        <h2 id="recent-restocks">Recent restocks</h2>
+        {% if restocks.items %}
+          {% for receipt in restocks.items %}
+            <details class="sb-restock-record">
+              <summary>
+                <time data-sb-wat="date" datetime="{{ receipt.received_at.isoformat() }}{% if not receipt.received_at.tzinfo %}Z{% endif %}">{{ receipt.received_at.strftime('%d/%m/%Y') }}</time>
+                · {{ receipt.item_count }} {{ 'item' if receipt.item_count == 1 else 'items' }} · {{ naira(receipt.total) }}
+              </summary>
+              <ul class="sb-restock-list">
+                {% for row in receipt['items'] %}
+                  <li>
+                    <strong>{{ product_name(row.product.name) }}</strong> · {{ quantity_with_unit(row.quantity, row.product.unit) }}
+                    <p>{{ naira(row.unit_cost) }} per unit · {{ naira(row.quantity * row.unit_cost) }} total</p>
+                    {% if row.supplier %}<p>Supplier: {{ row.supplier }}</p>{% endif %}
+                    {% if row.note %}<p>{{ row.note }}</p>{% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            </details>
+          {% endfor %}
+          <nav class="pager" aria-label="Recent restocks pages">
+            {% if restocks.has_prev %}<a href="{{ url_for('restocking.index', page=restocks.prev_num, insight_page=product_page.page, q=query) }}">Previous</a>{% endif %}
+            Page {{ restocks.page }} of {{ restocks.pages }}
+            {% if restocks.has_next %}<a href="{{ url_for('restocking.index', page=restocks.next_num, insight_page=product_page.page, q=query) }}">Next</a>{% endif %}
+          </nav>
+        {% else %}
+          {{ empty_message('Your recent restocks will appear here.', '#restock-form' if has_products else url_for('products.create'), 'Record a restock' if has_products else 'Add a product') }}
+        {% endif %}
+      </section>
+
+      <section class="sb-card" aria-labelledby="restock-advice">
+        <h2 id="restock-advice">When to restock</h2>
+        <p class="sb-section-note">Estimates use sales from the past 30 days.</p>
+        <form class="sb-restock-filter" method="GET">
+          <input type="hidden" name="page" value="{{ restocks.page }}">
+          <label for="restock-insights-search">Find a product</label>
+          <input id="restock-insights-search" name="q" type="search" value="{{ query }}">
+          <button class="sb-button sb-button-secondary">Search</button>
+        </form>
+        <ul class="sb-restock-list">
+          {% for row in recommendations %}
+            <li>
+              <div class="sb-restock-stock-head">
+                <a href="{{ url_for('products.detail', product_id=row.product.id) }}">{{ product_name(row.product.name) }}</a>
+                {{ status_badge(row.priority, {'Urgent': 'danger', 'Watch': 'warning'}.get(row.priority, 'healthy')) }}
+              </div>
+              <p>Current stock: {{ quantity_with_unit(row.product.stock_quantity, row.product.unit) }}</p>
+              {% if row.avg is none %}
+                <p>There isn’t enough sales history to estimate when to restock yet.</p>
+              {% endif %}
+              <details class="sb-restock-record">
+                <summary>{{ 'Estimate and settings' if row.avg is not none else 'Stock settings' }}</summary>
+                {% if row.avg is not none %}
+                  <dl>
+                    <dt>Average sold per day</dt><dd>{{ '%.1f'|format(row.avg) }}</dd>
+                    <dt>Reorder point</dt><dd>{{ '%.0f'|format(row.point) if row.point is not none else '—' }}</dd>
+                    <dt>Estimated days left</dt><dd>{{ '%.1f'|format(row.days) if row.days is not none else '—' }}</dd>
+                    <dt>Suggested quantity to order</dt><dd>{{ row.suggested if row.suggested is not none else '—' }}</dd>
+                  </dl>
+                {% endif %}
+                <form class="sb-restock-settings" method="POST" action="{{ url_for('restocking.settings', product_id=row.product.id) }}">
+                  <label>Supplier lead time (days)<input type="number" min="0" name="supplier_lead_time" value="{{ row.product.supplier_lead_time }}"></label>
+                  <label>Safety stock<input type="number" min="0" name="safety_stock" value="{{ row.product.safety_stock }}"></label>
+                  <label>Minimum stock<input type="number" min="0" name="minimum_stock_level" value="{{ row.product.minimum_stock_level }}"></label>
+                  <button class="sb-button sb-button-primary">Save settings</button>
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                </form>
+              </details>
+            </li>
+          {% endfor %}
+        </ul>
+        {% if not recommendations %}
+          {% if query %}
+            {{ empty_message('No products match your search.', url_for('restocking.index', page=restocks.page), 'Clear filters') }}
+          {% else %}
+            {{ empty_message('Your stock status will appear here when you add a product.', url_for('products.create'), 'Add a product') }}
+          {% endif %}
+        {% endif %}
+        <nav class="pager" aria-label="Restock advice pages">
+          {% if product_page.has_prev %}<a href="{{ url_for('restocking.index', insight_page=product_page.prev_num, q=query, page=restocks.page) }}">Previous insights</a>{% endif %}
+          Page {{ product_page.page }} of {{ product_page.pages }}
+          {% if product_page.has_next %}<a href="{{ url_for('restocking.index', insight_page=product_page.next_num, q=query, page=restocks.page) }}">Next insights</a>{% endif %}
+        </nav>
+      </section>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/basket.js', v='restock-presentation-1') }}" defer></script>
+<script src="{{ url_for('static', filename='js/overview-format.js') }}" defer></script>
+{% endblock %}

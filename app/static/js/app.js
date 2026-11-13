@@ -3,7 +3,8 @@ const sidebar = document.getElementById("sidebar");
 
 if (menuButton && sidebar) {
     const closeButton=document.getElementById('sidebarClose'),backdrop=document.getElementById('sidebarBackdrop'),main=document.querySelector('.main-panel');
-    const mobile=window.matchMedia?.('(max-width: 820px)');
+    const drawerQuery=document.body.classList.contains('sb-overview-shell') ? '(width < 900px)' : '(max-width: 820px)';
+    const mobile=window.matchMedia?.(drawerQuery);
     const isMobile=()=>mobile?.matches ?? false;
     function setMenu(open,restoreFocus=false){
         open=Boolean(open&&isMobile());

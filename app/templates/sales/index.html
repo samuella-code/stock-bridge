@@ -1,27 +1,78 @@
 {% extends "base.html" %}
-{% block extra_styles %}<link rel="stylesheet" href="{{url_for('static',filename='css/sales.css',v='sales-ux-2')}}">{% endblock %}
-{% block page_title %}Sales{% endblock %}
-{% block content %}{% from 'components/ui.html' import help_panel, empty_state %}
-<section class="dashboard-wrap">
-  <div class="welcome-row"><div><p class="eyebrow">Money in</p><h2>Record Sale</h2><p class="muted">Add every item the customer bought. Stock and profit update when you complete the sale.</p></div><div><small class="block-muted">All-time recorded sales</small><strong class="page-total">₦{{'{:,.2f}'.format(total)}}</strong><small class="block-muted">All-time estimated gross profit ₦{{'{:,.2f}'.format(profit)}}</small><small class="block-muted">Voided sales excluded from both totals.</small></div></div>
-  {% call help_panel('Sales') %}<p>Search for a product to add it to the sale. Set quantities and prices, add more products, then review the basket before completing the sale.</p><p>Sold quantities reduce stock automatically. StockBridge prevents selling more than is available and saves each sale’s price and cost for historical reports.</p>{% endcall %}<div class="data-layout">
-    <form class="panel-card form-stack" method="POST" id="sale-form" aria-label="Record sale">
+{% from 'components/presentation.html' import naira, status_badge, empty_message, product_name %}
+{% block title %}Record sale · StockBridge{% endblock %}
+{% block topbar_heading %}{% endblock %}
+{% block extra_styles %}
+{% for stylesheet in ('design-tokens', 'presentation', 'overview', 'sales', 'sale-presentation') %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/' ~ stylesheet ~ '.css') }}">
+{% endfor %}
+{% endblock %}
+{% block content %}
+<section class="sb-overview sb-sale" aria-labelledby="record-sale-title">
+  <header class="sb-overview-intro">
+    <div><p class="sb-eyebrow">Money in</p><h1 id="record-sale-title">Record sale</h1></div>
+  </header>
+  <div class="sb-sale-layout">
+    <form class="sb-card sb-sale-form" method="POST" id="sale-form" aria-label="Record sale" data-sale-redesign>
       <input type="hidden" name="submission_token" value="{{ submission_token }}">
-      {% set mode='sale' %}{% include 'products/basket.html' %}
-      {% if submitted_items %}<script type="application/json" class="sale-restore">{{ submitted_items|tojson }}</script>{% endif %}
-      <label>How customer paid<select name="payment_method">{% for method in payment_methods %}<option {{ 'selected' if request.form.get('payment_method') == method }}>{{method}}</option>{% endfor %}</select></label>
-      <label>Date<input type="date" aria-describedby="sale-date-help" name="sold_at" value="{{ request.form.get('sold_at', '') }}"></label><small id="sale-date-help">Leave Date blank to use the current date and time (UTC). Choosing a date records midnight UTC on that date.</small><label>Note (optional)<input name="note" maxlength="500" value="{{ request.form.get('note', '') }}"></label>
-      <p class="muted">If saving was interrupted, check sales history before creating another sale. Retrying this form uses the same submission reference.</p>
-      <button type="submit" class="primary-btn" {{'disabled' if not has_products}}>Complete sale</button>
-      {% if not has_products %}<p><a href="{{url_for('products.create')}}">Add your first product</a> to record a sale.</p>{% endif %}
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
-    <div class="panel-card"><h3>Sales history</h3>{% if sales.items %}
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <section aria-labelledby="sale-items-heading">
+        <h2 class="sb-sale-step" id="sale-items-heading"><span aria-hidden="true">1</span> What did the customer buy?</h2>
+        <div class="basket" data-mode="sale" data-lookup="{{ url_for('products.lookup') }}">
+          <label for="sale-search">Search products by name, SKU or category</label>
+          <input type="search" id="sale-search" class="basket-search" autocomplete="off" aria-controls="sale-results" placeholder="Start typing a product">
+          <div class="basket-results" id="sale-results" aria-live="polite"></div>
+          <p class="basket-message" aria-live="polite"></p>
+          <p class="basket-empty">Tap a product to add it to this sale.</p>
+          <p class="basket-count" aria-live="polite">0 products selected</p>
+          <div class="basket-lines"></div>
+        </div>
+        {% if submitted_items %}<script type="application/json" class="sale-restore">{{ submitted_items|tojson }}</script>{% endif %}
+        {% if not has_products %}<p><a class="sb-button sb-button-secondary" href="{{ url_for('products.create') }}">Add your first product</a></p>{% endif %}
+        <noscript><p>Enable JavaScript in your browser to add products and record a sale.</p></noscript>
+      </section>
+      <fieldset class="sb-sale-payment">
+        <legend class="sb-sale-step"><span aria-hidden="true">2</span> How did they pay?</legend>
+        {% set payment = request.form.get('payment_method', payment_methods|first) %}
+        {% if payment not in payment_methods %}{% set payment = payment_methods|first %}{% endif %}
+        <div class="sb-segmented">
+          {% for method in payment_methods %}
+          <label><input type="radio" name="payment_method" value="{{ method }}"{% if payment == method %} checked{% endif %}><span>{{ 'Transfer' if method == 'Bank Transfer' else method }}</span></label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <div class="sb-sale-options">
+        <details{% if request.form.get('sold_at') %} open{% endif %}>
+          <summary>Change date</summary>
+          <label for="sale-date">Date</label>
+          <input type="date" lang="en-GB" id="sale-date" aria-describedby="sale-date-help" name="sold_at" value="{{ request.form.get('sold_at', '') }}">
+          <small id="sale-date-help">Leave blank to record the sale now. Dates are entered as day/month/year.</small>
+        </details>
+        <details{% if request.form.get('note') %} open{% endif %}>
+          <summary>Add note</summary>
+          <label for="sale-note">Note (optional)</label>
+          <input id="sale-note" name="note" maxlength="500" value="{{ request.form.get('note', '') }}">
+        </details>
+      </div>
+      <footer class="sb-sale-footer">
+        <div class="sb-sale-totals">
+          <span class="sb-sale-step-number" aria-hidden="true">3</span>
+          <div><strong class="basket-total" aria-live="polite">Total: ₦0</strong><small data-sale-profit>Estimated gross profit: ₦0</small></div>
+        </div>
+        <button type="submit" class="sb-button sb-button-primary" {{ 'disabled' if not has_products }}>Complete sale</button>
+      </footer>
+    </form>
+    <aside class="sb-card sb-sale-history" aria-labelledby="recent-sales"><h2 id="recent-sales">Recent sales</h2>{% if sales.items %}
       <div class="table-wrap"><table class="responsive-table"><tr class="table-head-row"><th>Items</th><th>Total</th><th>Payment</th><th>Date</th><th>Action</th></tr>
-      {% for s in sales.items %}<tr><td>{% for item in s.items %}<div>{{item.product.name}} × {{item.quantity}} @ ₦{{'{:,.2f}'.format(item.unit_price)}}</div>{% endfor %}{% if s.voided_at %}<small>Voided: {{s.void_reason}}</small>{% endif %}</td><td class="numeric">₦{{'{:,.2f}'.format(s.total)}}</td><td>{{s.payment_method}}</td><td>{{s.sold_at.strftime('%d %b %Y')}}</td><td>{% if not s.voided_at %}<details class="sale-actions"><summary aria-label="Actions for sale {{s.id}}">⋯</summary><button type="button" class="secondary-btn" data-sale-details aria-controls="sale-details-{{s.id}}" aria-expanded="false">View Details</button><div hidden id="sale-details-{{s.id}}"><p>Sale #{{s.id}} · {{s.sold_at.strftime('%d %b %Y %H:%M')}} UTC · {{s.payment_method}}</p>{% for item in s.items %}<p>{{item.product.name}} × {{item.quantity}} @ ₦{{'{:,.2f}'.format(item.unit_price)}}</p>{% endfor %}<p>Total: ₦{{'{:,.2f}'.format(s.total)}}</p>{% if s.note %}<p>Note: {{s.note}}</p>{% endif %}</div><button type="button" class="danger-link" data-void-open aria-controls="void-sale-{{s.id}}" aria-expanded="false">Void Sale</button><form hidden id="void-sale-{{s.id}}" method="POST" action="{{url_for('sales.delete',sale_id=s.id)}}"><p>Void this sale and restore its stock? The original sale remains in history.</p><label>Reason to void<input name="reason" required maxlength="300" placeholder="Reason to void"></label><button type="submit" class="danger-link">Confirm Void Sale</button><button type="button" class="secondary-btn" data-void-cancel>Cancel</button><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form></details>{% endif %}</td></tr>{% endfor %}</table></div>
+      {% for s in sales.items %}<tr{% if s.voided_at %} class="sb-sale-voided"{% endif %}><td><div class="sb-sale-record">{% for item in s.items %}<div>{{ product_name(item.product.name) }} × {{item.quantity}} @ {{ naira(item.unit_price) }}</div>{% endfor %}</div>{% if s.voided_at %}{{ status_badge("Voided", "danger") }}<small class="sb-void-reason">{{ s.void_reason }}</small>{% endif %}</td><td class="numeric">{{ naira(s.total) }}</td><td>{{s.payment_method}}</td><td><time data-sb-wat="date" datetime="{{ s.sold_at.isoformat() }}{% if not s.sold_at.tzinfo %}Z{% endif %}">{{ s.sold_at.strftime("%d/%m/%Y") }}</time></td><td>{% if not s.voided_at %}<details class="sale-actions"><summary aria-label="Actions for sale {{s.id}}">⋯</summary><button type="button" class="secondary-btn" data-sale-details aria-controls="sale-details-{{s.id}}" aria-expanded="false">View Details</button><div hidden id="sale-details-{{s.id}}"><p>Sale #{{s.id}} · <time data-sb-wat="time" datetime="{{ s.sold_at.isoformat() }}{% if not s.sold_at.tzinfo %}Z{% endif %}">{{ s.sold_at.strftime("%d/%m/%Y") }}</time> · {{s.payment_method}}</p>{% for item in s.items %}<p>{{ product_name(item.product.name) }} × {{item.quantity}} @ {{ naira(item.unit_price) }}</p>{% endfor %}<p>Total: {{ naira(s.total) }}</p>{% if s.note %}<p>Note: {{s.note}}</p>{% endif %}</div><button type="button" class="danger-link" data-void-open aria-controls="void-sale-{{s.id}}" aria-expanded="false">Void Sale</button><form hidden id="void-sale-{{s.id}}" method="POST" action="{{url_for('sales.delete',sale_id=s.id)}}"><p>Void this sale and restore its stock? The original sale remains in history.</p><label>Reason to void<input name="reason" required maxlength="300" placeholder="Reason to void"></label><button type="submit" class="danger-link">Confirm Void Sale</button><button type="button" class="secondary-btn" data-void-cancel>Cancel</button><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form></details>{% endif %}</td></tr>{% endfor %}</table></div>
       <nav class="pager">{% if sales.has_prev %}<a href="{{url_for('sales.index',page=sales.prev_num)}}">Previous</a>{% endif %} Page {{sales.page}} of {{sales.pages}} {% if sales.has_next %}<a href="{{url_for('sales.index',page=sales.next_num)}}">Next</a>{% endif %}</nav>
-      {% else %}{{ empty_state('No sales recorded yet', 'Record your first sale and StockBridge will automatically reduce the inventory of the products sold.', '#sale-form' if has_products else url_for('products.create'), 'Record Sale' if has_products else 'Add Product') }}{% endif %}
-    </div>
+      {% else %}{{ empty_message('Your sales will appear here once recorded.', '#sale-form' if has_products else url_for('products.create'), 'Record sale' if has_products else 'Add product') }}{% endif %}
+    </aside>
   </div>
 </section>
 {% endblock %}
-{% block scripts %}<script src="{{url_for('static',filename='js/basket.js',v='basket-7cc-1')}}" defer></script><script src="{{url_for('static',filename='js/sales-actions.js')}}" defer></script>{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/basket.js', v='record-sale-1') }}" defer></script>
+<script src="{{ url_for('static', filename='js/sales-actions.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/overview-format.js') }}" defer></script>
+{% endblock %}

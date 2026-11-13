@@ -1,15 +1,231 @@
-{% extends "base.html" %}{% block title %}Products · StockBridge{% endblock %}{% block page_title %}{{ 'Inventory' if request.args.get('view') == 'inventory' else 'Products' }}{% endblock %}{% block content %}{% from 'components/ui.html' import help_panel, empty_state %}
-<section class="dashboard-wrap"><div class="welcome-row"><div><p class="eyebrow">Your inventory</p><h2>{{ 'Inventory' if request.args.get('view') == 'inventory' else 'Products' }}</h2><p class="muted">Enter opening stock when adding a product. Sales and restocks keep the quantity up to date.</p></div></div>
-{% call help_panel('Inventory' if request.args.get('view') == 'inventory' else 'Products') %}<p>Products holds the items your business stocks. Opening stock is what you already have when adding an item.</p><p>Current stock changes automatically through sales, restocks and recorded stock adjustments with a reason. Do not overwrite it to correct a count; use the product’s stock adjustment form.</p><p>Cost price is what one unit costs you. Selling price is what you charge. The low-stock threshold flags when quantity reaches that level.</p>{% endcall %}{% include 'products/entry_choices.html' %}
-<h3 id="inventory-summary-heading">Business-wide summary — all active products</h3>
-<p class="muted" id="inventory-summary-scope">These totals cover all active products in this business. Search, filters and pagination affect only the product list below. Archived products are excluded.</p>
-<div class="inventory-summary" role="group" aria-labelledby="inventory-summary-heading" aria-describedby="inventory-summary-scope"><article class="mini-stat"><span>Active products</span><strong>{{total_products}}</strong></article><article class="mini-stat"><span>Running low or out</span><strong>{{low_stock_count}}</strong></article><article class="mini-stat"><span>Estimated stock value</span><strong>₦{{'{:,.2f}'.format(inventory_value)}}</strong><small>Current stock × latest unit cost</small></article></div>
-<div class="panel-card inventory-panel"><form class="inventory-toolbar" method="GET">
-<input type="hidden" name="view" value="{{request.args.get('view','')}}"><label>Search<input type="search" name="q" value="{{query}}" placeholder="Search name, SKU, category or supplier"></label>
-<label>Category<select name="category"><option value="">All categories</option>{% for item in categories %}<option value="{{item}}" {{'selected' if category==item}}>{{item}}</option>{% endfor %}</select>
-</label><label>Stock status<select name="stock">{% for key,label in [('all','All stock'),('in','In stock'),('low','Low stock'),('out','Out of stock'),('archived','Archived')] %}<option value="{{key}}" {{'selected' if stock_filter==key}}>{{label}}</option>{% endfor %}</select>
-</label><label class="catalogue-sort">Sort<select name="sort">{% for key,label in [('recent','Recently added'),('name','Name'),('stock','Quantity'),('price','Selling price'),('cost','Cost price'),('value','Stock value'),('oldest','Oldest first'),('priority','Low-stock priority')] %}<option value="{{key}}" {{'selected' if sort==key}}>{{label}}</option>{% endfor %}</select></label><button class="secondary-btn">Filter</button></form>
-{% if products %}<div class="table-wrap"><table class="product-table responsive-table"><thead><tr><th>Product</th><th>Category</th><th>Current stock</th><th>Cost</th><th>Selling</th><th>Stock value</th><th>Status</th><th></th></tr></thead><tbody>
-{% for p in products %}<tr><td><a href="{{url_for('products.detail',product_id=p.id,**catalogue_navigation)}}"><strong>{{p.name}}</strong></a><small>{{p.sku or 'No SKU'}}</small></td><td data-label="Category">{{p.category or '—'}}</td><td data-label="Current Stock">{{p.stock_quantity}} {{p.unit}}</td><td data-label="Cost">₦{{'{:,.2f}'.format(p.buying_price)}}</td><td data-label="Selling">₦{{'{:,.2f}'.format(p.selling_price)}}</td><td data-label="Stock Value">₦{{'{:,.2f}'.format(p.stock_quantity*p.buying_price)}}</td><td><span class="status {{'danger' if p.is_low_stock else 'healthy'}}">{{p.stock_status}}</span></td><td><a href="{{url_for('products.detail',product_id=p.id,**catalogue_navigation)}}">Details</a>{% if p.active and p.is_low_stock %} · <a href="{{url_for('restocking.index',product_id=p.id,**catalogue_navigation)}}">Restock</a>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
-<nav class="pager">{% if pagination.has_prev %}<a href="{{url_for('products.index',page=pagination.prev_num,q=query,stock=stock_filter,category=category,sort=sort,view=request.args.get('view',''))}}">Previous</a>{% endif %} Page {{pagination.page}} of {{pagination.pages}} {% if pagination.has_next %}<a href="{{url_for('products.index',page=pagination.next_num,q=query,stock=stock_filter,category=category,sort=sort,view=request.args.get('view',''))}}">Next</a>{% endif %}</nav>
-{% else %}<div class="empty-state"><strong>{{'No matching products' if query or stock_filter!='all' or category else ('No inventory yet' if request.args.get('view') == 'inventory' else 'No products yet')}}</strong>{% if query or stock_filter!='all' or category %}<p>Try another search or clear the filters to see your products.</p><a class="primary-btn button-link" href="{{url_for('products.index',view=request.args.get('view',''))}}">Clear filters</a>{% else %}<p>{{ 'Add your first product with opening stock to begin tracking inventory.' if request.args.get('view') == 'inventory' else 'Add your first product to start tracking stock, sales and profit.' }}</p><p>Opening stock is the quantity you currently have when creating a product.</p><div class="guidance-actions"><a class="primary-btn button-link" href="{{url_for('products.create', **catalogue_navigation)}}">Add Product</a><a class="secondary-btn button-link" href="{{url_for('products.quick_add')}}">Quick Add</a><a class="secondary-btn button-link" href="{{url_for('products.import_products')}}">Import Products</a></div>{% endif %}</div>{% endif %}</div></section>{% endblock %}
+{% extends "base.html" %}
+{% from 'components/presentation.html' import empty_message, kpi, naira, product_name, quantity_with_unit, status_badge %}
+{% set catalogue_view = request.args.get('view', '') %}
+{% set is_inventory = catalogue_view == 'inventory' %}
+{% set title = 'Inventory' if is_inventory else 'Products' %}
+{% block title %}{{ title }} · StockBridge{% endblock %}
+{% block topbar_heading %}{% endblock %}
+{% block extra_styles %}
+  {% for stylesheet in ('design-tokens', 'presentation', 'overview', 'catalogue-presentation') %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/' ~ stylesheet ~ '.css') }}">
+  {% endfor %}
+{% endblock %}
+
+{% macro margin_percent(value) %}{{ ('%.2f'|format(value)).rstrip('0').rstrip('.') }}%{% endmacro %}
+
+{% block content %}
+{% set margins = namespace(sum=0, count=0, at_cost=0) %}
+{% if not is_inventory %}
+  {% for product in products if product.active and product.selling_price > 0 %}
+    {% set margins.sum = margins.sum + (product.selling_price - product.buying_price) / product.selling_price * 100 %}
+    {% set margins.count = margins.count + 1 %}
+    {% if product.selling_price == product.buying_price %}
+      {% set margins.at_cost = margins.at_cost + 1 %}
+    {% endif %}
+  {% endfor %}
+{% endif %}
+<section class="sb-overview sb-catalogue{% if is_inventory %} sb-catalogue-inventory{% endif %}" aria-labelledby="catalogue-title">
+  <header class="sb-overview-intro sb-catalogue-header">
+    <div class="sb-catalogue-intro">
+      <p class="sb-catalogue-kicker">{{ 'Stock levels' if is_inventory else 'Your catalogue' }}</p>
+    <div class="sb-catalogue-heading">
+      <h1 id="catalogue-title">{{ title }}</h1>
+      <details class="sb-catalogue-help">
+        <summary aria-label="Learn about {{ title }}">?</summary>
+        <div class="sb-card">
+          <p>Opening stock is what you already have when adding a product.</p>
+          <p>Sales and restocks update current stock automatically. Use the stock adjustment form on the product page to correct a count and record the reason.</p>
+          <p>Cost price is what one unit costs you. Selling price is what you charge. The low-stock threshold tells you when stock is running low.</p>
+          <a href="{{ url_for('legal.help_centre', _anchor='inventory' if is_inventory else 'products') }}">Read the {{ title }} guide</a>
+        </div>
+      </details>
+    </div>
+      <p>{{ 'What you have, what is running out, and what it is worth.' if is_inventory else 'Names, prices and details for everything you sell.' }}</p>
+    </div>
+    {% if is_inventory %}
+      {% set adjustable_products = products|selectattr('active')|list %}
+      <div class="sb-catalogue-actions">
+        <a class="sb-button sb-button-primary" href="{{ url_for('restocking.index') }}">Restock</a>
+        {% if adjustable_products %}
+          <details class="sb-inventory-adjust">
+            <summary class="sb-button sb-button-secondary">Adjust stock</summary>
+            <div class="sb-card">
+              <p>Choose a product on this page</p>
+              <ul>
+                {% for product in adjustable_products %}
+                  <li><a href="{{ url_for('products.detail', product_id=product.id, _anchor='stock-adjustment', **catalogue_navigation) }}">{{ product_name(product.name) }}</a></li>
+                {% endfor %}
+              </ul>
+            </div>
+          </details>
+        {% endif %}
+      </div>
+    {% else %}
+      <nav class="sb-catalogue-actions" aria-label="Add products">
+        <a class="sb-button sb-button-primary" href="{{ url_for('products.create', **catalogue_navigation) }}">Add product</a>
+        <a class="sb-button sb-button-secondary" href="{{ url_for('products.quick_add') }}">Quick add</a>
+        <a class="sb-button sb-button-secondary" href="{{ url_for('products.import_products') }}">Import</a>
+      </nav>
+    {% endif %}
+  </header>
+
+  {% if is_inventory %}
+    {% set active_rows = products|selectattr('active')|list %}
+    {% set low_rows = active_rows|selectattr('is_low_stock')|list %}
+    {% set in_stock = active_rows|selectattr('stock_quantity', 'gt', 0)|list|length %}
+    <section class="sb-catalogue-summary sb-inventory-summary" aria-label="Stock summary">
+      <dl>
+        {{ kpi('Products in stock', in_stock ~ ' of ' ~ active_rows|length, 'Active products on this page') }}
+        <div class="sb-kpi{% if low_stock_count %} sb-inventory-restock-warning{% endif %}">
+          <dt>Needs restocking</dt>
+          <dd>{{ low_stock_count }}</dd>
+          <dd class="sb-kpi-hint">{% if low_stock_count == 1 and low_rows|length == 1 %}{{ product_name(low_rows[0].name) }} is {{ low_rows[0].stock_status|lower }}{% else %}Low or out of stock across all active products{% endif %}</dd>
+        </div>
+        {{ kpi('Stock value', inventory_value, 'Current stock × latest cost, across all active products', money=true) }}
+      </dl>
+    </section>
+  {% else %}
+    <section class="sb-catalogue-summary sb-products-summary" aria-label="Product summary">
+      <dl>
+        {{ kpi('Active products', total_products, '') }}
+        <div class="sb-kpi{% if margins.count and margins.sum <= 0 %} sb-products-margin-warning{% endif %}">
+          <dt>Average margin</dt>
+          <dd>{{ margin_percent(margins.sum / margins.count) if margins.count else '—' }}</dd>
+          <dd class="sb-kpi-hint">{% if margins.count %}Active products on this page with a selling price{% else %}No active products with a selling price on this page{% endif %}</dd>
+        </div>
+        {{ kpi('Categories', categories|length, 'Add categories to filter faster' if not categories else '') }}
+      </dl>
+    </section>
+  {% endif %}
+
+  <form class="sb-card sb-catalogue-filters" method="GET" aria-label="Filter {{ title|lower }}">
+    <input type="hidden" name="view" value="{{ catalogue_view }}">
+    <label class="sb-catalogue-search">Search<input type="search" name="q" value="{{ query }}" placeholder="Name, SKU, category or supplier"></label>
+    <label>Category
+      <select name="category">
+        <option value="">All categories</option>
+        {% for item in categories %}<option value="{{ item }}"{% if category == item %} selected{% endif %}>{{ item }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Stock status
+      <select name="stock">
+        {% for key, label in [('all','All stock'),('in','In stock'),('low','Low stock'),('out','Out of stock'),('archived','Archived')] %}
+          <option value="{{ key }}"{% if stock_filter == key %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Sort
+      <select name="sort">
+        {% for key, label in [('recent','Recently added'),('name','Name'),('stock','Quantity'),('price','Selling price'),('cost','Cost price'),('value','Stock value'),('oldest','Oldest first'),('priority','Low-stock priority')] %}
+          <option value="{{ key }}"{% if sort == key %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button class="sb-button sb-button-secondary" type="submit">Filter</button>
+  </form>
+
+  {% if products %}
+    {% if is_inventory %}
+      {% set stock_max = ([1] + products|map(attribute='stock_quantity')|list)|max %}
+      <div class="sb-card sb-products-table sb-inventory-table" role="region" aria-label="Inventory stock levels and values" tabindex="0">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Product</th>
+              <th scope="col">Stock left</th>
+              <th scope="col">Status</th>
+              <th scope="col">Stock value</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in products %}
+              {% set detail = url_for('products.detail', product_id=p.id, **catalogue_navigation) %}
+              <tr>
+                <th scope="row">{{ product_name(p.name) }}</th>
+                <td>
+                  <strong>{{ quantity_with_unit(p.stock_quantity, p.unit) }}</strong>
+                  <progress class="sb-inventory-meter{% if p.is_low_stock %} sb-inventory-meter-low{% endif %}" max="{{ stock_max }}" value="{{ [0, p.stock_quantity]|max }}" aria-hidden="true" title="Relative to the largest stock quantity on this page"></progress>
+                </td>
+                <td>{{ status_badge('Archived' if not p.active else p.stock_status, 'danger' if p.active and p.stock_quantity == 0 else 'warning' if not p.active or p.is_low_stock else 'healthy') }}</td>
+                <td>{{ naira(p.stock_quantity * p.buying_price) }}</td>
+                <td>
+                  <div class="sb-catalogue-actions">
+                    {% if p.active and p.is_low_stock %}
+                      <a class="sb-button sb-button-primary" href="{{ url_for('restocking.index', product_id=p.id, **catalogue_navigation) }}" aria-label="Restock {{ product_name(p.name) }}">Restock</a>
+                    {% endif %}
+                    <a href="{{ detail }}" aria-label="Details for {{ product_name(p.name) }}">Details</a>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="sb-card sb-products-table" role="region" aria-label="Product prices and margins" tabindex="0">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Product</th>
+              <th scope="col">Cost price</th>
+              <th scope="col">Selling price</th>
+              <th scope="col">Margin</th>
+              <th scope="col">Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in products %}
+              {% set detail = url_for('products.detail', product_id=p.id, **catalogue_navigation) %}
+              <tr>
+                <th scope="row">
+                  {{ product_name(p.name) }}
+                  <small>{{ p.sku or 'No code' }}{% if p.category %} · {{ p.category }}{% endif %}{% if not p.active %} · Archived{% endif %}</small>
+                </th>
+                <td>{{ naira(p.buying_price) }}</td>
+                <td>{{ naira(p.selling_price) }}</td>
+                <td>
+                  {% if p.selling_price > 0 %}
+                    {% set margin = (p.selling_price - p.buying_price) / p.selling_price * 100 %}
+                    {{ status_badge(margin_percent(margin), 'warning' if margin == 0 else 'danger' if margin < 0 else 'healthy') }}
+                  {% else %}
+                    <span aria-label="Margin unavailable">—</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <div class="sb-catalogue-actions">
+                    <a href="{{ detail }}" aria-label="Details for {{ product_name(p.name) }}">Details</a>
+                    {% if p.active and p.is_low_stock %}
+                      <a href="{{ url_for('restocking.index', product_id=p.id, **catalogue_navigation) }}" aria-label="Restock {{ product_name(p.name) }}">Restock</a>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if margins.at_cost %}
+        <p class="sb-products-at-cost">Selling price equals cost price on {{ margins.at_cost }} {{ 'product' if margins.at_cost == 1 else 'products' }} on this page. Those sales earn no gross profit at the listed price.</p>
+      {% endif %}
+    {% endif %}
+    <nav class="sb-catalogue-actions" aria-label="{{ title }} pages">
+      {% if pagination.has_prev %}<a class="sb-button sb-button-secondary" href="{{ url_for('products.index', page=pagination.prev_num, q=query, stock=stock_filter, category=category, sort=sort, view=catalogue_view) }}">Previous</a>{% endif %}
+      <span>Page {{ pagination.page }} of {{ pagination.pages }}</span>
+      {% if pagination.has_next %}<a class="sb-button sb-button-secondary" href="{{ url_for('products.index', page=pagination.next_num, q=query, stock=stock_filter, category=category, sort=sort, view=catalogue_view) }}">Next</a>{% endif %}
+    </nav>
+  {% else %}
+    <div class="sb-card">
+      {% if query or stock_filter != 'all' or category %}
+        {{ empty_message('No products match these filters.', url_for('products.index', view=catalogue_view), 'Clear filters') }}
+      {% else %}
+        {{ empty_message('Your stock levels will appear here once you add a product.' if is_inventory else 'Your products and prices will appear here once you add a product.', url_for('products.create', **catalogue_navigation), 'Add product') }}
+      {% endif %}
+    </div>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/overview-format.js') }}" defer></script>
+{% endblock %}

@@ -1,0 +1,92 @@
+.sb-restock-aside,
+.sb-restock-filter,
+.sb-restock-settings {
+  display: grid;
+  gap: var(--sb-3);
+  min-width: 0;
+}
+.sb-restock-aside > section { min-width: 0; }
+.sb-restock-aside .sb-section-note { margin-block-end: var(--sb-3); }
+.sb-restock-filter { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+.sb-restock-filter label { grid-column: 1 / -1; }
+.sb-restock label { font-weight: 700; }
+
+.sb-restock-supplier input,
+.sb-restock-aside input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--sb-touch);
+  padding: var(--sb-2);
+  border: var(--sb-stroke) solid var(--sb-input-border);
+  border-radius: var(--sb-control-radius);
+  background: var(--sb-surface);
+  color: var(--sb-ink);
+  font: var(--sb-body-large) var(--sb-font);
+}
+.sb-restock-supplier .sb-sale-options { margin-block: var(--sb-2) 0; }
+#restock-form [hidden] { display: none; }
+#restock-form :is(.stock-warning, .expected-stock) { grid-column: 1 / -1; }
+#restock-form :is(.line-total, .basket-total, .search-result) { overflow-wrap: anywhere; }
+#restock-form .basket-empty { padding: var(--sb-3); }
+
+.sb-restock .sb-section-note { color: var(--sb-muted); }
+.sb-restock-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.sb-restock-list > li {
+  padding-block: var(--sb-2);
+  border-block-end: var(--sb-stroke) solid var(--sb-border);
+  overflow-wrap: anywhere;
+}
+.sb-restock-list p { margin-block: var(--sb-1); color: var(--sb-muted); }
+.sb-restock-stock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sb-2);
+}
+.sb-restock-stock-head a,
+.sb-restock .pager a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--sb-touch);
+  min-width: var(--sb-touch);
+}
+.sb-restock-record summary {
+  min-height: var(--sb-touch);
+  padding-block: var(--sb-2);
+  color: var(--sb-primary);
+  cursor: pointer;
+  font-weight: 700;
+}
+.sb-restock-record dl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sb-1) var(--sb-2);
+  margin-block: 0 var(--sb-3);
+}
+.sb-restock-record dd { margin: 0; font-weight: 700; }
+.sb-restock-settings button { justify-self: start; }
+
+.sb-restock-help { margin-block-start: var(--sb-2); }
+.sb-restock-help summary {
+  display: inline-grid;
+  place-items: center;
+  min-height: var(--sb-touch);
+  min-width: var(--sb-touch);
+  border: var(--sb-stroke) solid var(--sb-input-border);
+  border-radius: var(--sb-pill);
+  background: var(--sb-surface);
+  color: var(--sb-primary);
+  font-weight: 800;
+  cursor: pointer;
+}
+.sb-restock-help summary::-webkit-details-marker { display: none; }
+.sb-restock-help > div { margin-block-start: var(--sb-2); }
+.sb-restock-help p + p { margin-block-start: var(--sb-2); }
+.sb-restock summary:focus-visible {
+  outline: var(--sb-focus) solid var(--sb-primary);
+  outline-offset: var(--sb-focus);
+}

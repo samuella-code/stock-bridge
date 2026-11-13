@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% from 'components/public.html' import price_toggle, pricing_cards %}
+{% from 'components/public_pricing.html' import public_pricing, pricing_styles with context %}
 {% from 'components/legal_links.html' import billing_links %}
 {% block title %}Billing & Plan · StockBridge{% endblock %}
 {% block page_title %}Billing & Plan{% endblock %}
-{% block content %}{{ billing_links() }}<section class="billing-page"><div class="billing-intro"><h2>Basic, Plus and Pro</h2><p>Subscription checkout is not currently available. Trials are unavailable while subscription rollout is off. Your existing valid access is unchanged.</p></div>{{ price_toggle() }}{{ pricing_cards(plan_prices) }}{% if business %}<a class="secondary-btn" href="{{ url_for('main.dashboard') }}">Open dashboard</a>{% endif %}</section>{% endblock %}
+{% block content %}<section class="dashboard-wrap billing-page">{% if current_user.is_authenticated %}<div class="billing-intro"><h2>Basic, Plus and Pro</h2><p>Subscription checkout is not currently available. Trials are unavailable while subscription rollout is off. Your existing valid access is unchanged.</p></div>{{ price_toggle() }}{{ pricing_cards(plan_prices) }}{% else %}<h1 class="sb-public-plans-title">Pricing</h1>{{ public_pricing(plan_prices) }}{% endif %}{% if business %}<a class="secondary-btn" href="{{ url_for('main.dashboard') }}">Open dashboard</a>{% endif %}{{ billing_links() }}</section>{% endblock %}
+
+{% block extra_styles %}{% if not current_user.is_authenticated %}{{ pricing_styles() }}{% endif %}{% endblock %}

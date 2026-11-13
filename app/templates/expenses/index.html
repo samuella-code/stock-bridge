@@ -1,3 +1,137 @@
-{% extends "base.html" %}{% block page_title %}Expenses{% endblock %}{% block content %}{% from 'components/ui.html' import help_panel, empty_state %}
-<section class="dashboard-wrap"><div class="welcome-row"><div><p class="eyebrow">Operating costs</p><h2>Expenses</h2><p class="muted">Record rent, transport and other running costs here. Goods purchased for resale belong in Restocking.</p></div><div><small class="block-muted">All-time recorded expenses</small><strong class="page-total">₦{{'{:,.2f}'.format(total)}}</strong><small class="block-muted">Voided expenses excluded.</small></div></div>{% call help_panel('Expenses') %}<p>Record rent, electricity, transport and other running costs here. Goods bought for resale belong in Restocking.</p><p>Sales are not the same as profit. Reports consider the cost of products sold and recorded expenses.</p>{% endcall %}<div class="data-layout"><form class="panel-card form-stack" method="POST" id="expense-form"><label>Description<input name="description" value="{{ request.form.get('description', '') }}" required maxlength="180" placeholder="e.g. Shop electricity"></label><label>Category<select name="category">{% for category in categories %}<option {% if request.form.get('category') == category %}selected{% endif %}>{{category}}</option>{% endfor %}</select></label><label>Amount (₦)<input type="number" name="amount" value="{{ request.form.get('amount', '') }}" min=".01" step=".01" required></label><label>Date<input type="date" name="spent_at" value="{{ request.form.get('spent_at', '') }}"></label><label>Note (optional)<input name="note" value="{{ request.form.get('note', '') }}" maxlength="500"></label><button class="primary-btn">Add expense</button><input type="hidden" name="submission_token" value="{{ submission_token }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
-<div class="panel-card"><h3>Expense history</h3>{% if expenses.items %}<div class="table-wrap"><table class="responsive-table"><tr class="table-head-row"><th>Description</th><th>Category</th><th>Amount</th><th>Date</th><th></th></tr>{% for e in expenses.items %}<tr><td>{{e.description}}{% if e.voided_at %}<small>Voided: {{e.void_reason}}</small>{% endif %}</td><td>{{e.category}}</td><td class="numeric">₦{{'{:,.2f}'.format(e.amount)}}</td><td>{{e.spent_at.strftime('%d %b %Y')}}</td><td>{% if not e.voided_at %}<form method="POST" action="{{url_for('expenses.delete',expense_id=e.id)}}"><input aria-label="Reason to void" name="reason" required maxlength="300" placeholder="Reason to void"><button class="danger-link">Void</button><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>{% endif %}</td></tr>{% endfor %}</table></div><nav class="pager">{% if expenses.has_prev %}<a href="{{url_for('expenses.index',page=expenses.prev_num)}}">Previous</a>{% endif %} Page {{expenses.page}} of {{expenses.pages}} {% if expenses.has_next %}<a href="{{url_for('expenses.index',page=expenses.next_num)}}">Next</a>{% endif %}</nav>{% else %}{{ empty_state('No expenses recorded yet', 'Track running costs so StockBridge can show a more accurate picture of your profit.', '#expense-form', 'Add Expense') }}{% endif %}</div></div></section>{% endblock %}
+{% extends 'base.html' %}
+{% from 'components/presentation.html' import naira, empty_message %}
+{% set category_labels = {'Transportation': 'Transport', 'Wages': 'Staff', 'Miscellaneous': 'Other'} %}
+{% set featured_categories = ['Transportation', 'Electricity', 'Rent', 'Wages', 'Miscellaneous'] %}
+{% macro category_chip(category, selected) %}
+  <label class="sb-expense-chip">
+    <input type="radio" name="category" value="{{ category }}"{% if category == selected %} checked{% endif %}>
+    <span>{{ category_labels.get(category, category) }}</span>
+  </label>
+{% endmacro %}
+{% block title %}Expenses · StockBridge{% endblock %}
+{% block topbar_heading %}{% endblock %}
+{% block extra_styles %}
+{% for stylesheet in ('design-tokens', 'presentation', 'overview', 'expenses-presentation') %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/' ~ stylesheet ~ '.css') }}">
+{% endfor %}
+{% endblock %}
+{% block content %}
+<section class="sb-overview sb-expenses" aria-labelledby="expenses-title">
+  <header class="sb-overview-intro sb-expense-intro">
+    <div>
+      <p class="sb-expense-kicker">Running costs</p>
+      <div class="sb-expense-heading">
+        <h1 id="expenses-title">Expenses</h1>
+        <details class="sb-expense-help">
+          <summary aria-label="Learn about expenses">?</summary>
+          <div class="sb-card">
+            <p>Record rent, electricity, transport and other running costs here. Goods bought for resale belong in Restocking.</p>
+            <p>Sales are not the same as profit. Reports consider the cost of products sold and recorded expenses.</p>
+            <a href="{{ url_for('legal.help_centre', _anchor='expenses') }}">Read the Expenses guide</a>
+          </div>
+        </details>
+      </div>
+      <p>Rent, transport, electricity and other costs of running the shop. Goods you buy to resell go in Restocking.</p>
+    </div>
+  </header>
+  <div class="sb-expense-layout">
+    <form class="sb-card sb-expense-form" method="POST" id="expense-form" aria-label="Add expense">
+      <input type="hidden" name="submission_token" value="{{ submission_token }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label for="expense-description">What was it for?
+        <input id="expense-description" name="description" value="{{ request.form.get('description', '') }}" required maxlength="180" placeholder="e.g. Shop electricity">
+      </label>
+      {% set selected_category = request.form.get('category') %}
+      {% if selected_category not in categories %}{% set selected_category = categories|first %}{% endif %}
+      <fieldset class="sb-expense-categories">
+        <legend>Category</legend>
+        <div class="sb-expense-chips">
+          {% for category in featured_categories if category in categories %}
+            {{ category_chip(category, selected_category) }}
+          {% endfor %}
+        </div>
+        {% set more_categories = categories|reject('in', featured_categories)|list %}
+        {% if more_categories %}
+          <details{% if selected_category in more_categories %} open{% endif %}>
+            <summary>More categories</summary>
+            <div class="sb-expense-chips">
+              {% for category in more_categories %}{{ category_chip(category, selected_category) }}{% endfor %}
+            </div>
+          </details>
+        {% endif %}
+      </fieldset>
+      <label for="expense-amount">Amount (₦)
+        <input id="expense-amount" type="number" name="amount" value="{{ request.form.get('amount', '') }}" min=".01" step=".01" placeholder="0" required>
+      </label>
+      {% set spent_at = request.form.get('spent_at', '') %}
+      <div class="sb-expense-options">
+      {% if not spent_at %}<p class="sb-expense-date-hint">Recorded for today.</p>{% endif %}
+      <details{% if spent_at %} open{% endif %}>
+        <summary>Change date</summary>
+        <label for="expense-date">Date
+          <input id="expense-date" type="date" lang="en-GB" name="spent_at" value="{{ spent_at }}">
+        </label>
+      </details>
+      <details{% if request.form.get('note') %} open{% endif %}>
+        <summary>Add note</summary>
+        <label for="expense-note">Note (optional)
+          <input id="expense-note" name="note" value="{{ request.form.get('note', '') }}" maxlength="500">
+        </label>
+      </details>
+      </div>
+      <button class="sb-button sb-button-primary" type="submit">Add expense</button>
+    </form>
+
+    <div class="sb-expense-sidebar">
+      <section class="sb-card sb-expense-total" aria-labelledby="expense-total-title">
+        <h2 id="expense-total-title">Total expenses recorded</h2>
+        <strong>{{ naira(total) }}</strong>
+        <p>Voided expenses are not counted.</p>
+      </section>
+      <section class="sb-card sb-expense-history" aria-labelledby="expense-history-title">
+        <h2 id="expense-history-title">Expense history</h2>
+        {% if expenses.items %}
+        <ul class="sb-expense-records">
+          {% for expense in expenses.items %}
+          <li{% if expense.voided_at %} class="sb-expense-voided"{% endif %}>
+            <div class="sb-expense-record">
+              <div>
+                <span class="sb-expense-description">{{ expense.description }}</span>
+                <small><time data-sb-wat="date" datetime="{{ expense.spent_at.isoformat() }}{% if not expense.spent_at.tzinfo %}Z{% endif %}">{{ expense.spent_at.strftime('%d/%m/%Y') }}</time> · {{ category_labels.get(expense.category, expense.category) }}</small>
+              </div>
+              <div class="sb-expense-amount">
+                <span>{{ naira(expense.amount) }}</span>
+                {% if expense.voided_at %}
+                  <span class="sb-badge sb-badge-danger sb-expense-void-reason">Voided{% if expense.void_reason %}: {{ expense.void_reason }}{% endif %}</span>
+                {% endif %}
+              </div>
+            </div>
+            {% if not expense.voided_at %}
+            <details>
+              <summary>Void expense</summary>
+              <form class="sb-expense-void-form" method="POST" action="{{ url_for('expenses.delete', expense_id=expense.id) }}">
+                <label for="expense-reason-{{ expense.id }}">Reason to void
+                  <input id="expense-reason-{{ expense.id }}" name="reason" required maxlength="300">
+                </label>
+                <button class="sb-button sb-button-destructive" type="submit">Confirm void</button>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              </form>
+            </details>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        <nav class="pager" aria-label="Expense history pages">
+          {% if expenses.has_prev %}<a href="{{ url_for('expenses.index', page=expenses.prev_num) }}">Previous</a>{% endif %}
+          <span>Page {{ expenses.page }} of {{ expenses.pages }}</span>
+          {% if expenses.has_next %}<a href="{{ url_for('expenses.index', page=expenses.next_num) }}">Next</a>{% endif %}
+        </nav>
+        {% else %}
+        {{ empty_message('Your expenses will appear here once recorded.', '#expense-description', 'Add expense') }}
+        {% endif %}
+      </section>
+    </div>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/overview-format.js') }}" defer></script>{% endblock %}

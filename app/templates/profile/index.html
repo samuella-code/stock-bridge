@@ -1,1 +1,40 @@
-{% extends "base.html" %}{% block page_title %}Profile & settings{% endblock %}{% block content %}<section class="dashboard-wrap"><div class="form-layout"><div><p class="eyebrow">Account</p><h2>Profile & settings</h2><p class="muted">Update the name shown in StockBridge and the active business name.</p></div><form class="panel-card form-stack" method="POST"><label><span>Full name</span><input name="full_name" value="{{current_user.full_name}}" required></label><label><span>Email</span><input value="{{current_user.email}}" disabled></label><label><span>Active business name</span><input name="business_name" value="{{business.name}}" required></label><a class="secondary-btn" href="{{ url_for('businesses.profile', business_id=business.id) }}">Business image &amp; profile</a><button class="primary-btn">Save changes</button><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form></div>{% include 'notifications/preferences.html' %}</section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Profile & settings · StockBridge{% endblock %}
+{% block topbar_heading %}{% endblock %}
+{% block extra_styles %}
+  {% for stylesheet in ('design-tokens', 'presentation', 'overview', 'notifications-presentation', 'settings-presentation') %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/' ~ stylesheet ~ '.css') }}">
+  {% endfor %}
+{% endblock %}
+
+{% block content %}
+<section class="sb-overview sb-settings" aria-labelledby="settings-title">
+  <header class="sb-overview-intro">
+    <h1 id="settings-title">Profile &amp; settings</h1>
+  </header>
+
+  <div class="sb-settings-grid">
+    <form class="sb-card sb-settings-details" id="profile-details-form" method="POST" aria-labelledby="your-details-title">
+      <h2 id="your-details-title">Your details</h2>
+      <label for="settings-full-name">Name</label>
+      <input id="settings-full-name" name="full_name" value="{{ current_user.full_name }}" required>
+      <label for="settings-email">Email</label>
+      <input id="settings-email" value="{{ current_user.email }}" disabled>
+      <label for="settings-business-name">Business name</label>
+      <input id="settings-business-name" name="business_name" value="{{ business.name }}" required>
+      <a class="sb-button sb-button-secondary" href="{{ url_for('businesses.profile', business_id=business.id) }}">Business image and profile</a>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    </form>
+    {% include 'notifications/preferences.html' %}
+  </div>
+
+  <footer class="sb-settings-footer">
+    <a class="sb-button sb-button-secondary" href="{{ url_for('profile.index') }}">Cancel</a>
+    <button class="sb-button sb-button-primary" type="submit" form="profile-details-form">Save changes</button>
+  </footer>
+</section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/overview-format.js') }}" defer></script>
+{% endblock %}
