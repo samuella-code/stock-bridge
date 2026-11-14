@@ -26,7 +26,8 @@
           <th scope="col" class="sb-comparison-plan{% if plan == 'plus' %} sb-comparison-plus{% endif %}">
             {% if plan == 'plus' %}<span class="sb-badge sb-comparison-popular">Most popular</span>{% endif %}
             <strong>{{ plan|title }}</strong>
-            <span class="sb-comparison-monthly">{{ naira(plan_prices[plan].monthly) }} / month</span>
+            <span class="sb-comparison-price sb-pricing-yearly">{{ naira(plan_prices[plan].yearly) }} <span>per year</span></span>
+            <span class="sb-comparison-price sb-pricing-monthly">{{ naira(plan_prices[plan].monthly) }} <span>per month</span></span>
           </th>
           {% endfor %}
         </tr>

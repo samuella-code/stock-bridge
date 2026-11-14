@@ -126,3 +126,8 @@
   .entry-home .plan-comparison table{min-width:38rem;overflow-wrap:normal;word-break:normal}
   .entry-home .plan-comparison th,.entry-home .plan-comparison td{overflow-wrap:normal;word-break:normal;hyphens:none}
 }
+
+@media (width > 768px) {
+  .entry-signup > .entry-visual { grid-area: 1 / 1; }
+  .entry-signup > .entry-form { grid-area: 1 / 2; }
+}

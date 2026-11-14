@@ -105,6 +105,7 @@
 }
 
 .sb-comparison-scroll {
+  position: relative;
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -150,7 +151,8 @@
 .sb-plan-comparison th[scope="row"] { font-weight: 700; }
 .sb-comparison-plan { position: relative; }
 .sb-comparison-plan strong { display: block; font-size: var(--sb-body-large); font-weight: 800; }
-.sb-comparison-monthly { display: block; color: var(--sb-muted); font-size: var(--sb-caption); white-space: nowrap; }
+.sb-comparison-price.sb-pricing-yearly { display: block; }
+.sb-comparison-price { color: var(--sb-muted); font-size: var(--sb-caption); white-space: nowrap; }
 
 .sb-plan-comparison .sb-comparison-plus {
   border-inline: var(--sb-recommended-border) solid var(--sb-primary);
@@ -187,3 +189,12 @@
   font: 800 var(--sb-title)/1.15 var(--sb-font);
 }
 .sb-public-plans-title + .sb-public-pricing { padding-block-start: var(--sb-6); }
+
+@media (width < 768px) {
+  .sb-plan-comparison table { min-width: 320px; }
+  .sb-plan-comparison :is(th, td) { padding-inline: var(--sb-1); }
+  .sb-comparison-price { white-space: normal; }
+  .sb-comparison-price > span { display: block; }
+  .sb-comparison-popular { position: static; transform: none; white-space: normal; }
+  .sb-plan-comparison tfoot .sb-button { padding-inline: var(--sb-1); }
+}
