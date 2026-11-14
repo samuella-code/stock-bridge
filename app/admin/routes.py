@@ -99,9 +99,9 @@ def login():
 
 
 def _admin_mfa_required(user):
-    pilot_email = current_app.config["ADMIN_MFA_PILOT_EMAIL"]
+    pilot_emails = current_app.config["ADMIN_MFA_PILOT_EMAIL"].split(",")
     return current_app.config["ADMIN_MFA_REQUIRED"] or bool(
-        pilot_email and user.email.lower() == pilot_email
+        user.email.lower() in {email.strip() for email in pilot_emails if email.strip()}
     )
 
 

@@ -137,14 +137,22 @@ def test_verification_requires_csrf(enrolled_flow, monkeypatch):
     assert client.post(PATH, data={"code": "287082", "csrf_token": token}).status_code == 200
 
 
-def test_pilot_only_requires_verification_for_selected_admin(enrolled_flow, monkeypatch):
+def test_pilot_only_requires_verification_for_selected_admins(enrolled_flow, monkeypatch):
     client, _, _ = enrolled_flow
-    client.application.config.update(ADMIN_MFA_REQUIRED=False, ADMIN_MFA_PILOT_EMAIL="admin@example.com")
+    client.application.config.update(ADMIN_MFA_REQUIRED=False, ADMIN_MFA_PILOT_EMAIL="admin@example.com, pilot-admin@example.com")
     with client.application.app_context():
         other = User(full_name="Other admin", email="other-admin@example.com", role="admin")
         other.set_password("other-admin-password456")
-        db.session.add(other)
+        pilot = User(full_name="Pilot admin", email="pilot-admin@example.com", role="admin")
+        pilot.set_password("pilot-admin-password456")
+        db.session.add_all([other, pilot])
         db.session.commit()
+    selected_browser = client.application.test_client()
+    response = selected_browser.post("/admin/login", data={
+        "email": "pilot-admin@example.com", "password": "pilot-admin-password456",
+    })
+    assert response.location.endswith(PATH)
+    assert selected_browser.get("/api/admin/dashboard").status_code == 401
     other_browser = client.application.test_client()
     response = other_browser.post("/admin/login", data={
         "email": "other-admin@example.com", "password": "other-admin-password456",
