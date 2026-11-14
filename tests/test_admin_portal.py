@@ -212,8 +212,8 @@ def test_admin_login_throttle_and_no_secret_leaks(client):
 def test_admin_login_page_has_recovery_and_no_public_registration(client):
     page=client.get("/admin/login")
     assert page.status_code==200
-    assert b"Administrator Sign In" in page.data
-    assert b"Forgot Password?" in page.data
+    assert b"Administrator sign in" in page.data
+    assert b"Forgot password?" in page.data
     assert b"Show password" in page.data
     assert b"/admin/register" not in page.data
     assert client.get("/admin/register").status_code==404

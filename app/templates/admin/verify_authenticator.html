@@ -1,0 +1,70 @@
+{% extends "admin/base.html" %}
+{% block title %}Two-step verification · StockBridge{% endblock %}
+{% block body_class %} admin-signin-page{% endblock %}
+{% block extra_styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/design-tokens.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin-signin.css') }}">
+{% endblock %}
+{% block content %}
+<section class="auth-shell admin-login-shell" aria-labelledby="verification-title">
+  <div class="login-box">
+    <header class="auth-intro">
+      <span class="auth-mark" aria-hidden="true">SB</span>
+      <p class="eyebrow">Two-step verification</p>
+      {% if recovery_codes %}
+        <h1 id="verification-title">Save your recovery codes</h1>
+        <p>Store these somewhere safe. Each code works once and is shown only here.</p>
+      {% elif enrolling %}
+        <h1 id="verification-title">Set up your authenticator</h1>
+        <p>Scan this QR code with your authenticator app, then enter the six-digit code it shows.</p>
+      {% elif recovery %}
+        <h1 id="verification-title">Use a recovery code</h1>
+        <p>Enter one of the recovery codes you saved.</p>
+      {% else %}
+        <h1 id="verification-title">Enter your 6-digit code</h1>
+        <p>Open your authenticator app to get your code.</p>
+      {% endif %}
+    </header>
+
+    {% if recovery_codes %}
+      <ul class="admin-recovery-codes" aria-label="One-time recovery codes">
+        {% for code in recovery_codes %}<li><code>{{ code }}</code></li>{% endfor %}
+      </ul>
+      <a class="primary-action admin-continue-link" href="{{ url_for('admin.index') }}">Continue to Admin Portal</a>
+    {% else %}
+      {% if enrolling %}
+        <img class="admin-setup-qr" src="{{ setup_qr }}" width="256" height="256" alt="QR code to pair your authenticator app">
+        <details class="admin-manual-setup">
+          <summary>Enter a setup key manually</summary>
+          <p>Choose a time-based code in your app and enter this key.</p>
+          <code>{{ setup_key }}</code>
+        </details>
+      {% endif %}
+      {% if error %}<p class="notice error" role="alert">{{ error }}</p>{% endif %}
+      <form method="post" class="auth-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if recovery %}
+          <input type="hidden" name="method" value="recovery">
+          <label for="admin-mfa-code">Recovery code</label>
+          <input id="admin-mfa-code" name="code" type="text" maxlength="25" autocomplete="off" required>
+        {% else %}
+          <label for="admin-mfa-code">6-digit code</label>
+          <input id="admin-mfa-code" class="admin-code-input" name="code" type="text" inputmode="numeric"
+                 autocomplete="one-time-code" minlength="6" maxlength="6" pattern="[0-9]{6}" required>
+        {% endif %}
+        <button class="primary-action" type="submit">Verify and sign in</button>
+      </form>
+      {% if not enrolling %}
+        <p class="admin-signin-security">
+          {% if recovery %}
+            <a class="admin-forgot" href="{{ url_for('admin.verify_authenticator') }}">Use an authenticator code</a>
+          {% else %}
+            Lost your device? <a class="admin-forgot" href="{{ url_for('admin.verify_authenticator', method='recovery') }}">Use a recovery code</a>
+          {% endif %}
+        </p>
+      {% endif %}
+    {% endif %}
+  </div>
+  {% if not recovery_codes %}<a class="back-link" href="{{ url_for('admin.login') }}">← Back to sign in</a>{% endif %}
+</section>
+{% endblock %}

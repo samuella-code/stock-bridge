@@ -11,12 +11,14 @@ from sqlalchemy.orm import joinedload, selectinload
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
 from app.models import (
-    AccountBilling, AdminLoginAttempt, AdminPasswordReset, AuditLog,
+    AccountBilling, AdminAuthenticator, AdminLoginAttempt, AdminPasswordReset, AuditLog,
     Business, Expense, Payment, Product, RecurringSubscription,
     Restock, Sale, User,
 )
 from app.email_service import _send_email, safely_send, send_account_status_email, send_access_receipt_once
 from app.admin.security import valid_admin_password
+from app.admin import mfa
+from cryptography.fernet import InvalidToken
 from app.payments.service import PaystackError, verify_transaction
 
 admin_bp=Blueprint("admin",__name__,url_prefix="/admin")
@@ -35,7 +37,8 @@ def admin_required(view):
             abort(403)
         last=session.get("admin_last_activity",0)
         if (time.time()-last>current_app.config["ADMIN_IDLE_TIMEOUT_SECONDS"]
-                or session.get("admin_auth_version")!=current_user.admin_auth_version):
+                or session.get("admin_auth_version")!=current_user.admin_auth_version
+                or not _admin_second_factor_satisfied(current_user)):
             logout_user()
             session.clear()
             if request.blueprint=="admin_api":
@@ -64,7 +67,8 @@ def login():
     if current_user.is_authenticated:
         if (current_user.role=="admin" or current_user.admin_enabled) and session.get("admin_session"):
             if (time.time()-session.get("admin_last_activity",0)<=current_app.config["ADMIN_IDLE_TIMEOUT_SECONDS"]
-                    and session.get("admin_auth_version")==current_user.admin_auth_version and not current_user.suspended_at):
+                    and session.get("admin_auth_version")==current_user.admin_auth_version
+                    and _admin_second_factor_satisfied(current_user) and not current_user.suspended_at):
                 return redirect(url_for("admin.index"))
             logout_user()
             session.clear()
@@ -87,16 +91,152 @@ def login():
             db.session.commit()
             return render_template("admin/login.html",error="Invalid email or password."),401
         AdminLoginAttempt.query.filter_by(identifier=key).delete()
-        session.clear()
-        login_user(user,fresh=True)
-        session["admin_session"]=True
-        session["admin_last_activity"]=time.time()
-        session["admin_auth_version"]=user.admin_auth_version
-        user.last_activity_at=datetime.utcnow()
-        log("ADMIN_LOGIN_SUCCESS","Administrator signed in.",actor=user)
-        db.session.commit()
+        if _admin_mfa_required(user):
+            return _start_admin_challenge(user)
+        _finish_admin_login(user)
         return redirect(url_for("admin.index"))
     return render_template("admin/login.html")
+
+
+def _admin_mfa_required(user):
+    pilot_email = current_app.config["ADMIN_MFA_PILOT_EMAIL"]
+    return current_app.config["ADMIN_MFA_REQUIRED"] or bool(
+        pilot_email and user.email.lower() == pilot_email
+    )
+
+
+def _admin_second_factor_satisfied(user):
+    return not _admin_mfa_required(user) or session.get("admin_mfa_verified") is True
+
+
+def _finish_admin_login(user, *, verified=False):
+    auth_version = user.admin_auth_version
+    log("ADMIN_LOGIN_SUCCESS", "Administrator signed in.", actor=user)
+    db.session.commit()
+    logout_user()
+    session.clear()
+    login_user(user, fresh=True)
+    session["admin_session"] = True
+    session["admin_last_activity"] = time.time()
+    session["admin_auth_version"] = auth_version
+    if verified:
+        session["admin_mfa_verified"] = True
+
+
+def _admin_mfa_cipher():
+    try:
+        return mfa.secret_cipher(current_app.config["ADMIN_MFA_ENCRYPTION_KEY"])
+    except (ValueError, TypeError):
+        abort(503, description="Admin verification is unavailable.")
+
+
+def _locked_admin(user_id):
+    return User.query.filter_by(id=user_id).populate_existing().with_for_update().first()
+
+
+def _start_admin_challenge(user):
+    cipher = _admin_mfa_cipher()
+    auth_version = user.admin_auth_version
+    password_hash = user.password_hash
+    user = _locked_admin(user.id)
+    if not _admin_user(user) or user.admin_auth_version != auth_version or user.password_hash != password_hash:
+        db.session.rollback()
+        return render_template("admin/login.html", error="Invalid email or password."), 401
+    factor = db.session.get(AdminAuthenticator, user.id)
+    if factor is None:
+        factor = AdminAuthenticator(user_id=user.id, encrypted_secret=cipher.encrypt(mfa.new_secret().encode("ascii")))
+        db.session.add(factor)
+    elif factor.enabled_at is None:
+        factor.encrypted_secret = cipher.encrypt(mfa.new_secret().encode("ascii"))
+    challenge = secrets.token_urlsafe(32)
+    factor.challenge_digest = mfa.digest_token(challenge)
+    factor.challenge_expires_at = datetime.utcnow() + timedelta(seconds=mfa.CHALLENGE_SECONDS)
+    db.session.commit()
+    logout_user()
+    session.clear()
+    session["admin_mfa_pending"] = [user.id, auth_version, challenge]
+    return redirect(url_for("admin.verify_authenticator"))
+
+
+@admin_bp.route("/verify-authenticator", methods=["GET", "POST"])
+def verify_authenticator():
+    pending = session.get("admin_mfa_pending")
+    if not pending:
+        return redirect(url_for("admin.login"))
+    user_id, auth_version, challenge = pending
+    digest = mfa.digest_token(challenge)
+    now = datetime.utcnow()
+    # Serialize attempts across browsers and IPs against the same account.
+    user = _locked_admin(user_id) if request.method == "POST" else db.session.get(User, user_id)
+    factor = db.session.get(AdminAuthenticator, user_id)
+    if (not _admin_user(user) or not _admin_mfa_required(user)
+            or user.admin_auth_version != auth_version or not factor
+            or not factor.challenge_digest or not secrets.compare_digest(factor.challenge_digest, digest)
+            or not factor.challenge_expires_at
+            or factor.challenge_expires_at <= now):
+        session.pop("admin_mfa_pending", None)
+        return redirect(url_for("admin.login"))
+
+    enrolling = factor.enabled_at is None
+    recovery = not enrolling and (request.form if request.method == "POST" else request.args).get("method") == "recovery"
+    try:
+        secret = _admin_mfa_cipher().decrypt(factor.encrypted_secret).decode("ascii")
+    except InvalidToken:
+        abort(503, description="Admin verification is unavailable.")
+    attempt_key = mfa.digest_token(f"admin-mfa:{user_id}")
+    attempts = AdminLoginAttempt.query.filter(
+        AdminLoginAttempt.identifier == attempt_key,
+        AdminLoginAttempt.attempted_at >= now - timedelta(minutes=15),
+    )
+
+    def render_step(error=None, status=200):
+        return render_template("admin/verify_authenticator.html", enrolling=enrolling, recovery=recovery,
+            setup_key=secret if enrolling else None,
+            setup_qr=mfa.qr_image(mfa.setup_uri(user.email, secret)) if enrolling else None,
+            error=error), status
+
+    if request.method == "GET":
+        return render_step()
+    if attempts.count() >= 5:
+        return render_step("Too many attempts. Try again in 15 minutes.", 429)
+
+    code = request.form.get("code", "").strip()
+    step = None if recovery else mfa.matching_step(secret, code, factor.last_step)
+    recovery_digest = mfa.digest_token(code.lower()) if recovery else None
+    valid_recovery = recovery and recovery_digest in factor.recovery_digests
+    if step is None and not valid_recovery:
+        db.session.add(AdminLoginAttempt(identifier=attempt_key))
+        log("ADMIN_MFA_FAILED", "Administrator verification failed.", target_type="user", target_id=user_id)
+        db.session.commit()
+        return render_step("That code is invalid or has already been used.", 401)
+
+    changes = {"challenge_digest": None, "challenge_expires_at": None}
+    codes = None
+    if enrolling:
+        codes = mfa.new_recovery_codes()
+        changes.update(enabled_at=now, recovery_digests=[mfa.digest_token(code) for code in codes])
+    if recovery:
+        changes["recovery_digests"] = [value for value in factor.recovery_digests if value != recovery_digest]
+    else:
+        changes["last_step"] = step
+    consumed = AdminAuthenticator.query.filter(
+        AdminAuthenticator.user_id == user_id, AdminAuthenticator.challenge_digest == digest,
+        AdminAuthenticator.challenge_expires_at > now,
+    ).update(changes)
+    if consumed != 1:
+        db.session.rollback()
+        session.pop("admin_mfa_pending", None)
+        return redirect(url_for("admin.login"))
+    attempts.delete()
+    if enrolling:
+        log("ADMIN_MFA_ENROLLED", "Administrator set up an authenticator.", actor=user)
+    elif recovery:
+        log("ADMIN_MFA_RECOVERY_USED", "Administrator signed in with a recovery code.", actor=user)
+    _finish_admin_login(user, verified=True)
+    if codes is not None:
+        return render_template("admin/verify_authenticator.html", recovery_codes=codes)
+    return redirect(url_for("admin.index"))
+
 
 @admin_bp.post("/logout")
 @admin_required
@@ -121,6 +261,7 @@ def switch_to_business():
     session.pop("admin_session",None)
     session.pop("admin_last_activity",None)
     session.pop("admin_auth_version",None)
+    session.pop("admin_mfa_verified",None)
     return redirect(url_for("main.dashboard"))
 
 def _admin_user(user):
@@ -547,7 +688,8 @@ def activity():
     q=request.args.get("q","").strip()[:100]
     query=AuditLog.query.options(joinedload(AuditLog.actor),joinedload(AuditLog.business))
     if action=="security":
-        query=query.filter(AuditLog.action.in_(("ADMIN_LOGIN_SUCCESS","ADMIN_LOGIN_FAILED","ADMIN_LOGOUT","ADMIN_PASSWORD_RESET")))
+        query=query.filter(AuditLog.action.in_(("ADMIN_LOGIN_SUCCESS","ADMIN_LOGIN_FAILED","ADMIN_LOGOUT","ADMIN_PASSWORD_RESET",
+            "ADMIN_MFA_ENROLLED","ADMIN_MFA_FAILED","ADMIN_MFA_RECOVERY_USED")))
     elif action in ("account","management"):
         query=query.filter(AuditLog.action.in_(("USER_SUSPENDED","USER_REACTIVATED","BUSINESS_SUSPENDED","BUSINESS_REACTIVATED")))
     elif action=="payments": query=query.filter(or_(AuditLog.action.like("%PAYMENT%"),AuditLog.action=="LIFETIME_ACCESS_GRANTED"))

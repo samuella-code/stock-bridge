@@ -129,6 +129,16 @@ class AdminLoginAttempt(db.Model):
  identifier=db.Column(db.String(64),nullable=False,index=True)
  attempted_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False,index=True)
 
+class AdminAuthenticator(db.Model):
+ user_id=db.Column(db.Integer,db.ForeignKey("user.id",ondelete="CASCADE"),primary_key=True)
+ encrypted_secret=db.Column(db.LargeBinary,nullable=False)
+ enabled_at=db.Column(db.DateTime)
+ last_step=db.Column(db.BigInteger,nullable=False,default=-1)
+ recovery_digests=db.Column(db.JSON,nullable=False,default=list)
+ challenge_digest=db.Column(db.String(64))
+ challenge_expires_at=db.Column(db.DateTime)
+
+
 class AdminPasswordReset(db.Model):
  id=db.Column(db.Integer,primary_key=True)
  user_id=db.Column(db.Integer,db.ForeignKey("user.id"),nullable=False,index=True)
