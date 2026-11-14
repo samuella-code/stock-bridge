@@ -100,6 +100,19 @@
   font: 700 var(--sb-body-large)/1.5 ui-monospace, monospace;
   letter-spacing: .4em;
 }
+.admin-code-boxes {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--sb-1);
+  inline-size: min(100%, calc(6 * var(--sb-12) + 5 * var(--sb-1)));
+  justify-self: center;
+}
+.admin-signin-page .auth-form .admin-code-boxes input {
+  min-inline-size: 0;
+  padding-inline: 0;
+  text-align: center;
+  font: 700 var(--sb-body-large)/1.5 ui-monospace, monospace;
+}
 .admin-recovery-codes {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));

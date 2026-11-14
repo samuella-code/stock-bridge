@@ -3,7 +3,8 @@
 {% block body_class %} admin-signin-page{% endblock %}
 {% block extra_styles %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/design-tokens.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/admin-signin.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin-signin.css', v='otp-boxes-1') }}">
+<script src="{{ url_for('static', filename='js/admin-code.js') }}" defer></script>
 {% endblock %}
 {% block content %}
 <section class="auth-shell admin-login-shell" aria-labelledby="verification-title">
@@ -48,8 +49,8 @@
           <label for="admin-mfa-code">Recovery code</label>
           <input id="admin-mfa-code" name="code" type="text" maxlength="25" autocomplete="off" required>
         {% else %}
-          <label for="admin-mfa-code">6-digit code</label>
-          <input id="admin-mfa-code" class="admin-code-input" name="code" type="text" inputmode="numeric"
+          <label id="admin-mfa-code-label" for="admin-mfa-code">6-digit code</label>
+          <input id="admin-mfa-code" class="admin-code-input" name="code" type="text" inputmode="numeric" data-admin-code
                  autocomplete="one-time-code" minlength="6" maxlength="6" pattern="[0-9]{6}" required>
         {% endif %}
         <button class="primary-action" type="submit">Verify and sign in</button>
