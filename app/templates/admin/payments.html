@@ -3,9 +3,12 @@
 <h1>Subscription payments</h1>
 <p>Read-only payment history. Subscription access is managed by the existing payment verification process.</p>
 <form method="get" class="filters">
+  <label class="filter-field" for="payment-search">Search payment references
+    <input type="search" id="payment-search" name="q" value="{{ q }}" maxlength="100">
+  </label>
   <label class="filter-field" for="payment-status">Payment status
   <select id="payment-status" name="status">
-    {% for key,label in [('all','All'),('success','Successful'),('pending','Pending'),('failed','Failed')] %}
+    {% for key,label in [('all','All'),('needs-attention','Failed or pending'),('success','Successful'),('pending','Pending'),('failed','Failed')] %}
     <option value="{{key}}" {{'selected' if status==key}}>{{label}}</option>
     {% endfor %}
   </select></label>

@@ -18,6 +18,7 @@ from app.models import (
 from app.email_service import _send_email, safely_send, send_account_status_email, send_access_receipt_once
 from app.admin.security import valid_admin_password
 from app.admin import mfa
+from app.admin.dashboard import (ISSUE_STATUSES, PERIODS, business_access_counts, dashboard, owner_alert_query, owner_query)
 from cryptography.fernet import InvalidToken
 from app.payments.service import PaystackError, verify_transaction
 
@@ -392,8 +393,15 @@ def overview():
     customer_ids=db.session.query(User.id).filter(User.role=="user",User.admin_enabled.is_(False))
     customer_business_ids=db.session.query(Business.id).filter(Business.user_id.in_(customer_ids))
     from app.admin.subscription_reporting import current_subscription_accounts, collected_subscription_payments
+    from app.subscriptions.entitlements import EntitlementSnapshot
+    owned_businesses = Business.query.filter(Business.user_id.in_(owner_query().with_entities(User.id))).all()
+    customers = customer_query().all()
+    snapshot = EntitlementSnapshot(customers)
+    access = business_access_counts(owned_businesses, snapshot)
     return {
-        "current_subscription_accounts": current_subscription_accounts(customer_query().all()),
+        "current_subscription_accounts": current_subscription_accounts(
+            (user for user in customers if not user.staff_only), snapshot=snapshot,
+        ),
         "subscription_payments": collected_subscription_payments(),
         "users":User.query.filter(User.id.in_(customer_ids)).count(),
         "active_users":User.query.filter(User.id.in_(customer_ids),User.suspended_at.is_(None)).count(),
@@ -403,11 +411,11 @@ def overview():
         "new_today":User.query.filter(User.id.in_(customer_ids),User.created_at>=start).count(),
         "new_week":User.query.filter(User.id.in_(customer_ids),User.created_at>=week).count(),
         "new_month":User.query.filter(User.id.in_(customer_ids),User.created_at>=month).count(),
-        "businesses":Business.query.filter(Business.id.in_(customer_business_ids)).count(),
-        "active_businesses":Business.query.filter(Business.id.in_(customer_business_ids),Business.suspended_at.is_(None),Business.subscription_status=="active").count(),
-        "suspended_businesses":Business.query.filter(Business.id.in_(customer_business_ids),Business.suspended_at.isnot(None)).count(),
+        "businesses":len(owned_businesses),
+        "active_businesses":access["active_businesses"],
+        "suspended_businesses":sum(b.suspended_at is not None for b in owned_businesses),
         "paid_users":Business.query.filter(Business.id.in_(customer_business_ids),Business.subscription_plan=="lifetime",Business.subscription_status=="active").count(),
-        "unpaid_users":Business.query.filter(Business.id.in_(customer_business_ids),Business.subscription_status!="active").count(),
+        "unpaid_users":access["unpaid_users"],
         "successful_payments":success.count(),
         "pending_payments":Payment.query.filter(Payment.product=="lifetime",Payment.status.in_(("initialized","pending"))).count(),
         "failed_payments":Payment.query.filter_by(status="failed",product="lifetime").count(),
@@ -419,15 +427,22 @@ def overview():
         "expenses":Expense.query.filter(Expense.business_id.in_(customer_business_ids)).count(),
     }
 
-def recent_activity():
-    # Events from before the audit table existed remain visible via their records.
-    logs=AuditLog.query.order_by(AuditLog.created_at.desc()).limit(30).all()
-    return logs
-
 @admin_bp.get("/")
 @admin_required
 def index():
-    return render_template("admin/index.html",metrics=overview(),activity=recent_activity())
+    period = request.args.get("period", "30d")
+    if period not in PERIODS:
+        abort(400, description="Choose Today, 7 days or 30 days.")
+    return render_template("admin/index.html", metrics=dashboard(period, verified_payments_query()), period=period)
+
+
+@admin_bp.get("/dashboard/search")
+@admin_required
+def dashboard_search():
+    destinations = {"customers": "admin.users", "businesses": "admin.businesses", "payments": "admin.payments"}
+    endpoint = destinations.get(request.args.get("scope"), "admin.users")
+    return redirect(url_for(endpoint, q=request.args.get("q", "").strip()[:100]))
+
 
 @admin_bp.get("/users")
 @admin_required
@@ -439,6 +454,8 @@ def users():
         User.businesses.any(Business.name.ilike(f"%{q}%"))))
     if status=="suspended": query=query.filter(User.suspended_at.isnot(None))
     elif status=="active": query=query.filter(User.suspended_at.is_(None))
+    elif status in ("trial-ended", "renewal-stopped"):
+        query = query.filter(User.id.in_(owner_alert_query(status, datetime.utcnow()).with_entities(User.id)))
     elif status in ("paid", "unpaid"):
         now = datetime.utcnow()
 
@@ -612,10 +629,15 @@ def subscription_payments_query():
 def payments():
     status=request.args.get("status","all")
     query=subscription_payments_query().options(joinedload(Payment.business))
-    if status in ("success","failed","pending"):
+    q = request.args.get("q", "").strip()[:100]
+    if q:
+        query = query.filter(Payment.reference.icontains(q, autoescape=True))
+    if status == "needs-attention":
+        query = query.filter(Payment.status.in_(ISSUE_STATUSES))
+    elif status in ("success","failed","pending"):
         query=query.filter(Payment.status.in_(("initialized","pending")) if status=="pending" else Payment.status==status)
     rows=query.order_by(Payment.created_at.desc(),Payment.id.desc()).paginate(page=request.args.get("page",1,type=int),per_page=25,error_out=False)
-    return render_template("admin/payments.html",rows=rows,status=status)
+    return render_template("admin/payments.html",rows=rows,status=status,q=q)
 
 
 @admin_bp.get("/payments/<int:payment_id>")

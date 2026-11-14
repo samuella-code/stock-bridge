@@ -5,14 +5,15 @@ from app.models import Business, Payment, RecurringSubscription, User
 from app.subscriptions.entitlements import PLANS, EntitlementSnapshot
 
 
-def current_subscription_accounts(customers, now=None):
+def current_subscription_accounts(customers, now=None, *, snapshot=None):
     """Count each eligible customer once, using the effective paid-period winner."""
     now = now or datetime.utcnow()
     counts = {plan: {interval: 0 for interval in ('monthly', 'yearly')}
               for plan in ('basic', 'plus', 'pro')}
-    customers = list(customers)
-    snapshot = EntitlementSnapshot(customers, now=now)
-    for user in snapshot.users.values():
+    if snapshot is None:
+        snapshot = EntitlementSnapshot(customers, now=now)
+        customers = snapshot.users.values()
+    for user in customers:
         access = snapshot.access(user)
         sub = access.subscription
         if access.can_write and sub and (sub.plan_code, sub.billing_interval) in PLANS:

@@ -96,7 +96,10 @@ def test_dashboard_metric_values_match_existing_api_and_legacy_scope(client, rec
     admin_login(client)
     metrics = client.get('/api/admin/dashboard').json
     page = client.get('/admin/').data
-    assert b'Legacy access payments' in page and b'View subscription payments' in page
+    assert b'platform-legacy' not in page
+    assert b'Legacy Lifetime Access' not in page
+    assert b'<h2 id="access-title">' not in page
+    assert b'Businesses without active status' not in page
     # The seeded successful subscription is not misrepresented as legacy revenue.
     assert metrics['access_revenue_kobo'] == 0 and metrics['successful_payments'] == 0
     assert b'NGN 5,000.00' not in page

@@ -26,6 +26,11 @@
   --sb-danger-bg: #fdecea;
   --sb-live: #3ddc84;
   --sb-segment-bg: #e9efec;
+  --sb-admin-canvas: #f2f6f4;
+  --sb-admin-navy: #142739;
+  --sb-admin-search: #2c3d50;
+  --sb-admin-segment: #e7eeea;
+  --sb-admin-clear: #e7f4ec;
   --sb-card-shadow: 0 2px 10px rgba(15, 48, 37, .08);
   --sb-float-shadow: 0 24px 60px rgba(15, 48, 37, .25);
   --sb-control-radius: 12px;

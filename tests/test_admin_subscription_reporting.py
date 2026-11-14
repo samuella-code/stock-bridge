@@ -66,8 +66,8 @@ def test_six_account_buckets_and_html(client, setup, plan, interval):
     assert data['current_subscription_accounts']['total'] == 1
     assert data['current_subscription_accounts']['by_plan'][plan][interval] == 1
     page = client.get('/admin/').data
-    assert f'{plan.title()} {interval} accounts'.encode() in page
-    assert b'Collected subscription revenue' in page
+    assert f'<span>{plan.title()} {interval}</span><strong>1</strong>'.encode() in page
+    assert b'Collected revenue' in page
 
 
 @pytest.mark.parametrize('state,expected', [
@@ -257,15 +257,63 @@ def test_api_reports_computes_current_account_totals_once(client, setup, monkeyp
     assert data['period_metrics']['current_subscription_accounts'] == data['current_subscription_accounts']
 
 
-def test_business_status_label_preserves_existing_calculation(client, setup):
-    from app.admin.routes import overview
+def test_dashboard_counts_current_writable_businesses(client, setup):
     user, shops, sub = customer('pro', businesses=3)
     shops[0].subscription_status = 'inactive'
     shops[1].subscription_status = 'trialing'
     shops[2].subscription_status = 'cancelled'
     db.session.commit()
     admin_login(client)
-    assert overview()['unpaid_users'] == 3
-    page = client.get('/admin/').data
-    assert b'Businesses without active status' in page
-    assert b'Non-active legacy business status' not in page
+    totals = client.get('/api/admin/dashboard').json
+    assert totals['active_businesses'] == 3
+    assert totals['unpaid_users'] == 1  # The fixture includes a legacy marker without account access.
+
+
+def test_platform_dashboard_combines_monthly_and_yearly_and_drills_into_alerts(client, setup):
+    from decimal import Decimal
+    from app.admin.dashboard import dashboard
+    from app.admin.routes import verified_payments_query
+    from app.models import AuditLog
+    from app.subscriptions.entitlements import access_label
+
+    client.application.jinja_env.globals["billing_access_label"] = access_label
+
+    now = datetime.utcnow()
+    owner, shops, monthly = customer('basic', businesses=2)
+    annual_owner, annual_shops, annual = customer('pro', 'yearly', businesses=6)
+    monthly.cancel_at_period_end = True
+    annual_shops[0].suspended_at = now
+    payment(owner, monthly, 'dashboard-verified', now - timedelta(days=40))
+    pending = payment(annual_owner, annual, 'dashboard-pending', None)
+    pending.status = 'pending'
+    expired = db.session.get(AccountBilling, owner.id)
+    expired.trial_started_at = now - timedelta(days=10)
+    expired.trial_ends_at = now - timedelta(days=3)
+    stopped_owner, _, stopped = customer()
+    stopped.current_period_end = now - timedelta(hours=1)
+    trial = db.session.get(AccountBilling, stopped_owner.id)
+    trial.trial_started_at = now - timedelta(days=10)
+    trial.trial_ends_at = now - timedelta(days=3)
+    employee = User(full_name='Employee fixture', email='employee@example.invalid', password_hash='unused', staff_only=True)
+    db.session.add(employee)
+    db.session.add_all([AuditLog(action='USER_REGISTERED', description='Synthetic event',
+                                 created_at=now - timedelta(minutes=i)) for i in range(5)])
+    db.session.commit()
+    metrics = dashboard('30d', verified_payments_query(), now=now + timedelta(seconds=1))
+    assert metrics['owners'] == 4 and metrics['employees'] == 1
+    assert metrics['paying'] == 2 and metrics['paying_percent'] == 50
+    assert metrics['monthly'] == Decimal(13600000) / 12
+    assert metrics['collected'] == 300000
+    assert metrics['plans']['Basic monthly'] == 1
+    assert metrics['plans']['Pro yearly'] == 1
+    assert metrics['plans']['Trial or subscription ended'] == 1
+    assert (metrics['active_businesses'], metrics['unpaid_users']) == (4, 6)
+    assert (metrics['trials_ended'], metrics['renewal_stopped'], metrics['payment_issues']) == (1, 1, 1)
+    assert len(metrics['activity']) == 4 and metrics['activity'][0][0].tzname() == 'WAT'
+    admin_login(client)
+    assert f'/admin/users/{stopped_owner.id}'.encode() in client.get('/admin/users?status=trial-ended').data
+    assert f'/admin/users/{owner.id}'.encode() in client.get('/admin/users?status=renewal-stopped').data
+    assert b'dashboard-pending' in client.get('/admin/payments?status=needs-attention').data
+    assert b'Not money collected.' in client.get('/admin/?period=today').data
+    search = client.get('/admin/dashboard/search?scope=payments&q=dashboard-pending', follow_redirects=True)
+    assert b'dashboard-pending' in search.data and b'dashboard-verified' not in search.data
