@@ -5,7 +5,7 @@
   min-width: 0;
 }
 .sb-expense-layout { align-items: start; }
-.sb-expense-heading, .sb-expense-options, .sb-expense-chips {
+.sb-expense-options, .sb-expense-chips {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -13,22 +13,6 @@
 }
 .sb-expense-intro .sb-expense-kicker { color: var(--sb-muted); }
 .sb-expense-intro h1 { font-size: var(--sb-hero-phone); }
-.sb-expense-help { position: relative; }
-.sb-expense-help > .sb-card {
-  position: absolute;
-  z-index: 2;
-  inset-inline-end: 0;
-  width: min(var(--sb-sidebar-width), 46vw);
-  margin-block-start: var(--sb-1);
-}
-.sb-expense-help p + p { margin-block-start: var(--sb-2); }
-.sb-expense-help a {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--sb-touch);
-  color: var(--sb-primary);
-  text-decoration: underline;
-}
 .sb-expense-form, .sb-expense-void-form {
   display: grid;
   gap: var(--sb-3);
@@ -101,12 +85,6 @@
   font-weight: 700;
   text-decoration: underline;
   cursor: pointer;
-}
-.sb-expenses .sb-expense-help > summary {
-  display: grid;
-  place-items: center;
-  min-width: var(--sb-touch);
-  text-decoration: none;
 }
 .sb-expense-total { background: var(--sb-soft-green); }
 .sb-expense-total > strong {

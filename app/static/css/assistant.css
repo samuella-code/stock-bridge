@@ -249,3 +249,14 @@ body.sb-assistant-enabled { padding-bottom: calc(var(--sb-20) + env(safe-area-in
 @media (prefers-reduced-motion: reduce) {
   .sb-assistant *, .sb-assistant *::before { animation: none !important; transition: none !important; scroll-behavior: auto; }
 }
+
+@media (width < 640px) {
+  body.sb-assistant-enabled:has(.sb-business-profile) { padding-bottom: env(safe-area-inset-bottom); }
+  body:has(.sb-business-profile) .sb-assistant:not([data-assistant-open]) {
+    position: relative;
+    inset: auto;
+    display: flex;
+    justify-content: flex-end;
+    padding: var(--sb-3) max(var(--sb-6), env(safe-area-inset-right)) var(--sb-6);
+  }
+}

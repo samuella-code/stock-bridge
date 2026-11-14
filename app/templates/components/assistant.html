@@ -29,7 +29,7 @@
         </section>
         <a class="sb-assistant-card sb-assistant-contact" href="{{ url_for('legal.contact') }}">
           {{ icon('help') }}
-          <span><strong>Talk to a person on WhatsApp</strong><small>WhatsApp contact details coming soon.</small></span>
+          {% if request.endpoint == 'auth.signup' %}<span><strong>Contact and support</strong></span>{% else %}<span><strong>Talk to a person on WhatsApp</strong><small>WhatsApp contact details coming soon.</small></span>{% endif %}
           <span aria-hidden="true">→</span>
         </a>
       </div>

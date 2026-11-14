@@ -11,7 +11,7 @@ function mount(file,options={}) {
   const handlers={},inputHandlers={},input={files:file?[file]:[],addEventListener(k,fn){inputHandlers[k]=fn;}},status={textContent:''},preview={hidden:true},button={disabled:false};
   const form={action:'/businesses/1/logo',addEventListener(k,fn){handlers[k]=fn;},querySelector(s){return s==='input[type=file]'?input:s==='[data-image-status]'?status:s==='[data-image-preview]'?preview:button;}};
   let data=null, requests=0,destination=null,closed=false,canvas=null;
-  const document={querySelectorAll(){return [form];},createElement(){canvas={getContext(){return {drawImage(){}};},toBlob(fn,mime,quality){fn({type:'image/webp',size:options.blobSize||1000});}};return canvas;}};
+  const document={querySelectorAll(){return [form];},createElement(){canvas={getContext(){return {drawImage(){}};},toBlob(fn,mime,quality){fn(options.encode ? options.encode(mime,quality) : {type:mime,size:1000});}};return canvas;}};
   const createImageBitmap=async()=>({width:options.width||1600,height:options.height||800,close(){closed=true;}});
   function FormData(){this.set=(...args)=>{data=args;};}
   vm.runInNewContext(source,{document,FormData,URL:{createObjectURL(){return 'blob:preview';},revokeObjectURL(){}},createImageBitmap,window:{location:{assign(v){destination=v;}}},fetch:async()=>{requests++;return {ok:!options.fail,url:'https://stockbridge.example/businesses/1/profile'};}});
@@ -30,5 +30,20 @@ function mount(file,options={}) {
   s=mount({type:'image/png',size:100},{fail:true});await s.handlers.submit(event);equal(s.requests,1);equal(s.button.disabled,false);equal(s.destination,null);assert.ok(s.status.textContent.includes('preserved'));assertions++;
   s=mount({type:'image/png',size:100},{corrupt:true});await s.handlers.submit(event);equal(s.requests,0);equal(s.button.disabled,false);
   s=mount({type:'image/webp',size:100},{animated:true});await s.handlers.submit(event);equal(s.requests,0);equal(s.button.disabled,false);
-  console.log(`PASS: original upload boundaries, optimization dimensions, supported formats, limits, preview and failure recovery (${assertions} assertions).`);
+  for (const [type, fallback, extension] of [
+    ['image/jpeg', 'image/jpeg', 'jpg'],
+    ['image/png', 'image/png', 'png'],
+    ['image/webp', 'image/png', 'png'],
+  ]) {
+    s = mount({type,size:100}, {encode: mime => ({type:mime === 'image/webp' ? 'image/png' : mime,size:1000})});
+    await s.handlers.submit(event);
+    equal(s.requests,1);equal(s.data[1].type,fallback);equal(s.data[2],`business-logo.${extension}`);
+  }
+  s = mount({type:'image/jpeg',size:100}, {encode: mime => mime === 'image/webp' ? null : {type:mime,size:1000}});
+  await s.handlers.submit(event);equal(s.requests,1);equal(s.data[2],'business-logo.jpg');
+  s = mount({type:'image/jpeg',size:100}, {encode: (mime,quality) => ({type:quality === 0.75 ? 'image/png' : mime,size:600*1024})});
+  await s.handlers.submit(event);equal(s.requests,1);equal(s.data[1].type,'image/webp');
+  s = mount({type:'image/png',size:100}, {encode: mime => mime === 'image/webp' ? null : {type:mime,size:4*1024*1024+1}});
+  await s.handlers.submit(event);equal(s.requests,0);equal(s.button.disabled,false);equal(s.closed,true);
+  console.log(`PASS: upload boundaries, optimization dimensions, format fallback, preview and failure recovery (${assertions} assertions).`);
 })().catch(error=>{console.error(error);process.exitCode=1;});

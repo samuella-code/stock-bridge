@@ -20,17 +20,7 @@
   <header class="sb-overview-intro sb-expense-intro">
     <div>
       <p class="sb-expense-kicker">Running costs</p>
-      <div class="sb-expense-heading">
-        <h1 id="expenses-title">Expenses</h1>
-        <details class="sb-expense-help">
-          <summary aria-label="Learn about expenses">?</summary>
-          <div class="sb-card">
-            <p>Record rent, electricity, transport and other running costs here. Goods bought for resale belong in Restocking.</p>
-            <p>Sales are not the same as profit. Reports consider the cost of products sold and recorded expenses.</p>
-            <a href="{{ url_for('legal.help_centre', _anchor='expenses') }}">Read the Expenses guide</a>
-          </div>
-        </details>
-      </div>
+      <h1 id="expenses-title">Expenses</h1>
       <p>Rent, transport, electricity and other costs of running the shop. Goods you buy to resell go in Restocking.</p>
     </div>
   </header>
@@ -121,11 +111,13 @@
           </li>
           {% endfor %}
         </ul>
-        <nav class="pager" aria-label="Expense history pages">
-          {% if expenses.has_prev %}<a href="{{ url_for('expenses.index', page=expenses.prev_num) }}">Previous</a>{% endif %}
-          <span>Page {{ expenses.page }} of {{ expenses.pages }}</span>
-          {% if expenses.has_next %}<a href="{{ url_for('expenses.index', page=expenses.next_num) }}">Next</a>{% endif %}
-        </nav>
+        {% if expenses.has_prev or expenses.has_next %}
+          <nav class="pager" aria-label="Expense history pages">
+            {% if expenses.has_prev %}<a href="{{ url_for('expenses.index', page=expenses.prev_num) }}">Previous</a>{% endif %}
+            <span>Page {{ expenses.page }} of {{ expenses.pages }}</span>
+            {% if expenses.has_next %}<a href="{{ url_for('expenses.index', page=expenses.next_num) }}">Next</a>{% endif %}
+          </nav>
+        {% endif %}
         {% else %}
         {{ empty_message('Your expenses will appear here once recorded.', '#expense-description', 'Add expense') }}
         {% endif %}

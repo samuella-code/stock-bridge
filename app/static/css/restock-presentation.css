@@ -70,22 +70,6 @@
 .sb-restock-record dd { margin: 0; font-weight: 700; }
 .sb-restock-settings button { justify-self: start; }
 
-.sb-restock-help { margin-block-start: var(--sb-2); }
-.sb-restock-help summary {
-  display: inline-grid;
-  place-items: center;
-  min-height: var(--sb-touch);
-  min-width: var(--sb-touch);
-  border: var(--sb-stroke) solid var(--sb-input-border);
-  border-radius: var(--sb-pill);
-  background: var(--sb-surface);
-  color: var(--sb-primary);
-  font-weight: 800;
-  cursor: pointer;
-}
-.sb-restock-help summary::-webkit-details-marker { display: none; }
-.sb-restock-help > div { margin-block-start: var(--sb-2); }
-.sb-restock-help p + p { margin-block-start: var(--sb-2); }
 .sb-restock summary:focus-visible {
   outline: var(--sb-focus) solid var(--sb-primary);
   outline-offset: var(--sb-focus);

@@ -1,5 +1,28 @@
 /* Phone-image optimization avoids Vercel's 4.5 MB request-body ceiling. */
 (() => {
+  const uploadLimit = 4 * 1024 * 1024;
+  const compactTarget = 500 * 1024;
+
+  async function encodeUpload(canvas, sourceType) {
+    const formats = sourceType === 'image/jpeg'
+      ? [['image/webp', 'webp'], ['image/jpeg', 'jpg']]
+      : [['image/webp', 'webp'], ['image/png', 'png']];
+    const encode = (type, quality) => new Promise(resolve => canvas.toBlob(resolve, type, quality));
+
+    for (const [type, extension] of formats) {
+      const preferred = await encode(type, 0.85);
+      if (preferred?.type !== type || preferred.size === 0) continue;
+      if (preferred.size <= compactTarget || (type === 'image/png' && preferred.size <= uploadLimit)) {
+        return { blob: preferred, filename: `business-logo.${extension}` };
+      }
+      if (type === 'image/png') continue;
+      const compact = await encode(type, 0.75);
+      const blob = compact?.type === type && compact.size > 0 && compact.size < preferred.size ? compact : preferred;
+      if (blob.size <= uploadLimit) return { blob, filename: `business-logo.${extension}` };
+    }
+    throw new Error('This image could not be prepared for upload. Try a smaller JPEG or PNG.');
+  }
+
   document.querySelectorAll('[data-business-image]').forEach(form => {
     const input = form.querySelector('input[type=file]');
     const status = form.querySelector('[data-image-status]');
@@ -50,13 +73,9 @@
         canvas.width = Math.max(1, Math.round(bitmap.width * ratio));
         canvas.height = Math.max(1, Math.round(bitmap.height * ratio));
         canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-        const encode = quality => new Promise(resolve => canvas.toBlob(resolve, 'image/webp', quality));
-        let blob = await encode(0.85);
-        if (!blob || blob.type !== 'image/webp') throw new Error('This browser cannot optimize WebP images. Try a current browser.');
-        if (blob.size > 500 * 1024) blob = await encode(0.75);
-        if (!blob || blob.size > 4 * 1024 * 1024) throw new Error('Image could not be optimized.');
+        const { blob, filename } = await encodeUpload(canvas, file.type);
         const data = new FormData(form);
-        data.set('logo', blob, 'business-logo.webp');
+        data.set('logo', blob, filename);
         status.textContent = 'Uploading optimized image…';
         const response = await fetch(form.action, {method: 'POST', body: data, credentials: 'same-origin'});
         if (!response.ok) throw new Error('Upload failed. Your current image is preserved.');

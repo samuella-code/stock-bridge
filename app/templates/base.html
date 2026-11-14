@@ -8,7 +8,7 @@
     <title>{% block title %}StockBridge{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@{% if (request.endpoint in ('main.dashboard', 'main.reports', 'main.insights', 'main.business_overview', 'staff.manage', 'products.index', 'sales.index', 'restocking.index', 'restocking.receive', 'notifications.index', 'businesses.index', 'profile.index', 'expenses.index', 'subscriptions.index') or (not current_user.is_authenticated and request.endpoint in ('main.index', 'subscriptions.index', 'auth.login'))) %}400;500;{% endif %}600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@{% if (request.endpoint in ('main.dashboard', 'main.reports', 'main.insights', 'main.business_overview', 'staff.manage', 'products.index', 'sales.index', 'restocking.index', 'restocking.receive', 'notifications.index', 'businesses.index', 'profile.index', 'expenses.index', 'subscriptions.index') or (not current_user.is_authenticated and request.endpoint in ('main.index', 'subscriptions.index', 'auth.login', 'auth.signup'))) %}400;500;{% endif %}600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/inventory.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modules.css') }}">
@@ -19,7 +19,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/entry.css', v='entry-phase7-1') }}">
 {% if onboarding_tour is defined and onboarding_tour.eligible %}<link rel="stylesheet" href="{{url_for('static',filename='css/tour.css')}}">{% endif %}
 {% block extra_styles %}{% endblock %}
-    {% if request.endpoint in ('main.index', 'auth.login', 'main.dashboard', 'main.reports', 'main.insights', 'main.business_overview', 'staff.manage', 'products.index', 'subscriptions.index') %}
+    {% if request.endpoint in ('main.index', 'auth.login', 'auth.signup', 'main.dashboard', 'main.reports', 'main.insights', 'main.business_overview', 'staff.manage', 'products.index', 'subscriptions.index') %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/presentation-refinements.css') }}">
     {% endif %}
 </head>
@@ -153,7 +153,7 @@
     </div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
-{% if current_user.is_authenticated and request.endpoint != 'staff.manage' %}<form hidden data-email-dispatch action="{{ url_for('notifications.email_dispatch') }}"><input name="csrf_token" value="{{ csrf_token() }}"></form><script src="{{ url_for('static', filename='js/activity.js') }}" defer></script><script src="{{ url_for('static', filename='js/business-image.js') }}" defer></script>{% endif %}
+{% if current_user.is_authenticated and request.endpoint != 'staff.manage' %}<form hidden data-email-dispatch action="{{ url_for('notifications.email_dispatch') }}"><input name="csrf_token" value="{{ csrf_token() }}"></form><script src="{{ url_for('static', filename='js/activity.js') }}" defer></script><script src="{{ url_for('static', filename='js/business-image.js', v='logo-encoding-2') }}" defer></script>{% endif %}
 {% if current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/customer.js', v='phase7-icons-1') }}" defer></script>{% endif %}
 {% if current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/onboarding.js', v='guidance-6.1') }}" defer></script>{% endif %}
 {% if not current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/public.js', v='entry-7') }}" defer></script>{% endif %}

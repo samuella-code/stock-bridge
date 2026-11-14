@@ -12,13 +12,6 @@
 <section class="sb-overview sb-sale sb-restock" aria-labelledby="restock-title">
   <header class="sb-overview-intro">
     <h1 id="restock-title">Restocking</h1>
-    <details class="sb-restock-help">
-      <summary aria-label="Learn about restocking">?</summary>
-      <div class="sb-card">
-        <p>Recording a sale reduces stock. Recording a restock increases it.</p>
-        <p>Search for the products you received, enter the quantity and cost per unit, then review the items before saving. Each receipt keeps its purchase cost.</p>
-      </div>
-    </details>
   </header>
 
   <div class="sb-sale-layout">
@@ -95,11 +88,13 @@
               </ul>
             </details>
           {% endfor %}
-          <nav class="pager" aria-label="Recent restocks pages">
-            {% if restocks.has_prev %}<a href="{{ url_for('restocking.index', page=restocks.prev_num, insight_page=product_page.page, q=query) }}">Previous</a>{% endif %}
-            Page {{ restocks.page }} of {{ restocks.pages }}
-            {% if restocks.has_next %}<a href="{{ url_for('restocking.index', page=restocks.next_num, insight_page=product_page.page, q=query) }}">Next</a>{% endif %}
-          </nav>
+          {% if restocks.has_prev or restocks.has_next %}
+            <nav class="pager" aria-label="Recent restocks pages">
+              {% if restocks.has_prev %}<a href="{{ url_for('restocking.index', page=restocks.prev_num, insight_page=product_page.page, q=query) }}">Previous</a>{% endif %}
+              Page {{ restocks.page }} of {{ restocks.pages }}
+              {% if restocks.has_next %}<a href="{{ url_for('restocking.index', page=restocks.next_num, insight_page=product_page.page, q=query) }}">Next</a>{% endif %}
+            </nav>
+          {% endif %}
         {% else %}
           {{ empty_message('Your recent restocks will appear here.', '#restock-form' if has_products else url_for('products.create'), 'Record a restock' if has_products else 'Add a product') }}
         {% endif %}
@@ -153,11 +148,13 @@
             {{ empty_message('Your stock status will appear here when you add a product.', url_for('products.create'), 'Add a product') }}
           {% endif %}
         {% endif %}
-        <nav class="pager" aria-label="Restock advice pages">
-          {% if product_page.has_prev %}<a href="{{ url_for('restocking.index', insight_page=product_page.prev_num, q=query, page=restocks.page) }}">Previous insights</a>{% endif %}
-          Page {{ product_page.page }} of {{ product_page.pages }}
-          {% if product_page.has_next %}<a href="{{ url_for('restocking.index', insight_page=product_page.next_num, q=query, page=restocks.page) }}">Next insights</a>{% endif %}
-        </nav>
+        {% if product_page.has_prev or product_page.has_next %}
+          <nav class="pager" aria-label="Restock advice pages">
+            {% if product_page.has_prev %}<a href="{{ url_for('restocking.index', insight_page=product_page.prev_num, q=query, page=restocks.page) }}">Previous insights</a>{% endif %}
+            Page {{ product_page.page }} of {{ product_page.pages }}
+            {% if product_page.has_next %}<a href="{{ url_for('restocking.index', insight_page=product_page.next_num, q=query, page=restocks.page) }}">Next insights</a>{% endif %}
+          </nav>
+        {% endif %}
       </section>
     </div>
   </div>
