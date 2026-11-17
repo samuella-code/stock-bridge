@@ -231,7 +231,7 @@
   white-space: nowrap;
 }
 body.navigation-open .sb-assistant { visibility: hidden; }
-body.sb-assistant-enabled { padding-bottom: calc(var(--sb-20) + env(safe-area-inset-bottom)); }
+/* body.sb-assistant-enabled { padding-bottom: calc(var(--sb-20) + env(safe-area-inset-bottom)); } */
 
 @keyframes sb-assistant-enter { from { opacity: 0; transform: translateY(var(--sb-4)); } }
 @keyframes sb-assistant-pulse { 50% { transform: scale(1.04); } }
