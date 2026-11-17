@@ -251,7 +251,7 @@ body.navigation-open .sb-assistant { visibility: hidden; }
 }
 
 @media (width < 640px) {
-  body.sb-assistant-enabled:has(.sb-business-profile) { padding-bottom: env(safe-area-inset-bottom); }
+  /* body.sb-assistant-enabled:has(.sb-business-profile) { padding-bottom: env(safe-area-inset-bottom); } */
   body:has(.sb-business-profile) .sb-assistant:not([data-assistant-open]) {
     position: relative;
     inset: auto;
