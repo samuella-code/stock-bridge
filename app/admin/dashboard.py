@@ -122,7 +122,7 @@ def dashboard(period, legacy_payments, *, now=None):
 
     legacy = legacy_payments.with_entities(func.count(Payment.id), func.coalesce(func.sum(Payment.amount_kobo), 0)).one()
     collections = collected_subscription_payments()
-    security_count = AdminLoginAttempt.query.filter(
+    security_count = db.session.query(AdminLoginAttempt.identifier).filter(
         AdminLoginAttempt.attempted_at >= now - timedelta(minutes=15),
     ).group_by(AdminLoginAttempt.identifier).having(func.count(AdminLoginAttempt.id) >= 5).count()
     events = AuditLog.query.options(joinedload(AuditLog.business)).filter(AuditLog.created_at >= start, AuditLog.created_at <= now).order_by(

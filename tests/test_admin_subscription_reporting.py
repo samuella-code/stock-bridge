@@ -2,8 +2,9 @@
 from datetime import datetime, timedelta
 import pytest
 from sqlalchemy import event
+from sqlalchemy.dialects import postgresql
 from app import db
-from app.models import AccountBilling, Business, Payment, RecurringSubscription, User
+from app.models import AccountBilling, AdminLoginAttempt, Business, Payment, RecurringSubscription, User
 from app.admin.subscription_reporting import current_subscription_accounts, collected_subscription_payments
 from app.subscriptions.entitlements import PLANS
 from tests.test_admin_portal import client, seed, admin_login
@@ -18,6 +19,41 @@ def setup(client, monkeypatch):
     ids = seed(client)
     client.application.config['SUBSCRIPTIONS_ENABLED'] = True
     return ids
+
+
+def test_dashboard_security_counts_recent_groups_without_selecting_ungrouped_columns(client, setup):
+    from app.admin.dashboard import dashboard
+    from app.admin.routes import verified_payments_query
+
+    now = datetime.utcnow()
+    db.session.add_all(
+        AdminLoginAttempt(identifier=identifier, attempted_at=attempted_at)
+        for identifier, count, attempted_at in (
+            ('at-limit', 5, now),
+            ('above-limit', 6, now),
+            ('below-limit', 4, now),
+            ('outside-window', 5, now - timedelta(minutes=16)),
+        )
+        for _ in range(count)
+    )
+    db.session.commit()
+
+    grouped_queries = []
+
+    def capture_grouped_query(conn, clause, multiparams, params, execution_options):
+        sql = ' '.join(str(clause.compile(dialect=postgresql.dialect())).split())
+        if 'GROUP BY admin_login_attempt.identifier' in sql:
+            grouped_queries.append(sql)
+
+    engine = db.engine
+    event.listen(engine, 'before_execute', capture_grouped_query)
+    try:
+        assert dashboard('today', verified_payments_query(), now=now)['security'] == 2
+    finally:
+        event.remove(engine, 'before_execute', capture_grouped_query)
+
+    assert len(grouped_queries) == 1
+    assert 'SELECT admin_login_attempt.identifier AS admin_login_attempt_identifier FROM admin_login_attempt' in grouped_queries[0]
 
 
 def customer(plan='pro', interval='monthly', *, now=None, status='active', businesses=1):
