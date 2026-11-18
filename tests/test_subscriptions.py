@@ -1,5 +1,7 @@
 from datetime import datetime
 import pytest
+import re
+from html import unescape
 from app import create_app, db
 from app.models import Business, User
 
@@ -23,12 +25,18 @@ def test_signup_is_available_without_payment(client):
 def test_public_home_and_customer_login_link_to_signup(client):
     home = client.get("/")
     assert home.status_code == 200
-    assert b"Track stock, sales, expenses and profit" in home.data
+    heading = re.search(r'<h1\b[^>]*id="home-title"[^>]*>(.*?)</h1>', home.get_data(as_text=True), re.S)
+    assert heading is not None
+    heading_text = ' '.join(unescape(re.sub(r'<[^>]+>', ' ', heading[1])).split())
+    assert heading_text == 'Know what you have. Know what you sold. Know what you made.'
     assert b'href="/auth/signup"' in home.data
     assert b'href="/auth/login"' in home.data
     login = client.get("/auth/login")
     assert b"Forgot your password?" in login.data
-    assert b'New to StockBridge? <a href="/auth/signup">Create an account</a>' in login.data
+    assert login.status_code == 200
+    login_html = login.get_data(as_text=True)
+    assert 'New to StockBridge?' in login_html
+    assert re.search(r'<a\b[^>]*href="/auth/signup"[^>]*>\s*Create an account\s*</a>', login_html)
 
 
 def test_unverified_signup_cannot_enter_dashboard_or_pay(client, app, monkeypatch):

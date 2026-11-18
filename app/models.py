@@ -371,3 +371,26 @@ class StaffAuditEvent(db.Model):
     audit_log_id = db.Column(db.Integer, db.ForeignKey('audit_log.id'), nullable=False, unique=True)
     owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
     details = db.Column(db.JSON, nullable=False)
+
+
+class AdminCustomerNote(db.Model):
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), primary_key=True)
+    body = db.Column(db.Text, nullable=False, default='')
+    version = db.Column(db.Integer, nullable=False, default=1)
+    updated_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+
+class AdminCustomerMessage(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    actor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
+    request_key = db.Column(db.String(64), nullable=False)
+    content_digest = db.Column(db.String(64), nullable=False)
+    status = db.Column(db.String(16), nullable=False, default='sending')
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime)
+    __table_args__ = (
+        db.UniqueConstraint('actor_id', 'request_key', name='uq_admin_message_request'),
+        db.CheckConstraint("status IN ('sending','sent','failed','unknown')", name='ck_admin_message_status'),
+    )

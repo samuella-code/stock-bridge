@@ -1,0 +1,42 @@
+{% extends 'admin/base.html' %}
+{% block body_class %} platform-dashboard-page admin-customers-page{% endblock %}
+{% block head_meta %}
+<meta name="color-scheme" content="only light">
+<meta name="csrf-token" content="{{ csrf_token() }}">
+{% endblock %}
+{% block extra_styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/design-tokens.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin-dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin-customers.css') }}">
+<script src="{{ url_for('static', filename='js/admin-customers.js') }}" defer>
+</script>
+{% endblock %}
+{% block content %}
+<div class="customers-shell">
+{% block customer_content %}{% endblock %}
+<p id="customer-status-message" class="page-status" role="status" aria-live="polite">
+</p>
+</div>
+<dialog id="customer-drawer" class="drawer" aria-labelledby="customer-drawer-title">
+<div class="drawer-head">
+<h2 id="customer-drawer-title">Customer overview</h2>
+<button class="btn icon" type="button" data-close-drawer aria-label="Close customer overview">×</button>
+</div>
+<div class="drawer-body" id="customer-drawer-body">
+</div>
+<p class="page-status" id="drawer-status" role="status">
+</p>
+</dialog>
+<dialog id="customer-action" class="drawer" aria-labelledby="customer-action-title">
+<div class="drawer-head">
+<h2 id="customer-action-title">Customer action</h2>
+<button class="btn icon" type="button" data-close-action aria-label="Close action">×</button>
+</div>
+<div class="drawer-body">
+<form id="customer-action-form" class="dialog-form">
+</form>
+<p id="action-status" class="page-status" role="status">
+</p>
+</div>
+</dialog>
+{% endblock %}

@@ -447,44 +447,18 @@ def dashboard_search():
 @admin_bp.get("/users")
 @admin_required
 def users():
-    q=request.args.get("q","").strip()[:100]
-    status=request.args.get("status","all")
-    query=customer_query().options(selectinload(User.businesses))
-    if q: query=query.filter(or_(User.email.ilike(f"%{q}%"),User.full_name.ilike(f"%{q}%"),
-        User.businesses.any(Business.name.ilike(f"%{q}%"))))
-    if status=="suspended": query=query.filter(User.suspended_at.isnot(None))
-    elif status=="active": query=query.filter(User.suspended_at.is_(None))
-    elif status in ("trial-ended", "renewal-stopped"):
-        query = query.filter(User.id.in_(owner_alert_query(status, datetime.utcnow()).with_entities(User.id)))
-    elif status in ("paid", "unpaid"):
-        now = datetime.utcnow()
-
-        legacy_accounts = db.session.query(AccountBilling.user_id).filter(
-            AccountBilling.legacy_granted_at.isnot(None),
-            AccountBilling.legacy_payment_id.isnot(None),
-        )
-
-        current_subscriptions = db.session.query(
-            RecurringSubscription.user_id
-        ).filter(
-            RecurringSubscription.current_period_start <= now,
-            RecurringSubscription.current_period_end > now,
-            RecurringSubscription.status.in_(
-                ("active", "past_due", "cancel_at_period_end", "cancelled")
-            ),
-        )
-
-        has_paid_access = or_(
-            User.id.in_(legacy_accounts),
-            User.id.in_(current_subscriptions),
-        )
-
-        if status == "paid":
-            query = query.filter(has_paid_access)
-        else:
-            query = query.filter(~has_paid_access)
-    rows=query.order_by(User.created_at.desc()).paginate(page=request.args.get("page",1,type=int),per_page=25,error_out=False)
-    return render_template("admin/users.html",rows=rows,q=q,status=status)
+    from app.admin import customer_data
+    now = datetime.utcnow()
+    status = request.args.get('status', 'all')
+    if status not in customer_data.FILTERS:
+        abort(400)
+    q = request.args.get('q', '').strip()[:100]
+    rows = customer_data.filtered_customers(q, status, now).paginate(
+        page=request.args.get('page', 1, type=int), per_page=25, error_out=False)
+    loader = customer_data.CustomerRows(rows.items, now)
+    return render_template('admin/users.html', rows=rows, q=q, status=status,
+                           customer_rows=[loader.serialize(u) for u in rows.items],
+                           summary=customer_data.summary(now))
 
 @admin_bp.get("/users/<int:user_id>")
 @admin_required
@@ -520,6 +494,9 @@ def user_detail(user_id):
         metrics=metrics,
         payments=payments,
         activity=activity,
+        detail=customer_tools.data.details(user, datetime.utcnow()),
+        local_time=customer_tools.data.local_time,
+        masked_description=customer_tools.data.masked_description,
     )
 def change_suspension(record, *, target_type, description, business_id):
     """Compare and set status in the same transaction as its audit event.
@@ -856,3 +833,6 @@ def api_reports():
     metrics["period_metrics"]=period_metrics(start,end,
         current_accounts=metrics["current_subscription_accounts"])
     return jsonify(metrics)
+
+# Register customer tools after the shared admin decorator and helpers exist.
+from app.admin import customers as customer_tools

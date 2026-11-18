@@ -1,0 +1,81 @@
+{% extends 'admin/customers_base.html' %}
+{% macro amount(value) %}₦{{ ('{:,.2f}'.format(value)).removesuffix('.00') }}{% endmacro %}
+{% block title %}Customer inspection · StockBridge Admin{% endblock %}
+{% block customer_content %}
+<a class="detail-back" href="{{ url_for('admin.user_detail', user_id=customer.id) }}">← Customer details</a>
+<h1>Customer inspection</h1>
+<p class="detail-banner">Read-only admin view · {{ customer.name }} · {{ shop.name if shop else 'No accessible business' }}</p>
+<form method="get" class="invitation-filter-form">
+<label for="inspection-business">Business<select id="inspection-business" name="business_id">
+{% for b in businesses %}
+<option value="{{ b.id }}" {{ 'selected' if shop and shop.id == b.id }}>{{ b.name }}</option>
+{% endfor %}
+</select>
+</label>
+<input type="hidden" name="dataset" value="{{ dataset }}">
+<button class="btn">Open</button>
+</form>
+{% if shop %}
+<nav class="filter-chips" aria-label="Inspect records">
+{% for key,label in [('products','Products and inventory'),('sales','Sales'),('restocking','Restocking'),('expenses','Expenses')] %}
+<a class="chip" href="{{ url_for('admin.inspect_customer', user_id=customer.id, business_id=shop.id, dataset=key) }}" {% if key == dataset %}aria-current="page"{% endif %}>{{ label }}</a>
+{% endfor %}
+</nav>
+<div class="table-box" tabindex="0" aria-label="Customer records, scroll horizontally">
+<table role="table">
+<caption>{{ rows.total }} {{ dataset }} records</caption>
+<thead>
+<tr>
+{% if dataset == 'products' %}
+<th scope="col">Product</th>
+<th scope="col">Stock</th>
+<th scope="col">Cost price</th>
+<th scope="col">Selling price</th>
+{% else %}
+<th scope="col">Record</th>
+<th scope="col">Recorded</th>
+<th scope="col">Amount</th>
+<th scope="col">Status</th>
+{% endif %}
+</tr>
+</thead>
+<tbody>
+{% for r in rows.items %}
+<tr class="{{ 'voided-record' if r.voided_at|default(false) }}">
+{% if dataset == 'products' %}
+<td data-label="Product">{{ r.name }}</td>
+<td data-label="Stock">{{ r.stock_quantity }} {{ r.unit }}{{ '' if r.stock_quantity == 1 else 's' }}</td>
+<td data-label="Cost price">{{ amount(r.buying_price) }}</td>
+<td data-label="Selling price">{{ amount(r.selling_price) }}</td>
+{% else %}
+<td data-label="Record">
+{% if dataset == 'sales' %}Sale #{{ r.id }}{% elif dataset == 'restocking' %}{{ r.product.name }} · {{ r.quantity }}{% else %}{{ r.description }}{% endif %}
+</td>
+<td data-label="Recorded">{{ local_time(r.sold_at if dataset == 'sales' else r.received_at if dataset == 'restocking' else r.spent_at) }}</td>
+<td data-label="Amount">{{ amount(r.amount if dataset == 'expenses' else r.total) }}</td>
+<td data-label="Status">
+{% if r.voided_at|default(false) %}
+<span class="badge danger">Voided · {{ r.void_reason }}</span>
+{% else %}Recorded{% endif %}
+</td>
+{% endif %}
+</tr>
+{% else %}
+<tr>
+<td data-label="Records" colspan="4">Records will appear here when added.</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% if rows.pages > 1 %}
+<nav class="actions" aria-label="Inspection pages">
+{% if rows.has_prev %}
+<a class="btn" href="{{ url_for('admin.inspect_customer', user_id=customer.id, business_id=shop.id, dataset=dataset, page=rows.prev_num) }}">Previous</a>
+{% endif %}{% if rows.has_next %}
+<a class="btn" href="{{ url_for('admin.inspect_customer', user_id=customer.id, business_id=shop.id, dataset=dataset, page=rows.next_num) }}">Next</a>
+{% endif %}
+</nav>
+{% endif %}
+{% endif %}
+{% endblock %}

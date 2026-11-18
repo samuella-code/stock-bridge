@@ -1,0 +1,69 @@
+{% macro badge(text, kind='') %}
+<span class="badge {{ kind }}">{{ text }}</span>
+{% endmacro %}
+{% macro profile(c) %}
+<div class="profile-top">
+<span class="avatar large {{ 'employee' if c.employee }}" aria-hidden="true">{{ c.name[:1]|upper }}</span>
+<div>
+<h2>{{ c.name }}</h2>{{ badge('Employee' if c.employee else 'Account owner', 'neutral') }}</div>
+</div>
+<div class="email-line">
+<span data-email-value>{{ c.email }}</span>
+<button type="button" class="text-btn" data-reveal-url="{{ url_for('admin.reveal_customer_email', user_id=c.id) }}" aria-label="Show full email for {{ c.name }}">Show</button>
+</div>
+<div class="badges">{{ badge(c.plan, 'neutral' if c.employee else ('warning' if 'expired' in c.plan else '')) }}{{ badge('Verified' if c.verified else 'Email unverified', '' if c.verified else 'warning') }}{% if c.suspended %}{{ badge('Suspended', 'danger') }}{% endif %}
+</div>
+{% endmacro %}
+{% macro actions(c) %}
+<div class="actions spaced" data-customer-id="{{ c.id }}">
+{% if not c.employee %}
+<button type="button" class="btn" data-customer-action="message">Send message</button>
+{% if c.trial_end and not c.interval %}
+<button type="button" class="btn" data-customer-action="trial">Extend trial</button>
+{% endif %}{% endif %}
+<a class="btn" href="{{ url_for('admin.inspect_customer', user_id=c.id) }}">View as read-only</a>
+{% if not c.employee %}
+<button type="button" class="btn {{ 'danger' if not c.suspended }}" data-customer-action="suspension">{{ 'Reactivate' if c.suspended else 'Suspend' }}</button>
+{% endif %}
+</div>
+{% endmacro %}
+{% macro team_table(team) %}
+<div class="table-box" tabindex="0" aria-label="Team table, scroll horizontally">
+<table role="table">
+<caption class="sr-only">Invited employees and their access</caption>
+<thead>
+<tr>
+<th scope="col">Invited email</th>
+<th scope="col">Role</th>
+<th scope="col">Works in</th>
+<th scope="col">Status</th>
+<th scope="col">Actions</th>
+</tr>
+</thead>
+<tbody>
+{% for i in team %}
+<tr>
+<td data-label="Invited email">
+<span data-email-value>{{ i.email }}</span>
+<br>
+<button type="button" class="text-btn" data-reveal-url="{{ url_for('admin.reveal_invitation_email', invitation_id=i.id) }}">Show full email</button>
+</td>
+<td data-label="Role">{{ i.role }}</td>
+<td data-label="Works in">{{ i.businesses|map(attribute='name')|join(', ') or '—' }}</td>
+<td data-label="Status">{{ badge(i.status, 'warning' if i.status == 'Expired' else 'neutral' if i.status == 'Removed' else '') }}</td>
+<td data-label="Actions">
+{% if i.status in ('Invited', 'Expired') %}
+<button type="button" class="text-btn" data-staff-action="resend" data-invitation-id="{{ i.id }}">Resend</button>
+<button type="button" class="text-btn" data-staff-action="cancel" data-invitation-id="{{ i.id }}">Cancel</button>
+{% else %}—{% endif %}
+</td>
+</tr>
+{% else %}
+<tr>
+<td data-label="Team" colspan="5">Invited employees will appear here.</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endmacro %}

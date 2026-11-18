@@ -1,20 +1,214 @@
-{% extends "admin/base.html" %}{% block content %}<a href="{{url_for('admin.users')}}">← Customers</a><h1>{{user.full_name}}</h1><div class="admin-card detail-grid"><p>Email: {{user.email}}</p><div>
-  <strong>Businesses:</strong>
-  {% if businesses %}
-    <ul>
-      {% for shop in businesses %}
-        <li>
-          <a href="{{ url_for('admin.business_detail', business_id=shop.id) }}">
-            {{ shop.name }}
-          </a>
-          — {{ 'Suspended' if shop.suspended_at else 'Active' }}
-        </li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p class="empty-state">No businesses registered.</p>
-  {% endif %}
-</div><p>Account: <span class="status-badge {{'suspended' if user.suspended_at else 'active'}}">{{'Suspended' if user.suspended_at else 'Active'}}</span></p><p>Access: {{billing_access_label(user) if config.SUBSCRIPTIONS_ENABLED else ('Lifetime' if business and business.has_write_access else 'Unpaid')}}</p><p>Joined: {{user.created_at.strftime('%d %b %Y')}}</p><p>Last sign-in: {{user.last_activity_at.strftime('%d %b %Y %H:%M') if user.last_activity_at else 'No sign-in recorded'}}</p></div>
-<div class="admin-card"><p>Email verification: {{'Verified' if user.email_verified_at else 'Not verified'}}</p><p>Verified at: {{user.email_verified_at.strftime('%d %b %Y %H:%M') ~ ' UTC' if user.email_verified_at else '—'}}</p><p>Account ID: {{user.id}}</p></div><div class="admin-cards">{% for label,value in metrics.items() %}<article><span>{{label|title}}</span><strong>{{value}}</strong></article>{% endfor %}</div>
-<section class="admin-card"><h2>Recent payments</h2>{% for payment in payments %}<p>{{payment.created_at.strftime('%d %b %Y')}} · ₦{{'{:,.2f}'.format(payment.amount_kobo/100)}} · {{payment.status}} · {% if payment.product == 'subscription' and payment.user_id == user.id and (not payment.business_id or (payment.business and payment.business.user_id == user.id)) %}<a href="{{url_for('admin.payment_detail',payment_id=payment.id)}}">{{payment.reference}}</a>{% else %}{{ payment.reference }}{% if payment.product == 'subscription' %} · {{ payment.plan_code|title if payment.plan_code else 'Plan not recorded' }} {{ payment.billing_interval or '' }}{% endif %}{% endif %}</p>{% else %}<p class="empty-state">No payments recorded.</p>{% endfor %}</section><section class="admin-card"><h2>Account history</h2>{% for row in activity %}<p>{{row.created_at.strftime('%d %b %Y %H:%M')}} UTC · {{row.action.replace('_',' ')|title}} · {{row.description}}</p>{% else %}<p class="empty-state">No account actions recorded.</p>{% endfor %}</section>
-{% if not user.admin_enabled %}<form method="post" action="{{url_for('admin.suspend_user',user_id=user.id)}}" class="admin-card"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><input type="hidden" name="desired_state" value="{{ 'reactivate' if user.suspended_at else 'suspend' }}"><input type="hidden" name="expected_state" value="{{ 'suspended' if user.suspended_at else 'active' }}"><input type="hidden" name="expected_suspended_at" value="{{ user.suspended_at.isoformat() if user.suspended_at else '' }}"><h2>{{'Reactivate user' if user.suspended_at else 'Suspend user'}}</h2><label>Reason for {{'reactivation' if user.suspended_at else 'suspension'}}<input name="reason" required maxlength="300"></label><label class="confirmation"><input type="checkbox" name="confirm" required>Confirm you want to {{'reactivate' if user.suspended_at else 'suspend'}} {{user.full_name}}.</label><button class="{{'' if user.suspended_at else 'danger-action'}}">{{'Reactivate user' if user.suspended_at else 'Suspend user'}}</button></form>{% endif %}{% endblock %}
+{% extends 'admin/customers_base.html' %}
+{% from 'admin/customer_components.html' import badge, profile, actions, team_table %}
+{% block title %}Customer details · StockBridge Admin{% endblock %}
+{% block customer_content %}
+<a class="detail-back" href="{{ url_for('admin.users') }}">← Customers</a>
+<header class="heading">
+<div>
+<h1>Customer details</h1>
+<p>Account information, access and team.</p>
+</div>
+</header>
+<p class="legend">
+<span>
+<b>Account owner</b> pays or is on trial.</span>
+<span>
+<b>Employee</b> works under an owner’s plan and is not counted as a customer.</span>
+</p>
+<div class="details-grid" data-detail-customer="{{ detail.id }}">
+<section class="card">{{ profile(detail) }}{% if detail.employee %}
+<p class="detail-banner">This account was invited as an employee. It does not own a business and does not need its own plan.</p>
+{% else %}
+<dl class="label-value">
+<div>
+<dt>Paid so far</dt>
+<dd>₦{{ ('{:,.2f}'.format(detail.paid_so_far_kobo / 100)).removesuffix('.00') }}</dd>
+</div>
+<div>
+<dt>Next renewal</dt>
+<dd>{{ 'Renewal stopped' if detail.renewal_stopped else (detail.next_renewal or 'No upcoming renewal') }}</dd>
+</div>
+</dl>
+{% endif %}
+<dl class="label-value">
+<div>
+<dt>Joined</dt>
+<dd>{{ detail.joined or '—' }}</dd>
+</div>
+<div>
+<dt>Last active</dt>
+<dd>{{ detail.last_active or 'No activity recorded' }}</dd>
+</div>
+</dl>
+</section>
+{% if detail.employee %}
+<section class="card">
+<h2>Works for</h2>
+{% for m in detail.works_for %}
+<div class="team-item">
+<strong>{{ m.owner }}</strong>
+<p>{{ m.businesses|map(attribute='name')|join(', ') or 'No assigned businesses' }}</p>
+<p class="caption muted">{{ m.role }} · {{ 'Access active' if m.access_active else 'Access unavailable' }}</p>{{ badge(m.status) }}{% if m.status != 'Removed' %}
+<button class="text-btn" type="button" data-remove-membership="{{ m.id }}">Remove access</button>
+{% endif %}
+</div>
+{% else %}
+<p class="muted spaced">No business assignments.</p>
+{% endfor %}
+<p class="caption muted spaced">Plan reminders are never sent to employees.</p>
+<a class="btn spaced" href="{{ url_for('admin.inspect_customer', user_id=detail.id) }}">View as read-only</a>
+</section>
+<section class="card full-span">
+<h2>Invitations</h2>
+{% for i in detail.invitations %}
+<div class="team-item">
+<strong>{{ i.owner }}</strong>
+<p class="caption muted">{{ i.role }} · {{ i.businesses|map(attribute='name')|join(', ') }}</p>
+<dl class="label-value">
+<div>
+<dt>Invited</dt>
+<dd>{{ i.sent }}</dd>
+</div>
+<div>
+<dt>Invited by</dt>
+<dd>{{ i.invited_by.name }}</dd>
+</div>
+<div>
+<dt>Accepted</dt>
+<dd>{{ i.accepted or 'Not accepted' }}</dd>
+</div>
+<div>
+<dt>Status</dt>
+<dd>{{ i.status }}</dd>
+</div>
+</dl>
+{% if i.status in ('Invited','Expired') %}
+<button type="button" class="btn spaced" data-staff-action="resend" data-invitation-id="{{ i.id }}">Resend invitation</button>
+{% endif %}
+</div>
+{% else %}
+<p class="muted spaced">Invitation history will appear here.</p>
+{% endfor %}
+</section>
+{% else %}
+<section class="card">
+<h2>Businesses</h2>
+{% for b in detail.businesses %}
+<div class="business-item">
+<span>
+<strong>{{ b.name }}</strong>
+<span class="subline">{{ 'Suspended' if b.suspended else 'Registered business' }}</span>
+</span>
+<a class="text-btn" href="{{ url_for('admin.business_detail', business_id=b.id) }}">Open →</a>
+</div>
+{% else %}
+<p class="muted spaced">No businesses registered.</p>
+{% endfor %}
+<dl class="label-value">
+<div>
+<dt>Staff seats</dt>
+<dd>{{ detail.staff_seats.used }} of {{ detail.staff_seats.limit }}</dd>
+</div>
+</dl>
+</section>
+<section class="card full-span">
+<h2>Team</h2>
+<p class="section-copy spaced">Showing a full email is recorded in Activity.</p>{{ team_table(detail.team) }}</section>
+<section class="card full-span">
+<h2>Account actions</h2>{{ actions(detail) }}
+<details class="disclosure spaced">
+<summary>{{ 'Reactivate account' if user.suspended_at else 'Suspend account' }}</summary>
+<form method="post" action="{{ url_for('admin.suspend_user', user_id=user.id) }}" class="dialog-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="desired_state" value="{{ 'reactivate' if user.suspended_at else 'suspend' }}">
+<input type="hidden" name="expected_state" value="{{ 'suspended' if user.suspended_at else 'active' }}">
+<input type="hidden" name="expected_suspended_at" value="{{ user.suspended_at.isoformat() if user.suspended_at else '' }}">
+<label>Reason<input name="reason" required maxlength="300">
+</label>
+<label>
+<input type="checkbox" name="confirm" required>Confirm this account status change for {{ user.full_name }}.</label>
+<button class="btn danger">{{ 'Reactivate' if user.suspended_at else 'Suspend' }} account</button>
+</form>
+</details>
+</section>
+{% endif %}
+<section class="card note full-span" data-note-user="{{ detail.id }}" data-note-version="{{ detail.note.version }}">
+<h2>Internal note</h2>
+<label class="sr-only" for="customer-note">Internal note for this customer</label>
+<textarea id="customer-note" maxlength="5000">{{ detail.note.body }}</textarea>
+<div class="note-footer">
+<span class="caption muted">Visible only to your admin team.</span>
+<button class="btn" type="button" data-save-note>Save note</button>
+</div>
+</section>
+</div>
+<section class="card" data-platform-invitations>
+<div class="section-top">
+<h2>All staff invitations</h2>
+<a class="btn" id="invitation-export" href="{{ url_for('admin.staff_invitations_export') }}">Export CSV</a>
+</div>
+<p class="section-copy">Invitations across the platform. Plan reminders are never sent to employees.</p>
+<form class="invitation-filter-form" id="invitation-filter">
+<label for="invitation-search">Search invitations<input id="invitation-search" type="search" name="q" placeholder="Email, owner, business or role">
+</label>
+<label for="invitation-status">Status<select id="invitation-status" name="status">
+{% for s in ['all','Invited','Accepted','Expired','Removed'] %}
+<option value="{{ s }}">{{ 'All' if s == 'all' else s }}</option>
+{% endfor %}
+</select>
+</label>
+<button class="btn">Search</button>
+</form>
+<div class="table-box" tabindex="0" aria-label="Staff invitations, scroll horizontally">
+<table role="table">
+<caption class="sr-only">All staff invitations</caption>
+<thead>
+<tr>
+<th scope="col">Invited email</th>
+<th scope="col">Invited by</th>
+<th scope="col">Business</th>
+<th scope="col">Role</th>
+<th scope="col">Sent</th>
+<th scope="col">Status</th>
+<th scope="col">Email delivery</th>
+</tr>
+</thead>
+<tbody id="platform-invitation-rows">
+<tr>
+<td colspan="7" data-label="Invitations">Loading invitations…</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="actions spaced" id="invitation-pages">
+</div>
+</section>
+<section class="card">
+<h2>Recent payments</h2>
+{% for payment in payments %}
+<p class="spaced">{{ payment.created_at.strftime('%d/%m/%Y') }} · ₦{{ ('{:,.2f}'.format(payment.amount_kobo / 100)).removesuffix('.00') }} · {{ payment.status }} · {% if payment.product == 'subscription' and payment.user_id == user.id and (not payment.business_id or (payment.business and payment.business.user_id == user.id)) %}
+<a class="text-btn" href="{{ url_for('admin.payment_detail', payment_id=payment.id) }}">{{ payment.reference }}</a>
+{% else %}{{ payment.reference }}{% endif %}
+</p>
+{% else %}
+<p class="muted spaced">No payments recorded.</p>
+{% endfor %}
+</section>
+<details class="card disclosure">
+<summary>Recorded activity</summary>
+<div class="mini-stats spaced">
+{% for label,value in metrics.items() %}
+<div>
+<span>{{ label|title }}</span>
+<strong>{{ value }}</strong>
+</div>
+{% endfor %}
+</div>
+<h2 class="spaced">Account history</h2>
+{% for row in activity %}
+<p class="spaced">{{ local_time(row.created_at) }} · {{ row.action.replace('_',' ')|title }} · {{ masked_description(row.description) }}</p>
+{% else %}
+<p class="muted spaced">No account actions recorded.</p>
+{% endfor %}
+</details>
+{% endblock %}

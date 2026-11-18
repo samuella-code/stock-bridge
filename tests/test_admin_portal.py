@@ -655,9 +655,10 @@ def test_admin_customer_paid_unpaid_filters(client):
     paid_html = paid_response.get_data(as_text=True)
     unpaid_html = unpaid_response.get_data(as_text=True)
 
-    assert "owner@example.com" in paid_html
-    assert paid_html.count("owner@example.com") == 1
-    assert "unpaid-filter@example.com" not in paid_html
-
-    assert "unpaid-filter@example.com" in unpaid_html
-    assert "owner@example.com" not in unpaid_html
+    assert 'o•••@e•••.com' in paid_html
+    assert paid_html.count('o•••@e•••.com') == 1
+    assert 'u•••@e•••.com' not in paid_html
+    assert 'u•••@e•••.com' in unpaid_html
+    assert 'o•••@e•••.com' not in unpaid_html
+    assert 'owner@example.com' not in paid_html
+    assert 'unpaid-filter@example.com' not in unpaid_html

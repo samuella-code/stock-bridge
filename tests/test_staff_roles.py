@@ -1,5 +1,7 @@
 """Owner-defined roles: isolated in-memory data, no operational delegation."""
 import json
+import re
+from html import unescape
 from unittest.mock import patch
 import pytest
 from sqlalchemy.schema import CreateTable
@@ -181,6 +183,8 @@ def test_corrupt_stored_permissions_fail_closed_and_role_changes_share_owner_loc
 def test_same_template_key_is_scoped_across_two_memberships(app):
     first, shops = seed('pro'); _, raw = issue(first, shops, role='manager'); user, original = accept_new(raw)
     other, other_shops = seed('pro', email='second-employer@example.invalid')
+    shops[0].name = 'First employer shop'
+    other_shops[0].name = 'Second employer shop'
     roles.save(other, 'manager', 'Second employer lead', ['inventory_view'], now=NOW)
     db.session.commit()
     _, raw = issue(other, other_shops, email=user.email, role='manager')
@@ -191,8 +195,21 @@ def test_same_template_key_is_scoped_across_two_memberships(app):
     assert service.member_businesses(second, user, now=NOW) == [other_shops[0]]
     client = app.test_client(); login(client, user)
     page = client.get('/staff/')
-    assert page.status_code == 200 and b'<h2>Manager</h2>' in page.data
-    assert b'<h2>Second employer lead</h2>' in page.data
+    assert page.status_code == 200
+    cards = re.findall(r'<article\b[^>]*>(.*?)</article>', page.get_data(as_text=True), re.S)
+    for business, role, other_role in (
+        (shops[0], 'Manager', 'Second employer lead'),
+        (other_shops[0], 'Second employer lead', 'Manager'),
+    ):
+        matching_cards = []
+        for card in cards:
+            heading = re.search(r'<h2\b[^>]*>(.*?)</h2>', card, re.S)
+            if heading and unescape(re.sub(r'<[^>]+>', '', heading[1])).strip() == business.name:
+                matching_cards.append(card)
+        assert len(matching_cards) == 1
+        content = ' '.join(unescape(re.sub(r'<[^>]+>', ' ', matching_cards[0])).split())
+        assert f'Role: {role}' in content
+        assert f'Role: {other_role}' not in content
 
 
 def test_complete_catalogue_defaults_and_restocking_example_are_independent(app):

@@ -94,11 +94,11 @@ def invite(owner, email, role, label, finance, ids, *, now, actor=None):
     return _invite_locked(owner, email, role, label, finance, ids, now=now, actor=actor)
 
 
-def _invite_locked(owner, email, role, label, finance, ids, *, now, actor=None):
+def _invite_locked(owner, email, role, label, finance, ids, *, now, actor=None, administrator=False):
     access, choices = owner_access(owner, now=now)
     actor = owner if actor is None else actor
     from app.staff import delegation_access as delegated
-    auth, _ = delegated.mutation(owner, actor, now=now)
+    auth, _ = invitation_authority(owner, actor, now=now, administrator=administrator)
     if auth.owner: role_service._initialize_locked(owner.id)
     role, label, ids = fields(role, label, finance, ids, choices)
     auth.assignment(role_service.resolve(owner.id,role).permissions,ids,
@@ -260,14 +260,14 @@ def can_operate(*args, **kwargs):
     return False
 
 
-def resend(owner, identifier, *, now, actor=None):
+def resend(owner, identifier, *, now, actor=None, administrator=False):
     """Explicit replacement, not an automatic retry; caller commits before SMTP."""
     lock_owner(owner.id); now = max(now, datetime.utcnow()); owner_access(owner, now=now)
     row = StaffInvitation.query.filter_by(id=identifier, owner_id=owner.id, state='pending').first()
     if not row: raise ValueError('Pending invitation is unavailable.')
     actor = owner if actor is None else actor
     from app.staff import delegation_access as delegated
-    auth, _ = delegated.mutation(owner,actor,now=now)
+    auth, _ = invitation_authority(owner, actor, now=now, administrator=administrator)
     delegated.target(auth,row)
     if row.delivery_status == 'sending' and row.delivery_attempted_at and now < row.delivery_attempted_at + timedelta(minutes=2):
         raise ValueError('Delivery is still in progress; review later.')
@@ -275,4 +275,40 @@ def resend(owner, identifier, *, now, actor=None):
     row.state, row.revoked_at = 'revoked', now
     audit(owner.id, actor.id, 'STAFF_INVITE_REPLACED', invitation=row)
     db.session.flush()
-    return _invite_locked(owner, row.email, row.role, row.duty_label, False, ids, now=now, actor=actor)
+    return _invite_locked(owner, row.email, row.role, row.duty_label, False, ids, now=now, actor=actor, administrator=administrator)
+
+
+def require_administrator(actor):
+    # This authority is supplied only by the authenticated admin endpoints.
+    stored = db.session.get(User, actor.id)
+    if not stored or stored.suspended_at or not (stored.role == 'admin' or stored.admin_enabled):
+        raise ValueError('Administrator access is required.')
+
+
+def invitation_authority(owner, actor, *, now, administrator):
+    from app.staff import delegation_access as delegated
+    if administrator:
+        require_administrator(actor)
+        # Use the owner's existing assignment/Pro/seat policy. The actual admin
+        # remains the actor passed to audit and delivery, with no session switch.
+        return delegated.mutation(owner, owner, now=now)
+    return delegated.mutation(owner, actor, now=now)
+
+
+def administrative_revoke(owner, kind, identifier, actor, *, now):
+    require_administrator(actor)
+    lock_owner(owner.id)
+    require_administrator(actor)
+    model = StaffInvitation if kind == 'invitation' else StaffMembership if kind == 'membership' else None
+    if model is None or owner.role != 'user' or owner.admin_enabled or owner.staff_only:
+        raise ValueError('Staff record is unavailable.')
+    row = model.query.filter_by(id=identifier, owner_id=owner.id).first()
+    if not row:
+        raise ValueError('Staff record is unavailable.')
+    if row.state == 'revoked':
+        return
+    if kind == 'invitation' and row.state != 'pending':
+        raise ValueError('Only a pending or expired invitation can be cancelled.')
+    # Removing access remains possible after the owner's Pro period ends.
+    row.state, row.revoked_at = 'revoked', now
+    audit(owner.id, actor.id, 'STAFF_REVOKED', **{kind: row})

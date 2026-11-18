@@ -14,6 +14,8 @@ def queue_due(now=None):
     now = now or datetime.utcnow()
     for account in AccountBilling.query.filter(AccountBilling.trial_ends_at.isnot(None)).yield_per(100):
         user=db.session.get(User,account.user_id)
+        if not user or user.staff_only or user.role != 'user' or user.admin_enabled:
+            continue
         lock_account(user.id)
         if effective_access(user,now=now).kind == 'trial' and now >= account.trial_ends_at-timedelta(days=2):
             notice(user.id,f'trial-ending:{user.id}','trial_ending','Your trial ends soon. Choose Basic, Plus or Pro to keep recording business activity. No automatic charge follows your trial.')
@@ -21,6 +23,8 @@ def queue_due(now=None):
             notice(user.id,f'trial-expired:{user.id}','trial_expired','Your free trial has ended. Your business records remain available to view. Choose a plan to record new activity.')
     for sub in RecurringSubscription.query.filter(RecurringSubscription.current_period_end<=now).yield_per(100):
         user=db.session.get(User,sub.user_id)
+        if not user or user.staff_only or user.role != 'user' or user.admin_enabled:
+            continue
         lock_account(user.id)
         if effective_access(user,now=now).subscription:
             continue
@@ -38,7 +42,7 @@ def deliver(limit=100):
         db.session.commit()
         if not claimed.rowcount:continue
         event=db.session.get(BillingEvent,event_id);user=db.session.get(User,event.user_id)
-        if not user or user.role!='user' or user.admin_enabled:continue
+        if not user or user.role!='user' or user.admin_enabled or user.staff_only:continue
         # Durable claim precedes SMTP. Unknown delivery failures require operator review; no blind duplicate send.
         try:
             delivered=_transactional('billing','StockBridge billing update',user.email,user.full_name,event.message,

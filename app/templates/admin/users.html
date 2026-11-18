@@ -1,2 +1,77 @@
-{% extends "admin/base.html" %}{% block content %}<h1>Customers</h1><form method="get" class="filters"><label class="filter-field" for="customer-search">Search customers<input id="customer-search" type="search" name="q" value="{{q}}" placeholder="Name, email or business" aria-label="Search customers"></label><label class="filter-field" for="customer-status">Account status<select id="customer-status" name="status" aria-label="Account status">{% for key,label in [('all','All customers'),('active','Active'),('suspended','Suspended'),('paid','Paid'),('unpaid','Unpaid'),('trial-ended','Trials ended'),('renewal-stopped','Renewal stopped')] %}<option value="{{key}}" {{'selected' if status==key}}>{{label}}</option>{% endfor %}</select></label><button>Search</button></form>
-<div class="table-scroll"><table class="admin-table" role="table"><caption class="sr-only">Customer accounts and access status</caption><thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Name</th><th scope="col" role="columnheader">Email</th><th scope="col" role="columnheader">Business</th><th scope="col" role="columnheader">Account</th><th scope="col" role="columnheader">Access</th><th scope="col" role="columnheader">Joined</th><th scope="col" role="columnheader">Last activity</th></tr></thead><tbody role="rowgroup">{% for u in rows.items %}<tr role="row"><td role="cell" data-label="Name"><a href="{{url_for('admin.user_detail',user_id=u.id)}}">{{u.full_name}}</a></td><td role="cell" data-label="Email">{{u.email}}</td><td role="cell" data-label="Business">{{u.businesses[0].name if u.businesses else '—'}}</td><td role="cell" data-label="Account"><span class="status-badge {{'suspended' if u.suspended_at else 'active'}}">{{'Suspended' if u.suspended_at else 'Active'}}</span></td><td role="cell" data-label="Access">{{billing_access_label(u) if config.SUBSCRIPTIONS_ENABLED else ('Lifetime' if u.businesses and u.businesses[0].has_write_access else 'Not paid')}}</td><td role="cell" data-label="Joined">{{u.created_at.strftime('%d %b %Y')}}</td><td role="cell" data-label="Last activity">{{u.last_activity_at.strftime('%d %b %Y') if u.last_activity_at else 'No activity recorded'}}</td></tr>{% else %}<tr class="empty-row" role="row"><td role="cell" colspan="7">No matching customers. Try another search or account filter.</td></tr>{% endfor %}</tbody></table></div>{% include "admin/pager.html" %}{% endblock %}
+{% extends 'admin/customers_base.html' %}
+{% from 'admin/customer_components.html' import badge %}
+{% block title %}Customers · StockBridge Admin{% endblock %}
+{% block customer_content %}
+<header class="heading">
+<div>
+<h1>Customers</h1>
+<p>{{ summary.owners }} account owners · {{ summary.employees }} employees · {{ summary.paying }} paying · {{ summary.trials_ended }} trials ended</p>
+</div>
+<a class="btn" href="{{ url_for('admin.customers_export', q=q, status=status) }}">Export CSV</a>
+</header>
+<form method="get" class="filters">
+<div class="search">
+<label for="customer-search">Search customers</label>
+<input id="customer-search" type="search" name="q" value="{{ q }}" placeholder="Name, email or business">
+</div>
+<div class="filter-chips" aria-label="Filter customers">
+{% for key,label in [('all','All'),('owners','Owners'),('employees','Employees'),('paid','Paying'),('trial-ended','Trial ended'),('renewal-stopped','Renewal stopped')] %}
+<button class="chip" name="status" value="{{ key }}" aria-pressed="{{ 'true' if status == key else 'false' }}">{{ label }}</button>
+{% endfor %}
+</div>
+</form>
+<div class="table-box" tabindex="0" aria-label="Customers table, scroll horizontally">
+<table role="table">
+<caption class="sr-only">Customer accounts and plan status</caption>
+<thead>
+<tr>
+<th scope="col">Customer</th>
+<th scope="col">Business</th>
+<th scope="col">Plan</th>
+<th scope="col">Joined</th>
+<th scope="col">Last active</th>
+<th scope="col">Actions</th>
+</tr>
+</thead>
+<tbody>
+{% for c in customer_rows %}
+<tr data-open-customer="{{ c.id }}">
+<td data-label="Customer">
+<div class="identity">
+<span class="avatar {{ 'employee' if c.employee }}" aria-hidden="true">{{ c.name[:1]|upper }}</span>
+<div class="identity-text">
+<a class="row-link" href="{{ url_for('admin.user_detail', user_id=c.id) }}" data-open-customer="{{ c.id }}">{{ c.name }}</a>
+<div>
+{% if c.employee %}{{ badge('Employee','neutral') }}{% elif c.employee_count %}{{ badge(c.employee_count ~ (' employee' if c.employee_count == 1 else ' employees'),'neutral') }}{% endif %}
+</div>
+<span class="caption muted">{{ c.email }}</span>
+</div>
+</div>
+</td>
+<td data-label="Business">{{ c.businesses|map(attribute='name')|join(', ') or '—' }}</td>
+<td data-label="Plan">{{ badge(c.plan, 'neutral' if c.employee else 'warning' if 'expired' in c.plan else '') }}{% if c.renewal_stopped %}
+<span class="subline">Renewal stopped</span>
+{% endif %}{% if c.suspended %}{{ badge('Suspended','danger') }}{% endif %}
+</td>
+<td data-label="Joined" class="caption">{{ c.joined or '—' }}</td>
+<td data-label="Last active" class="caption">{{ c.last_active or 'No activity recorded' }}</td>
+<td data-label="Actions">
+<details class="row-menu">
+<summary aria-label="Actions for {{ c.name }}">•••</summary>
+<div class="menu-items">
+<button class="text-btn" type="button" data-open-customer="{{ c.id }}">Quick view</button>
+<a class="text-btn" href="{{ url_for('admin.user_detail', user_id=c.id) }}">Customer details</a>
+</div>
+</details>
+</td>
+</tr>
+{% else %}
+<tr>
+<td data-label="Customers" colspan="6">No matching accounts. Try another name or filter.</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% include 'admin/pager.html' %}
+{% endblock %}
