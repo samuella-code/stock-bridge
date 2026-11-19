@@ -26,7 +26,7 @@
 <div class="report-panels">
 <section class="card report-chart" aria-labelledby="collected-title"><h2 id="collected-title">Collected by week</h2>
 {% if not metrics.collected %}<p class="report-empty">No verified payments in this period. Collections will appear here once a payment is verified.</p>{% endif %}
-<ol class="report-weeks" style="--report-columns:{{[metrics.weeks|length,7]|min}}">{% for week in metrics.weeks %}<li><div class="report-bar" aria-hidden="true"><span style="--report-bar-size:{{week.percent}}%"></span></div><strong>{{money(week.amount)}}</strong><span class="caption muted">w/c {{week.monday}}</span><span class="sr-only">Payments from {{week.start}} to {{week.end}}</span></li>{% endfor %}</ol>
+<ol class="report-weeks report-columns-{{[metrics.weeks|length,7]|min}}">{% for week in metrics.weeks %}<li><div class="report-bar" aria-hidden="true"><svg viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false"><rect x="0" y="{{100-week.percent}}" width="100" height="{{week.percent}}"></rect></svg></div><strong>{{money(week.amount)}}</strong><span class="caption muted">w/c {{week.monday}}</span><span class="sr-only">Payments from {{week.start}} to {{week.end}}</span></li>{% endfor %}</ol>
 <p class="muted">Weeks are based on verified payments in the selected period. Collected revenue is not recurring revenue.</p>
 <p class="caption muted">Weeks run Monday to Sunday in WAT. Partial weeks include only selected dates. Active and paying accounts are current owner totals.</p></section>
 <section class="card report-email" aria-labelledby="report-email-title"><h2 id="report-email-title">Email me this report</h2><p class="muted">Get the previous week's summary every Monday morning at 08:00 WAT.</p>

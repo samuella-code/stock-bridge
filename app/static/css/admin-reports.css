@@ -8,13 +8,14 @@
 .report-kpis dd { font-size: var(--sb-kpi-value); font-weight: 600; margin: var(--sb-2) 0; overflow-wrap: anywhere; }
 .report-kpis dt { font-size: var(--sb-caption); font-weight: 500; }
 .report-green { background: var(--sb-soft-green); }
-.report-panels { display: grid; align-items: stretch; gap: var(--sb-5); }
-.report-chart { display: grid; gap: var(--sb-4); }
+.report-panels { display: grid; align-items: start; gap: var(--sb-5); }
+.report-chart { display: grid; align-content: start; gap: var(--sb-4); }
 .report-weeks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sb-3); list-style: none; margin: 0; padding: 0; }
 .report-weeks li { display: grid; gap: var(--sb-1); text-align: center; overflow-wrap: anywhere; }
 .report-weeks strong { font-size: var(--sb-caption); }
 .report-bar { height: var(--sb-chart-height); display: flex; align-items: end; border-bottom: var(--sb-stroke) solid var(--sb-border); }
-.report-bar span { display: block; width: 100%; height: var(--report-bar-size); background: var(--sb-primary); border-radius: var(--sb-control-radius) var(--sb-control-radius) 0 0; }
+.report-bar svg { display: block; width: 100%; height: 100%; border-radius: var(--sb-control-radius) var(--sb-control-radius) 0 0; }
+.report-bar rect { fill: var(--sb-primary); }
 .report-empty { padding: var(--sb-4); background: var(--sb-soft-green); border-radius: var(--sb-control-radius); }
 .report-email { display: grid; align-content: start; gap: var(--sb-4); }
 .report-switch { display: flex; align-items: center; justify-content: space-between; gap: var(--sb-3); min-height: var(--sb-touch); }
@@ -25,6 +26,6 @@
 .report-switch-control input:checked + span { background: var(--sb-primary); }
 .report-switch-control input:checked + span::before { transform: translateX(calc(var(--sb-switch-width) - var(--sb-6))); }
 .report-switch-control input:focus-visible + span { outline: var(--sb-focus) solid var(--sb-primary); outline-offset: var(--sb-1); }
-@media (min-width: 640px) { .report-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .report-custom { grid-template-columns: repeat(2, minmax(0, 1fr)) auto; } .report-custom > p { grid-column: 1 / -1; } .report-weeks { grid-template-columns: repeat(var(--report-columns), minmax(0, 1fr)); } .report-bar { height: calc(var(--sb-chart-height) + var(--sb-20)); } }
+@media (min-width: 640px) { .report-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .report-custom { grid-template-columns: repeat(2, minmax(0, 1fr)) auto; } .report-custom > p { grid-column: 1 / -1; } .report-weeks.report-columns-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); } .report-weeks.report-columns-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .report-weeks.report-columns-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } .report-weeks.report-columns-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } .report-weeks.report-columns-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); } .report-weeks.report-columns-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); } .report-weeks.report-columns-7 { grid-template-columns: repeat(7, minmax(0, 1fr)); } .report-bar { height: calc(var(--sb-chart-height) + var(--sb-20)); } }
 @media (min-width: 900px) { .report-panels { grid-template-columns: minmax(0, 5fr) minmax(0, 3fr); } }
 @media (min-width: 1160px) { .report-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
