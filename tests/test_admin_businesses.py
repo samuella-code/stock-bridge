@@ -109,13 +109,15 @@ def test_foreign_assignment_and_removed_memberships_do_not_leak_team(client, rec
     assert business_data.serialize([db.session.get(Business,records['shop'])],datetime.utcnow())[0]['team'] == []
 
 
-def test_access_warning_detects_per_business_disagreement_even_when_counts_match(client, records):
+def test_access_summary_stays_authoritative_without_displaying_legacy_disagreement(client, records):
     now=datetime.utcnow()
     db.session.get(Business,records['shop']).subscription_status='inactive'; db.session.commit()
     values=business_data.summary(now)
     assert values == dict(total=3,active=2,marked_active=2,disagreements=2)
     admin_login(client)
-    assert b'Business access needs review.' in client.get('/admin/businesses?q=no-match').data
+    page = client.get('/admin/businesses').data
+    assert b'Business access needs review.' not in page
+    assert b'3 businesses' in page and b'2 with active access' in page
     client.application.config['SUBSCRIPTIONS_ENABLED']=False
     assert business_data.summary(now)['disagreements'] == 0
     assert b'Business access needs review.' not in client.get('/admin/businesses').data

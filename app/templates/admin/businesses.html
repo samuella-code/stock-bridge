@@ -12,14 +12,6 @@
   </div>
   <a class="btn" href="{{ url_for('admin.businesses_export', q=q, status=status) }}">Export CSV</a>
 </header>
-{% if summary.disagreements %}
-<aside class="business-access-note" role="note" aria-label="Business access needs review">
-  <strong>Business access needs review.</strong>
-  {{ summary.marked_active }} businesses are marked active, while current plan access allows {{ summary.active }}.
-  {{ summary.disagreements }} {{ 'record differs' if summary.disagreements == 1 else 'records differ' }}.
-  The status below follows current access rules.
-</aside>
-{% endif %}
 <form method="get" class="filters">
   <div class="search">
     <label for="business-search">Search businesses</label>
