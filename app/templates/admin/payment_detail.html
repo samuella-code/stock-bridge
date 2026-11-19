@@ -1,21 +1,23 @@
-{% extends "admin/base.html" %}
-{% block content %}
-<a href="{{url_for('admin.payments')}}">← Subscription payments</a>
-<h1>Subscription payment</h1>
-<p>Read-only details. A payment status alone does not establish current subscription access.</p>
-<div class="admin-card detail-grid">
-  <p>Customer: <a href="{{url_for('admin.user_detail',user_id=owner.id)}}">{{owner.full_name}} ({{owner.email}})</a></p>
-  <p>Payment email: {{payment.customer_email}}</p>
-  <p>Business: {% if payment.business %}<a href="{{url_for('admin.business_detail',business_id=payment.business.id)}}">{{payment.business.name}}</a>{% else %}Unlinked{% endif %}</p>
-  <p>Plan: {{payment.plan_code|title if payment.plan_code else 'Not recorded'}}</p>
-  <p>Billing interval: {{payment.billing_interval|title if payment.billing_interval else 'Not recorded'}}</p>
-  <p>Amount: {{payment.currency}} {{'{:,.2f}'.format(payment.amount_kobo/100)}}</p>
-  <p>Currency: {{payment.currency}}</p>
-  <p>Provider: {{payment.provider}}</p>
-  <p>Transaction reference: {{payment.reference}}</p>
-  <p>Payment status: <span class="status-badge {{'success' if payment.status=='success' else ('failed' if payment.status=='failed' else 'pending')}}">{{payment.status|title}}</span></p>
-  <p>Created: {{payment.created_at.strftime('%d %b %Y %H:%M')}} UTC</p>
-  <p>Paid: {{payment.paid_at.strftime('%d %b %Y %H:%M') ~ ' UTC' if payment.paid_at else 'Not recorded'}}</p>
-  <p>Recurring subscription status: {{subscription.status.replace('_',' ')|title if subscription else 'Not linked or unavailable'}}</p>
-</div>
+{% extends 'admin/customers_base.html' %}
+{% from 'admin/customer_components.html' import badge %}
+{% block title %}Payment details · StockBridge Admin{% endblock %}
+{% block extra_styles %}{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static',filename='css/admin-payments.css') }}">
+<script src="{{ url_for('static',filename='js/admin-payments.js') }}" defer></script>{% endblock %}
+{% block customer_content %}
+<a href="{{url_for('admin.payments')}}">Payments</a>
+<header class="heading"><div><h1>Payment details</h1><p>Read-only details. A payment status alone does not establish current subscription access.</p></div></header>
+<section class="card stack" aria-label="Subscription payment">
+<div>Customer: <a href="{{url_for('admin.user_detail',user_id=owner.id)}}">{{owner.full_name}}</a>
+<div><span data-email-value>{{masked_email(owner.email)}}</span><button type="button" class="text-btn" data-reveal-url="{{url_for('admin.reveal_customer_email',user_id=owner.id)}}">Show</button></div></div>
+<p>Payment email: {{masked_email(payment.customer_email)}}</p>
+<p>Business: {% if payment.business %}<a href="{{url_for('admin.business_detail',business_id=payment.business.id)}}">{{payment.business.name}}</a>{% else %}Unlinked{% endif %}</p>
+<p>Plan: {{payment.plan_code|title if payment.plan_code else 'Not recorded'}}</p>
+<p>Billing interval: {{payment.billing_interval|title if payment.billing_interval else 'Not recorded'}}</p>
+<p>Amount: {{money(payment.amount_kobo,payment.currency)}}</p><p>Currency: {{payment.currency}}</p><p>Provider: {{payment.provider}}</p>
+<div class="payment-reference">Transaction reference: <span>{{payment.reference}}</span><button type="button" class="text-btn" data-copy-reference="{{payment.reference}}">Copy</button></div>
+<p>Payment status: {{badge('Pending' if payment.status=='initialized' else payment.status|title,'danger' if payment.status=='failed' else 'warning' if payment.status in ['initialized','pending'] else '')}}</p>
+<p>Created: {{local_time(payment.created_at)}}</p><p>Paid: {{local_time(payment.paid_at) or 'Not recorded'}}</p>
+<p>Recurring subscription status: {{subscription.status.replace('_',' ')|title if subscription else 'Not linked or unavailable'}}</p>
+</section><p id="payment-copy-status" role="status" aria-live="polite" class="caption muted"></p>
 {% endblock %}

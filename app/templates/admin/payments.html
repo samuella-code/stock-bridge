@@ -1,36 +1,47 @@
-{% extends "admin/base.html" %}
-{% block content %}
-<h1>Subscription payments</h1>
-<p>Read-only payment history. Subscription access is managed by the existing payment verification process.</p>
-<form method="get" class="filters">
-  <label class="filter-field" for="payment-search">Search payment references
-    <input type="search" id="payment-search" name="q" value="{{ q }}" maxlength="100">
-  </label>
-  <label class="filter-field" for="payment-status">Payment status
-  <select id="payment-status" name="status">
-    {% for key,label in [('all','All'),('needs-attention','Failed or pending'),('success','Successful'),('pending','Pending'),('failed','Failed')] %}
-    <option value="{{key}}" {{'selected' if status==key}}>{{label}}</option>
-    {% endfor %}
-  </select></label>
-  <button type="submit">Filter</button>
-</form>
-<div class="table-scroll">
-<table class="admin-table" role="table"><caption class="sr-only">Subscription payment history</caption>
-  <thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Date</th><th scope="col" role="columnheader">Customer</th><th scope="col" role="columnheader">Business</th><th scope="col" role="columnheader">Plan</th><th scope="col" role="columnheader">Amount</th><th scope="col" role="columnheader">Status</th><th scope="col" role="columnheader">Reference</th></tr></thead>
-  <tbody role="rowgroup">
-  {% for p in rows.items %}
-  <tr role="row">
-    <td role="cell" data-label="Date">{{p.created_at.strftime('%d %b %Y')}}</td>
-    <td role="cell" data-label="Customer"><a href="{{url_for('admin.user_detail',user_id=p.user_id)}}">{{p.customer_email}}</a></td>
-    <td role="cell" data-label="Business">{% if p.business %}<a href="{{url_for('admin.business_detail',business_id=p.business.id)}}">{{p.business.name}}</a>{% else %}Unlinked{% endif %}</td>
-    <td role="cell" data-label="Plan">{{p.plan_code|title if p.plan_code else 'Not recorded'}} · {{p.billing_interval|title if p.billing_interval else 'Interval not recorded'}}</td>
-    <td role="cell" data-label="Amount">{{p.currency}} {{'{:,.2f}'.format(p.amount_kobo/100)}}</td>
-    <td role="cell" data-label="Status"><span class="status-badge {{'success' if p.status=='success' else ('failed' if p.status=='failed' else 'pending')}}">{{p.status|title}}</span></td>
-    <td role="cell" data-label="Reference"><a href="{{url_for('admin.payment_detail',payment_id=p.id)}}">{{p.reference}}</a></td>
-  </tr>
-  {% else %}<tr class="empty-row" role="row"><td role="cell" colspan="7">No subscription payments match this filter.</td></tr>{% endfor %}
-  </tbody>
-</table>
-</div>
-{% include "admin/pager.html" %}
+{% extends 'admin/customers_base.html' %}
+{% from 'admin/customer_components.html' import badge %}
+{% block title %}Payments · StockBridge Admin{% endblock %}
+{% block extra_styles %}{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static',filename='css/admin-payments.css') }}">
+<script src="{{ url_for('static',filename='js/admin-payments.js') }}" defer></script>
+{% endblock %}
+{% block customer_content %}
+<header class="heading"><div><h1>Payments</h1>
+<p>Read-only history. Access is managed by the payment verification process.</p></div>
+<a class="btn" href="{{ url_for('admin.payments',q=q,status=status,format='csv') }}">Export CSV</a></header>
+<section class="payment-summary" aria-label="Payment summary">
+{% for key,label,hint in [('collected','Collected','Verified subscription payments · all time'),('pending','Pending','Awaiting confirmation'),('failed','Failed','Recorded failed payments'),('renewals','Upcoming renewals','Scheduled in the next 30 days · not money collected')] %}
+<article class="card {{ 'renewals' if key=='renewals' }}"><dl><dt>{{ label }}</dt><dd>{{ money(summary[key].revenue_kobo) }}</dd></dl>
+<p class="caption muted">{{ summary[key].count }} {{ 'renewal' if key=='renewals' and summary[key].count==1 else 'renewals' if key=='renewals' else 'payment' if summary[key].count==1 else 'payments' }} · {{ hint }}</p></article>
+{% endfor %}
+</section>
+<form method="get" class="filters"><div class="search"><label for="payment-search">Search payments</label>
+<input id="payment-search" name="q" type="search" value="{{ q }}" maxlength="100" placeholder="Reference, customer or business"></div>
+<div class="filter-chips" aria-label="Filter payments">
+{% for key,label in [('all','All'),('success','Success'),('pending','Pending'),('failed','Failed')] %}
+<button class="chip" name="status" value="{{ key }}" aria-pressed="{{ 'true' if status==key else 'false' }}">{{ label }}</button>
+{% endfor %}
+{% if status=='needs-attention' %}<button class="chip" name="status" value="needs-attention" aria-pressed="true">Failed or pending</button>{% endif %}
+</div></form>
+<p id="payment-check-hint" class="payment-check-hint">Checking with Paystack is read-only and recorded in Activity. It does not change payment status or access.</p>
+<div class="table-box payments-table" tabindex="0" aria-label="Payments table, scroll horizontally"><table role="table">
+<caption class="sr-only">Subscription payments</caption><thead><tr>
+{% for label in ['Date','Customer','Business','Plan','Amount','Status','Reference'] %}<th scope="col">{{ label }}</th>{% endfor %}
+</tr></thead><tbody>
+{% for p in payment_rows %}<tr>
+<td data-label="Date" class="caption">{{ p.created }}</td>
+<td data-label="Customer"><a class="row-link" href="{{ url_for('admin.user_detail',user_id=p.owner_id) }}">{{ p.customer }}</a>
+<div><span class="caption muted" data-email-value>{{ p.email }}</span><button type="button" class="text-btn" data-reveal-url="{{ url_for('admin.reveal_customer_email',user_id=p.owner_id) }}" aria-label="Show email for {{ p.customer }}">Show</button></div></td>
+<td data-label="Business">{% if p.business_id %}<a href="{{ url_for('admin.business_detail',business_id=p.business_id) }}">{{ p.business }}</a>{% else %}Unlinked{% endif %}</td>
+<td data-label="Plan">{{ p.plan }}<span class="subline">{{ p.interval }}</span></td>
+<td data-label="Amount">{{ p.amount }}</td>
+<td data-label="Status"><div class="payment-status">{{ badge(p.status,'danger' if p.status=='Failed' else 'warning' if p.status=='Pending' else 'neutral' if p.status!='Success' else '') }}
+{% if p.can_check %}<button class="btn" type="button" data-check-payment="{{ url_for('admin.check_payment',payment_id=p.id) }}" aria-describedby="payment-check-hint">Check with Paystack</button><p class="caption muted" data-check-result role="status" aria-live="polite"></p>{% endif %}</div></td>
+<td data-label="Reference" class="payment-reference"><a href="{{ url_for('admin.payment_detail',payment_id=p.id) }}">{{ p.short_reference }}</a>
+<button type="button" class="text-btn" data-copy-reference="{{ p.reference }}" aria-label="Copy payment reference">Copy</button></td>
+</tr>{% else %}<tr><td data-label="Payments" colspan="7">No subscription payments match this filter.</td></tr>{% endfor %}
+</tbody></table></div>
+<p id="payment-copy-status" role="status" aria-live="polite" class="caption muted"></p>
+<p class="caption muted">Amounts in the summary are in naira. Emails stay masked in CSV exports. Showing an email is recorded in Activity.</p>
+{% include 'admin/pager.html' %}
 {% endblock %}

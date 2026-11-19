@@ -638,22 +638,40 @@ def subscription_payments_query():
 @admin_bp.get("/payments")
 @admin_required
 def payments():
+    from app.admin import payment_data
     status=request.args.get("status","all")
-    query=subscription_payments_query().options(joinedload(Payment.business))
+    if status not in payment_data.FILTERS:
+        status='all'
     q = request.args.get("q", "").strip()[:100]
-    if q:
-        query = query.filter(Payment.reference.icontains(q, autoescape=True))
-    if status == "needs-attention":
-        query = query.filter(Payment.status.in_(ISSUE_STATUSES))
-    elif status in ("success","failed","pending"):
-        query=query.filter(Payment.status.in_(("initialized","pending")) if status=="pending" else Payment.status==status)
-    rows=query.order_by(Payment.created_at.desc(),Payment.id.desc()).paginate(page=request.args.get("page",1,type=int),per_page=25,error_out=False)
-    return render_template("admin/payments.html",rows=rows,status=status,q=q)
+    now=datetime.utcnow()
+    if request.args.get('format')=='csv':
+        from app.admin.customers import csv_response
+        def batches():
+            cursor=None
+            while True:
+                query=payment_data.filtered(q,status).filter(Payment.created_at<=now)
+                if cursor:
+                    stamp,identifier=cursor
+                    query=query.filter(or_(Payment.created_at<stamp,
+                        (Payment.created_at==stamp)&(Payment.id<identifier)))
+                batch=query.limit(100).all()
+                if not batch:
+                    break
+                cursor=(batch[-1].created_at,batch[-1].id)
+                yield [[p['created'],p['customer'],p['email'],p['business'],p['plan'],p['interval'],
+                        p['amount'],p['status'],p['reference']] for p in payment_data.serialize(batch)]
+        return csv_response('StockBridge-payments.csv',
+            ['Date','Customer','Masked email','Business','Plan','Interval','Amount','Status','Reference'],batches)
+    rows=payment_data.filtered(q,status).paginate(page=request.args.get('page',1,type=int),per_page=25,error_out=False)
+    return render_template('admin/payments.html',rows=rows,status=status,q=q,
+        payment_rows=payment_data.serialize(rows.items),summary=payment_data.summary(now),money=payment_data.money)
 
 
 @admin_bp.get("/payments/<int:payment_id>")
 @admin_required
 def payment_detail(payment_id):
+    from app.admin.payment_data import money
+    from app.admin.customer_data import masked_email, local_time
     payment=subscription_payments_query().options(joinedload(Payment.business)).filter(Payment.id==payment_id).first_or_404()
     owner=customer_query().filter(User.id==payment.user_id).first_or_404()
     # A corrupt/mismatched subscription reference must not disclose another account.
@@ -662,7 +680,8 @@ def payment_detail(payment_id):
         Business.user_id==owner.id)
     if payment.business_id is not None:
         subscription=subscription.filter(RecurringSubscription.business_id==payment.business_id)
-    return render_template("admin/payment_detail.html",payment=payment,owner=owner,subscription=subscription.first())
+    return render_template("admin/payment_detail.html",payment=payment,owner=owner,subscription=subscription.first(),
+        masked_email=masked_email,local_time=local_time,money=money)
 
 
 @admin_bp.post("/payments/<int:payment_id>/verify")
@@ -870,3 +889,4 @@ def api_reports():
 
 # Register customer tools after the shared admin decorator and helpers exist.
 from app.admin import customers as customer_tools
+from app.admin import payment_checks as payment_check_tools

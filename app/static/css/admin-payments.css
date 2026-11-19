@@ -1,0 +1,19 @@
+.payment-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sb-4);
+}
+.payment-summary .renewals { background: var(--sb-soft-green); }
+.payment-summary dt { font-size: var(--sb-caption); color: var(--sb-muted); }
+.payment-summary dd { margin: var(--sb-2) 0; font-size: var(--sb-kpi-value); font-weight: 600; }
+.payment-reference { overflow-wrap: anywhere; }
+.payments-table td:is([data-label="Plan"], [data-label="Amount"]) { white-space: nowrap; }
+.payment-status { display: grid; justify-items: start; gap: var(--sb-2); }
+.payment-status .btn { white-space: nowrap; }
+.payment-check-hint { color: var(--sb-muted); font-size: var(--sb-caption); }
+@media (min-width: 640px) {
+  .payment-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1160px) {
+  .payment-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}

@@ -41,7 +41,8 @@ def test_listing_is_subscription_only(client, records):
     page = client.get('/admin/payments')
     assert page.status_code == 200
     assert b'Subscription payments' in page.data and b'SUB-current' in page.data
-    assert b'Plus' in page.data and b'Monthly' in page.data and b'NGN 5,000.00' in page.data
+    assert b'Plus' in page.data and b'Monthly' in page.data and '₦5,000'.encode() in page.data
+    assert b'owner@example.com' not in page.data and 'o•••@e•••.com'.encode() in page.data
     assert b'LEGACY-hidden' not in page.data and b'OTHER-hidden' not in page.data
     assert b'Lifetime' not in page.data and b'Verify with Paystack' not in page.data
 
@@ -50,10 +51,11 @@ def test_detail_has_subscription_metadata_and_safe_links(client, records):
     admin_login(client)
     page = client.get(f"/admin/payments/{records['payment']}")
     assert page.status_code == 200
-    for text in ('Owner', 'owner@example.com', 'Shop', 'Plus', 'Monthly', 'NGN 5,000.00',
-                 'Currency: NGN', 'paystack', 'SUB-current', 'Success', '20 Oct 2026 08:30 UTC',
+    for text in ('Owner', 'o•••@e•••.com', 'Shop', 'Plus', 'Monthly', '₦5,000',
+                 'Currency: NGN', 'paystack', 'SUB-current', 'Success', '20/10/2026 · 09:30 WAT',
                  'Recurring subscription status: Active'):
         assert text.encode() in page.data
+    assert b'owner@example.com' not in page.data and b'UTC' not in page.data
     assert f"/admin/users/{records['customer']}".encode() in page.data
     assert f"/admin/businesses/{records['business']}".encode() in page.data
     assert b'/verify' not in page.data and b'confirm' not in page.data
