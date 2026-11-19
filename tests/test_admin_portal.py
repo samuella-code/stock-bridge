@@ -78,7 +78,8 @@ def test_admin_verification_checks_paystack_and_is_repeat_safe(client,monkeypatc
         assert AuditLog.query.filter_by(action="ACCESS_PAYMENT_SUCCESSFUL").count()==1
     metrics=client.get("/api/admin/dashboard").json
     assert metrics["successful_payments"]==1 and metrics["access_revenue_kobo"]==300000
-    assert b"3,000.00" in client.get("/admin/reports?period=today").data
+    report=client.get("/admin/reports?period=today").get_data(as_text=True)
+    assert "₦3,000" in report and "₦3,000.00" not in report
 
 def test_admin_payment_verification_cannot_touch_admin_owned_or_mismatched_business(client,monkeypatch):
     admin_id,customer_id,customer_business=seed(client)

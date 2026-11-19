@@ -37,7 +37,7 @@ def customer_url(endpoint, **values):
     return url_for(endpoint, _external=True, **values)
 
 
-def _send_email(subject, recipient, body, html=None):
+def _send_email(subject, recipient, body, html=None, *, timeout=15):
     host = current_app.config["SMTP_HOST"]
     if not host or not current_app.config["SMTP_FROM_EMAIL"]:
         current_app.logger.warning("SMTP sender is not configured; transactional email was not sent.")
@@ -55,7 +55,7 @@ def _send_email(subject, recipient, body, html=None):
     stage = "connection"
     started = time.monotonic()
     try:
-        with smtplib.SMTP(host, current_app.config["SMTP_PORT"], timeout=15) as smtp:
+        with smtplib.SMTP(host, current_app.config["SMTP_PORT"], timeout=timeout) as smtp:
             if current_app.config["SMTP_USE_TLS"]:
                 stage = "starttls"
                 smtp.starttls()

@@ -44,6 +44,9 @@ VERBS = {
     'ADMIN_PAYMENT_CHECK_RESULT': 'recorded a Paystack check result',
     'ADMIN_STAFF_RESEND': 'resent a staff invitation', 'ADMIN_STAFF_CANCEL': 'cancelled a staff invitation',
     'ADMIN_STAFF_REMOVED': 'removed staff access',
+    'ADMIN_REPORT_PREFERENCE_UPDATED': 'saved weekly report email preferences',
+    'ADMIN_REPORT_EMAIL_CLAIMED': 'prepared a weekly platform report email',
+    'ADMIN_REPORT_EMAIL_RESULT': 'recorded a weekly report delivery result',
 }
 
 

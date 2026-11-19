@@ -68,12 +68,14 @@ def test_filter_controls_have_visible_associated_labels(client, records, path):
     admin_login(client)
     dom = Elements(client.get(path).get_data(as_text=True))
     labels = {label['for'] for label in dom.get('label') if label.get('for')}
-    # Report controls retain their existing implicit wrapping labels.
     if path != '/admin/reports':
         controls = dom.get('select') + [i for i in dom.get('input') if i.get('type') == 'search']
         assert controls and all(c.get('id') in labels for c in controls)
     else:
-        assert len(dom.get('label')) == 3
+        dates = [i for i in dom.get('input') if i.get('name') in ('start', 'end') and i.get('type') != 'hidden']
+        assert len(dates) == 2 and all(i.get('id') in labels for i in dates)
+        assert all(i.get('placeholder') == 'dd/mm/yyyy' for i in dates)
+        assert any(i.get('role') == 'switch' and i.get('name') == 'weekly_email' for i in dom.get('input'))
 
 
 @pytest.mark.parametrize('target', ['customer', 'business'])

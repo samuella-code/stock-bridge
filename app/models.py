@@ -373,6 +373,29 @@ class StaffAuditEvent(db.Model):
     details = db.Column(db.JSON, nullable=False)
 
 
+class AdminReportPreference(db.Model):
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), primary_key=True)
+    weekly_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    version = db.Column(db.Integer, nullable=False, default=1)
+    auth_version = db.Column(db.Integer, nullable=False, default=0)
+    mfa_verified = db.Column(db.Boolean, nullable=False, default=False)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+
+class AdminReportDelivery(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
+    week_start = db.Column(db.Date, nullable=False)
+    recipient_digest = db.Column(db.String(64), nullable=False)
+    status = db.Column(db.String(16), nullable=False, default='sending')
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime)
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'week_start', name='uq_admin_report_week'),
+        db.CheckConstraint("status IN ('sending','sent','failed','unknown','suppressed')", name='ck_admin_report_delivery_status'),
+    )
+
+
 class AdminCustomerNote(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), primary_key=True)
     body = db.Column(db.Text, nullable=False, default='')

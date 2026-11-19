@@ -783,12 +783,36 @@ def activity():
 @admin_bp.get("/reports")
 @admin_required
 def reports():
+    from app.admin import report_data
+    now=datetime.utcnow()
     try:
-        period,start,end=report_period()
+        window=report_data.report_range(request.args,now)
     except ValueError as error:
-        return render_template("admin/reports.html",metrics=None,error=str(error),period="30d"),400
-    metrics=period_metrics(start,end)
-    return render_template("admin/reports.html",metrics=metrics,period=period,start=start.date(),end=(end-timedelta(microseconds=1)).date())
+        return render_template('admin/reports.html',metrics=None,error=str(error),period='custom',
+            start_value=request.args.get('start',''),end_value=request.args.get('end','')),400
+    metrics=report_data.report(window,verified_payments_query(),now)
+    start_value,end_value=window['first'].strftime('%d/%m/%Y'),window['last'].strftime('%d/%m/%Y')
+    if request.args.get('format')=='csv':
+        from app.admin.customers import csv_response
+        def batches():
+            yield [['Summary','New customers (owners)',start_value,end_value,metrics['new_customers'],'accounts'],
+                ['Summary','Collected',start_value,end_value,report_data.naira(metrics['collected']),'NGN'],
+                ['Current','Active owner accounts','','',metrics['active'],'accounts'],
+                ['Current','Paying owner accounts','','',metrics['paying'],'accounts'],
+                ['Generated',metrics['generated'],'','','',''],
+                ['Note','Collected revenue is not recurring revenue.','','','','']]
+            yield [['Weekly','Collected',week['start'],week['end'],report_data.naira(week['amount']),'NGN'] for week in metrics['weeks']]
+        return csv_response('StockBridge-platform-report.csv',['Section','Metric','From (WAT)','To (WAT)','Value','Unit'],batches)
+    from app.models import AdminReportPreference
+    from app.admin.report_emails import gate
+    preference=db.session.get(AdminReportPreference,current_user.id)
+    delivery_state,allowed_recipients=gate()
+    email_opt_in_active=bool(preference and preference.weekly_enabled and preference.auth_version==current_user.admin_auth_version
+        and (not _admin_mfa_required(current_user) or preference.mfa_verified))
+    return render_template('admin/reports.html',metrics=metrics,period=window['period'],
+        start_value=start_value,end_value=end_value,money=report_data.money,
+        email_preference=preference,email_opt_in_active=email_opt_in_active,
+        email_delivery_ready=delivery_state=='ready' and current_user.email.lower() in allowed_recipients)
 
 def period_metrics(start,end, *, current_accounts=None):
     from app.admin.subscription_reporting import current_subscription_accounts, collected_subscription_payments
@@ -914,3 +938,4 @@ def api_reports():
 # Register customer tools after the shared admin decorator and helpers exist.
 from app.admin import customers as customer_tools
 from app.admin import payment_checks as payment_check_tools
+from app.admin import report_emails as report_email_tools

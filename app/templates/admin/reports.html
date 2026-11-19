@@ -1,3 +1,38 @@
-{% extends "admin/base.html" %}{% block content %}<h1>Platform reports</h1><p>Registration and payment trends, shown in UTC. Legacy Lifetime Access and subscription collections are reported separately. <a href="{{url_for('admin.payments')}}">View subscription payments</a>.</p>
-<form method="get" class="filters report-periods"><label>Period<select name="period"><option value="today" {{'selected' if period=='today'}}>Today</option><option value="7d" {{'selected' if period=='7d'}}>Last 7 days</option><option value="30d" {{'selected' if period=='30d'}}>Last 30 days</option><option value="custom" {{'selected' if period=='custom'}}>Custom dates</option></select></label><label>From<input type="date" name="start" value="{{request.args.get('start','')}}"></label><label>To<input type="date" name="end" value="{{request.args.get('end','')}}"></label><button>Show report</button></form>
-{% if error %}<p class="notice error" role="alert">{{error}}</p>{% else %}<p>{{start}} to {{end}} (UTC)</p><div class="admin-cards">{% for label,value in [('New customers',metrics.registrations),('Emails verified',metrics.verified_customers),('Verified legacy access payments',metrics.purchases),('Verified legacy access revenue','₦{:,.2f}'.format(metrics.revenue_kobo/100)),('Pending payments',metrics.pending),('Failed payments',metrics.failed),('Active customer accounts now',metrics.active_now),('Suspended customer accounts now',metrics.suspended_now)] %}<article><span>{{label}}</span><strong>{{value}}</strong></article>{% endfor %}</div><p>Current account counts are live totals. Payment amounts reflect confirmed Paystack transactions in the selected period.</p>{% set subscription_collection_scope = "Selected UTC report period" %}{% include "admin/subscription_metrics.html" %}{% endif %}{% endblock %}
+{% extends 'admin/customers_base.html' %}
+{% block title %}Platform reports · StockBridge Admin{% endblock %}
+{% block extra_styles %}{{ super() }}
+<link rel="stylesheet" href="{{url_for('static',filename='css/admin-reports.css')}}">
+<script src="{{url_for('static',filename='js/admin-reports.js')}}" defer></script>
+{% endblock %}
+{% block header_tools %}<form method="get" action="{{url_for('admin.dashboard_search')}}" class="platform-search" role="search"><input id="platform-search" type="search" name="q" aria-label="Search customers by name, email or business" placeholder="Search customers by name, email or business" maxlength="100" required></form>{% endblock %}
+{% block customer_content %}
+<header class="heading report-heading"><div><h1>Platform reports</h1><p>Sign-ups and revenue trends, in Nigeria time.</p></div>
+<div class="report-heading-actions"><nav class="platform-period" aria-label="Report period">{% for key,label in [('7d','7 days'),('30d','30 days'),('90d','90 days')] %}<a href="{{url_for('admin.reports',period=key)}}" {% if period==key %}aria-current="true"{% endif %}>{{label}}</a>{% endfor %}
+<a data-pick-dates href="{{url_for('admin.reports',period='custom',start=start_value,end=end_value)}}" aria-controls="report-custom-dates" aria-expanded="{{'true' if period=='custom' else 'false'}}" {% if period=='custom' %}aria-current="true"{% endif %}>Pick dates</a></nav>
+{% if metrics %}<a class="btn" href="{{url_for('admin.reports',period=period,start=start_value,end=end_value,format='csv')}}">Export CSV</a>{% endif %}</div></header>
+<div id="report-custom-dates" {% if period!='custom' %}hidden{% endif %}>
+<form method="get" class="filters report-custom"><input type="hidden" name="period" value="custom">
+<div><label for="report-start">From</label><input id="report-start" name="start" type="text" inputmode="numeric" placeholder="dd/mm/yyyy" value="{{start_value}}" required aria-describedby="report-date-hint"></div>
+<div><label for="report-end">To</label><input id="report-end" name="end" type="text" inputmode="numeric" placeholder="dd/mm/yyyy" value="{{end_value}}" required aria-describedby="report-date-hint"></div>
+<button class="btn" type="submit">Apply dates</button><p id="report-date-hint" class="caption muted">Use day/month/year, for example 19/11/2026. Dates use Nigerian local time (WAT).</p></form></div>
+{% if error %}<p class="notice error" role="alert">{{error}}</p>{% else %}
+<p class="caption muted report-range">{{start_value}} to {{end_value}} · Updated {{metrics.generated}}. Account totals exclude employees.</p>
+<dl class="report-kpis">
+<div class="card"><dt>New customers</dt><dd>{{metrics.new_customers}}</dd><small>Emails verified in this period: {{metrics.verified}}</small></div>
+<div class="card"><dt>Collected</dt><dd>{{money(metrics.collected)}}</dd><small>{{metrics.payment_count}} verified {{'payment' if metrics.payment_count==1 else 'payments'}}</small></div>
+<div class="card"><dt>Active accounts</dt><dd>{{metrics.active}}</dd><small>{{metrics.suspended}} suspended · owner accounts now</small></div>
+<div class="card report-green"><dt>Paying accounts</dt><dd>{{metrics.paying}}</dd><small>Basic {{metrics.by_plan.basic}} · Plus {{metrics.by_plan.plus}} · Pro {{metrics.by_plan.pro}}</small></div>
+</dl>
+<div class="report-panels">
+<section class="card report-chart" aria-labelledby="collected-title"><h2 id="collected-title">Collected by week</h2>
+{% if not metrics.collected %}<p class="report-empty">No verified payments in this period. Collections will appear here once a payment is verified.</p>{% endif %}
+<ol class="report-weeks" style="--report-columns:{{[metrics.weeks|length,7]|min}}">{% for week in metrics.weeks %}<li><div class="report-bar" aria-hidden="true"><span style="--report-bar-size:{{week.percent}}%"></span></div><strong>{{money(week.amount)}}</strong><span class="caption muted">w/c {{week.monday}}</span><span class="sr-only">Payments from {{week.start}} to {{week.end}}</span></li>{% endfor %}</ol>
+<p class="muted">Weeks are based on verified payments in the selected period. Collected revenue is not recurring revenue.</p>
+<p class="caption muted">Weeks run Monday to Sunday in WAT. Partial weeks include only selected dates. Active and paying accounts are current owner totals.</p></section>
+<section class="card report-email" aria-labelledby="report-email-title"><h2 id="report-email-title">Email me this report</h2><p class="muted">Get the previous week's summary every Monday morning at 08:00 WAT.</p>
+<form method="post" action="{{url_for('admin.preference')}}" class="report-preference-form"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><input type="hidden" name="version" value="{{email_preference.version if email_preference else 0}}"><input type="hidden" name="period" value="{{period}}"><input type="hidden" name="start" value="{{start_value}}"><input type="hidden" name="end" value="{{end_value}}">
+<label class="report-switch"><span>Weekly email</span><span class="report-switch-control"><input type="checkbox" name="weekly_email" role="switch" {% if email_opt_in_active %}checked{% endif %} aria-describedby="weekly-email-hint"><span aria-hidden="true"></span></span></label><button class="btn" data-save-preference type="submit">Save email preference</button></form>
+<p class="caption muted" id="weekly-email-hint">{% if email_preference and email_preference.weekly_enabled and not email_opt_in_active %}Turn Weekly email on again to confirm your choice after the account security change.{% elif not email_delivery_ready %}Your choice is saved when you change the switch. Scheduled delivery is not enabled yet.{% else %}Sent only to your verified admin email. Turn off the switch to stop weekly reports.{% endif %}</p>
+</section></div>
+{% endif %}
+{% endblock %}

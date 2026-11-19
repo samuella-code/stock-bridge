@@ -1,0 +1,10 @@
+{% extends 'email/base.html' %}
+{% block content %}
+<h1>Weekly platform report</h1><p>{{first}} to {{last}} · WAT</p>
+<p>New customers: <strong>{{metrics.new_customers}}</strong><br>Collected: <strong>{{money(metrics.collected)}}</strong><br>
+Active owner accounts now: <strong>{{metrics.active}}</strong><br>Paying owner accounts now: <strong>{{metrics.paying}}</strong></p>
+<h2>Collected by week</h2><ul>{% for week in metrics.weeks %}<li>{{week.start}} to {{week.end}}: {{money(week.amount)}}</li>{% endfor %}</ul>
+<p>Collected revenue is not recurring revenue. Active and paying accounts are current totals.</p>
+<p><a href="{{link}}">Open Platform reports</a></p>
+<p>To stop these emails, turn off Weekly email in Platform reports. This email contains platform totals only.</p>
+{% endblock %}
