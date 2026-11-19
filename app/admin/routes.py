@@ -560,11 +560,45 @@ def suspend_user(user_id):
 @admin_bp.get("/businesses")
 @admin_required
 def businesses():
+    from app.admin import business_data
     q=request.args.get("q","").strip()[:100]
-    query=customer_business_query().options(joinedload(Business.owner))
-    if q: query=query.filter(or_(Business.name.ilike(f"%{q}%"),User.email.ilike(f"%{q}%"),User.full_name.ilike(f"%{q}%")))
-    rows=query.order_by(Business.created_at.desc()).paginate(page=request.args.get("page",1,type=int),per_page=25,error_out=False)
-    return render_template("admin/businesses.html",rows=rows,q=q)
+    status=request.args.get('status','all')
+    if status not in business_data.FILTERS:
+        abort(400)
+    now=datetime.utcnow()
+    rows=business_data.query(q,status,now=now).paginate(page=request.args.get('page',1,type=int),per_page=25,error_out=False)
+    return render_template('admin/businesses.html',rows=rows,q=q,status=status,
+        business_rows=business_data.serialize(rows.items,now),summary=business_data.summary(now))
+
+
+@admin_bp.get('/businesses/export.csv')
+@admin_required
+def businesses_export():
+    from app.admin import business_data
+    from app.admin.customers import csv_response
+    q=request.args.get('q','').strip()[:100]
+    status=request.args.get('status','all')
+    if status not in business_data.FILTERS:
+        abort(400)
+    now=datetime.utcnow()
+    def batches():
+        cursor=None
+        while True:
+            query=business_data.query(q,status,now=now).filter(Business.created_at<=now)
+            if cursor:
+                stamp,identifier=cursor
+                query=query.filter(or_(Business.created_at<stamp,
+                    (Business.created_at==stamp)&(Business.id<identifier)))
+            batch=query.limit(100).all()
+            if not batch:
+                break
+            cursor=(batch[-1].created_at,batch[-1].id)
+            yield [[b['name'],b['owner_email'],b['plan'],b['status'],b['created'],
+                    f"{b['last_sale']} · Sale #{b['last_sale_id']}" if b['last_sale_id'] else 'No sales yet',
+                    len(b['team']),'; '.join(f"{e['email']} · {e['role']}" for e in b['team'])]
+                   for b in business_data.serialize(batch,now)]
+    return csv_response('StockBridge-businesses.csv',
+        ['Business','Owner (masked)','Plan','Status','Created','Last sale','Employee count','Team (masked)'],batches)
 
 @admin_bp.get("/businesses/<int:business_id>")
 @admin_required

@@ -199,18 +199,18 @@ def test_explicit_batch_limit(client,size,queries):
 
 
 def test_next_request_refreshes_snapshot_and_one_instant(client, monkeypatch):
-    from app.admin import subscription_reporting
+    from app.subscriptions import entitlements
     from tests.test_admin_portal import seed, admin_login
     seed(client)
     user, shops, sub=customer(now=datetime.utcnow())
     db.session.commit()
     snapshots=[]
-    original=subscription_reporting.EntitlementSnapshot
+    original=entitlements.EntitlementSnapshot
     def captured(*args, **kwargs):
         snapshot=original(*args, **kwargs)
         snapshots.append(snapshot)
         return snapshot
-    monkeypatch.setattr(subscription_reporting,'EntitlementSnapshot',captured)
+    monkeypatch.setattr(entitlements,'EntitlementSnapshot',captured)
     admin_login(client)
     first=client.get('/api/admin/reports').json
     assert first['current_subscription_accounts']['total']==1

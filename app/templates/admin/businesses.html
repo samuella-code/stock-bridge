@@ -1,1 +1,65 @@
-{% extends "admin/base.html" %}{% block content %}<h1>Businesses</h1><form method="get" class="filters"><label class="filter-field" for="business-search">Search businesses<input id="business-search" type="search" name="q" value="{{q}}" placeholder="Business or owner" aria-label="Search businesses"></label><button>Search</button></form><div class="table-scroll"><table class="admin-table" role="table"><caption class="sr-only">Customer businesses and ownership</caption><thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Name</th><th scope="col" role="columnheader">Owner</th><th scope="col" role="columnheader">Access</th><th scope="col" role="columnheader">Status</th><th scope="col" role="columnheader">Created</th></tr></thead><tbody role="rowgroup">{% for b in rows.items %}<tr role="row"><td role="cell" data-label="Name"><a href="{{url_for('admin.business_detail',business_id=b.id)}}">{{b.name}}</a></td><td role="cell" data-label="Owner">{{b.owner.email}}</td><td role="cell" data-label="Access">{{billing_access_label(b.owner) if config.SUBSCRIPTIONS_ENABLED else ('Lifetime' if b.has_write_access else 'Not paid')}}</td><td role="cell" data-label="Status"><span class="status-badge {{'suspended' if b.suspended_at else 'active'}}">{{'Suspended' if b.suspended_at else 'Active'}}</span></td><td role="cell" data-label="Created">{{b.created_at.strftime('%d %b %Y')}}</td></tr>{% else %}<tr class="empty-row" role="row"><td role="cell" colspan="5">No matching businesses. Try another search.</td></tr>{% endfor %}</tbody></table></div>{% include "admin/pager.html" %}{% endblock %}
+{% extends 'admin/customers_base.html' %}
+{% from 'admin/customer_components.html' import badge %}
+{% block title %}Businesses · StockBridge Admin{% endblock %}
+{% block extra_styles %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin-businesses.css') }}">
+{% endblock %}
+{% block customer_content %}
+<header class="heading">
+  <div><h1>Businesses</h1>
+    <p>{{ summary.total }} businesses · {{ summary.active }} with active access</p>
+  </div>
+  <a class="btn" href="{{ url_for('admin.businesses_export', q=q, status=status) }}">Export CSV</a>
+</header>
+{% if summary.disagreements %}
+<aside class="business-access-note" role="note" aria-label="Business access needs review">
+  <strong>Business access needs review.</strong>
+  {{ summary.marked_active }} businesses are marked active, while current plan access allows {{ summary.active }}.
+  {{ summary.disagreements }} {{ 'record differs' if summary.disagreements == 1 else 'records differ' }}.
+  The status below follows current access rules.
+</aside>
+{% endif %}
+<form method="get" class="filters">
+  <div class="search">
+    <label for="business-search">Search businesses</label>
+    <input id="business-search" type="search" name="q" value="{{ q }}" placeholder="Business, owner name or email">
+  </div>
+  <div class="filter-chips" aria-label="Filter businesses">
+    {% for key,label in [('all','All'),('used','Used in last 7 days'),('never-used','Never used')] %}
+    <button class="chip" name="status" value="{{ key }}" aria-pressed="{{ 'true' if status == key else 'false' }}">{{ label }}</button>
+    {% endfor %}
+  </div>
+</form>
+<p class="caption muted">Use means recorded products, sales, restocks, expenses or stock changes. Last sale excludes voided sales. Team counts assigned employees.</p>
+<div class="table-box" tabindex="0" aria-label="Businesses table, scroll horizontally">
+<table role="table">
+  <caption class="sr-only">Businesses, current plan access and assigned employees</caption>
+  <thead><tr>
+    {% for label in ['Business','Owner','Plan','Status','Created','Last sale','Team'] %}
+    <th scope="col">{{ label }}</th>
+    {% endfor %}
+  </tr></thead>
+  <tbody>
+  {% for b in business_rows %}
+    <tr>
+      <td data-label="Business"><a class="row-link" href="{{ url_for('admin.business_detail',business_id=b.id) }}">{{ b.name }}</a></td>
+      <td data-label="Owner"><div><span data-email-value>{{ b.owner_email }}</span>
+        <button class="text-btn" type="button" data-reveal-url="{{ url_for('admin.reveal_customer_email',user_id=b.owner_id) }}" aria-label="Show owner email for {{ b.name }}">Show</button></div></td>
+      <td data-label="Plan">{{ badge(b.plan,'warning' if 'expired' in b.plan else 'neutral') }}</td>
+      <td data-label="Status">{{ badge(b.status,'danger' if b.status == 'Suspended' else 'warning' if b.status == 'Read-only' else '') }}</td>
+      <td data-label="Created" class="caption">{{ b.created }}</td>
+      <td data-label="Last sale" class="caption">{% if b.last_sale_id %}{{ b.last_sale }}<span class="subline">Sale #{{ b.last_sale_id }}</span>{% else %}No sales yet{% endif %}</td>
+      <td data-label="Team"><span class="subline">{{ b.team|length }} {{ 'employee' if b.team|length == 1 else 'employees' }}</span>
+        {% for e in b.team %}<div class="business-team-member"><span data-email-value>{{ e.email }}</span>
+          <button class="text-btn" type="button" data-reveal-url="{{ url_for('admin.reveal_customer_email',user_id=e.id) }}" aria-label="Show employee email for {{ b.name }}">Show</button>
+          <span class="subline caption muted">{{ e.role }}</span></div>{% endfor %}
+      </td>
+    </tr>
+  {% else %}<tr><td data-label="Businesses" colspan="7">No matching businesses. Try another name or filter.</td></tr>{% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="caption muted">Showing a full email is recorded in Activity. CSV exports keep emails masked.</p>
+{% include 'admin/pager.html' %}
+{% endblock %}

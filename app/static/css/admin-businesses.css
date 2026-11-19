@@ -1,0 +1,13 @@
+.business-access-note {
+  padding: var(--sb-4);
+  border: var(--sb-stroke) solid var(--sb-warning-border);
+  border-radius: var(--sb-card-radius);
+  background: var(--sb-warning-bg);
+  color: var(--sb-warning-text);
+}
+
+.business-team-member + .business-team-member {
+  margin-top: var(--sb-3);
+  padding-top: var(--sb-3);
+  border-top: var(--sb-stroke) solid var(--sb-border);
+}
