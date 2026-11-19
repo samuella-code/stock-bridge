@@ -1,1 +1,34 @@
-{% extends "admin/base.html" %}{% block content %}<h1>Activity and audit log</h1><p>Important account and platform events, newest first.</p><form method="get" class="filters"><label class="filter-field" for="activity-search">Search activity<input id="activity-search" type="search" name="q" value="{{q}}" placeholder="Search event, actor, business" aria-label="Search activity"></label><label class="filter-field" for="activity-category">Event category<select id="activity-category" name="action" aria-label="Event category">{% for key,label in [('all','All activity'),('security','Admin security'),('account','Account actions'),('payments','Payments'),('admin','Admin actions'),('customers','Customer events')] %}<option value="{{key}}" {{'selected' if action==key}}>{{label}}</option>{% endfor %}</select></label><button>Filter</button></form><div class="table-scroll"><table class="admin-table" role="table"><caption class="sr-only">Platform audit events</caption><thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Time (UTC)</th><th scope="col" role="columnheader">Actor</th><th scope="col" role="columnheader">Action</th><th scope="col" role="columnheader">Target</th><th scope="col" role="columnheader">Description</th></tr></thead><tbody role="rowgroup">{% for row in rows.items %}<tr role="row"><td role="cell" data-label="Time (UTC)">{{row.created_at.strftime('%d %b %Y %H:%M')}}</td><td role="cell" data-label="Actor">{{row.actor.email if row.actor else 'System'}}</td><td role="cell" data-label="Action">{{row.action.replace('_',' ')|title}}</td><td role="cell" data-label="Target">{{row.target_type|title ~ ' #' ~ row.target_id if row.target_type else (row.business.name if row.business else '—')}}</td><td role="cell" data-label="Description">{{row.description}}</td></tr>{% else %}<tr class="empty-row" role="row"><td role="cell" colspan="5">No activity matches this filter.</td></tr>{% endfor %}</tbody></table></div>{% include "admin/pager.html" %}{% endblock %}
+{% extends 'admin/customers_base.html' %}
+{% block title %}Activity · StockBridge Admin{% endblock %}
+{% block extra_styles %}{{ super() }}
+<link rel="stylesheet" href="{{url_for('static',filename='css/admin-activity.css')}}">
+<script src="{{url_for('static',filename='js/admin-activity.js')}}" defer></script>
+{% endblock %}
+{% block customer_content %}
+<header class="heading"><div><h1>Activity</h1><p>What happened across StockBridge, newest first.</p></div>
+<a class="btn" href="{{url_for('admin.activity',q=q,action=action,business_id=business_id or '',person_id=person_id or '',format='csv')}}">Export CSV</a></header>
+<form method="get" class="filters activity-filter-form">
+<div class="activity-filters">
+<div class="filter-field"><label for="activity-search">Search activity</label><input id="activity-search" name="q" type="search" value="{{q}}" maxlength="100" placeholder="Event, person or business"></div>
+<div class="filter-field"><label for="activity-business">Business</label><select id="activity-business" name="business_id"><option value="">All businesses</option>{% for b in businesses %}<option value="{{b.id}}" {{'selected' if business_id==b.id}}>{{safe_text(b.name)}}</option>{% endfor %}</select></div>
+<div class="filter-field"><label for="activity-person">Person</label><select id="activity-person" name="person_id"><option value="">All people</option><option value="system" {{'selected' if person_id=='system'}}>System</option>{% for u in people %}<option value="{{u.id}}" {{'selected' if person_id==u.id}}>{{safe_text(u.full_name)}} · {{mask_email(u.email)}}</option>{% endfor %}</select></div>
+</div><div class="filter-chips" aria-label="Activity categories">
+{% for key,label in categories %}<button class="chip" name="action" value="{{key}}" aria-pressed="{{'true' if action==key else 'false'}}">{{label}}</button>{% endfor %}
+{% if action in legacy %}<button class="chip" name="action" value="{{action}}" aria-pressed="true">{{legacy[action]}}</button>{% endif %}
+</div><button class="btn" type="submit" name="action" value="{{action}}">Apply filters</button></form>
+<div id="activity-days" class="activity-days">
+{% for group in groups %}<section class="activity-day" data-day="{{group.day}}" aria-label="{{group.label}}"><h2>{{group.label}}</h2><ol class="activity-events card">
+{% for e in group.events %}<li class="activity-event" data-event="{{e.id}}"><span class="avatar" aria-hidden="true">{{e.avatar}}</span><div>
+<p>{{e.sentence}}</p><p class="caption muted">{{e.business or 'Platform'}}{% if e.number %} · {{e.number}}{% endif %}</p>
+<time datetime="{{e.timestamp}}">{{e.time}}</time>
+<details><summary>Event details</summary><dl><dt>Event ID</dt><dd>{{e.id}}</dd><dt>Action</dt><dd>{{e.action}}</dd>
+{% if e.target %}<dt>Record type</dt><dd>{{e.target}}</dd>{% endif %}{% if e.target_id is not none %}<dt>Record ID</dt><dd>{{e.target_id}}</dd>{% endif %}
+<dt>Recorded details</dt><dd>{{e.description or 'No additional details recorded.'}}</dd></dl></details>
+</div></li>{% endfor %}</ol></section>{% else %}<p class="card">No activity matches these filters.</p>{% endfor %}
+</div>
+<nav id="activity-pagination" class="activity-pagination" aria-label="Activity pages">
+{% if rows.has_prev %}<a class="text-btn" href="{{url_for('admin.activity',page=rows.prev_num,q=q,action=action,business_id=business_id or '',person_id=person_id or '')}}">Newer activity</a>{% endif %}
+<span>Page {{rows.page}} of {{rows.pages or 1}}</span>
+{% if rows.has_next %}<a class="btn" data-load-older href="{{url_for('admin.activity',page=rows.next_num,q=q,action=action,business_id=business_id or '',person_id=person_id or '')}}">Load older activity</a>{% endif %}
+</nav><p id="activity-load-status" class="caption muted" role="status" aria-live="polite"></p>
+{% endblock %}

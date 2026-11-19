@@ -736,25 +736,49 @@ def verify_payment(payment_id):
 @admin_bp.get("/activity")
 @admin_required
 def activity():
+    from app.admin import activity_data
     action=request.args.get("action","all")
+    if action not in dict(activity_data.CATEGORIES) and action not in activity_data.LEGACY:
+        action='all'
     q=request.args.get("q","").strip()[:100]
-    query=AuditLog.query.options(joinedload(AuditLog.actor),joinedload(AuditLog.business))
-    if action=="security":
-        query=query.filter(AuditLog.action.in_(("ADMIN_LOGIN_SUCCESS","ADMIN_LOGIN_FAILED","ADMIN_LOGOUT","ADMIN_PASSWORD_RESET",
-            "ADMIN_MFA_ENROLLED","ADMIN_MFA_FAILED","ADMIN_MFA_RECOVERY_USED")))
-    elif action in ("account","management"):
-        query=query.filter(AuditLog.action.in_(("USER_SUSPENDED","USER_REACTIVATED","BUSINESS_SUSPENDED","BUSINESS_REACTIVATED")))
-    elif action=="payments": query=query.filter(or_(AuditLog.action.like("%PAYMENT%"),AuditLog.action=="LIFETIME_ACCESS_GRANTED"))
-    elif action=="admin": query=query.filter(AuditLog.action.like("ADMIN_%"))
-    elif action=="customers": query=query.filter(or_(AuditLog.action.like("USER_%"),AuditLog.action=="LIFETIME_ACCESS_GRANTED"))
-    if q:
-        matching_users=db.session.query(User.id).filter(or_(User.email.ilike(f"%{q}%"),User.full_name.ilike(f"%{q}%")))
-        query=query.filter(or_(AuditLog.description.ilike(f"%{q}%"),
-            AuditLog.actor.has(User.email.ilike(f"%{q}%")),
-            AuditLog.business.has(Business.name.ilike(f"%{q}%")),
-            and_(AuditLog.target_type=="user",AuditLog.target_id.in_(matching_users))))
-    rows=query.order_by(AuditLog.created_at.desc()).paginate(page=request.args.get("page",1,type=int),per_page=30,error_out=False)
-    return render_template("admin/activity.html",rows=rows,action=action,q=q)
+    def selection(name):
+        value=request.args.get(name,'')
+        if not value or (name=='person_id' and value=='system'):
+            return value or None
+        if not value.isascii() or not value.isdigit() or not 0<int(value)<=2147483647:
+            abort(400)
+        return int(value)
+    business_id,person_id=selection('business_id'),selection('person_id')
+    business=db.session.get(Business,business_id) if business_id else None
+    if business_id and not business:
+        abort(404)
+    if person_id not in (None,'system') and not db.session.get(User,person_id):
+        abort(404)
+    now=datetime.utcnow()
+    if request.args.get('format')=='csv':
+        from app.admin.customers import csv_response
+        def batches():
+            cursor=None
+            while True:
+                query=activity_data.filtered(q,action,business,person_id).filter(AuditLog.created_at<=now)
+                if cursor:
+                    stamp,identifier=cursor
+                    query=query.filter(or_(AuditLog.created_at<stamp,
+                        (AuditLog.created_at==stamp)&(AuditLog.id<identifier)))
+                batch=query.limit(100).all()
+                if not batch:break
+                cursor=(batch[-1].created_at,batch[-1].id)
+                yield [[e['date'],e['time'],e['actor'],e['sentence'],e['business'],e['number']]
+                       for e in activity_data.serialize(batch,now)]
+        return csv_response('StockBridge-activity.csv',['Date','Time','Person','Event','Business','Record'],batches)
+    rows=activity_data.filtered(q,action,business,person_id).paginate(
+        page=request.args.get('page',1,type=int),per_page=30,error_out=False)
+    people=User.query.filter(User.id.in_(db.session.query(AuditLog.actor_id))).order_by(User.full_name,User.id).all()
+    return render_template('admin/activity.html',rows=rows,action=action,q=q,business_id=business_id,person_id=person_id,
+        groups=activity_data.grouped(activity_data.serialize(rows.items,now)),
+        businesses=Business.query.order_by(Business.name,Business.id).all(),people=people,
+        categories=activity_data.CATEGORIES,legacy=activity_data.LEGACY,safe_text=activity_data.safe_text,
+        mask_email=activity_data.masked_email)
 
 @admin_bp.get("/reports")
 @admin_required

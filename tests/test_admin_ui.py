@@ -39,7 +39,7 @@ def test_desktop_and_mobile_section_and_main_landmark(client, records, path, sec
     assert dom.get('main') == [{'id': 'admin-main', 'tabindex': '-1'}]
 
 
-@pytest.mark.parametrize('path', ['/admin/users', '/admin/businesses', '/admin/payments', '/admin/activity'])
+@pytest.mark.parametrize('path', ['/admin/users', '/admin/businesses', '/admin/payments'])
 def test_mobile_table_has_caption_column_headers_and_every_cell_label(client, records, path):
     with client.application.app_context():
         db.session.add(AuditLog(action='USER_REGISTERED', description='Synthetic event'))
@@ -50,6 +50,17 @@ def test_mobile_table_has_caption_column_headers_and_every_cell_label(client, re
     assert dom.get('caption') and dom.get('table')[0]['role'] == 'table'
     assert all(h.get('scope') == 'col' for h in dom.get('th'))
     assert dom.get('td') and all(cell.get('data-label') for cell in dom.get('td'))
+
+
+def test_activity_uses_accessible_timeline_instead_of_a_table(client, records):
+    admin_login(client)
+    page=client.get('/admin/activity').get_data(as_text=True)
+    dom=Elements(page)
+    assert not dom.get('table')
+    assert any(ol.get('class')=='activity-events card' for ol in dom.get('ol'))
+    assert dom.get('time') and all('datetime' in t for t in dom.get('time'))
+    assert dom.get('summary')
+    assert not any('open' in details for details in dom.get('details'))
 
 
 @pytest.mark.parametrize('path', ['/admin/users', '/admin/businesses', '/admin/payments', '/admin/activity', '/admin/reports'])
