@@ -18,3 +18,25 @@ document.addEventListener('keydown', event => {
     if (search) { event.preventDefault(); search.focus(); }
   }
 });
+
+// Keep the existing local-format fields and server validation. The unnamed native
+// picker only supplies a date; it never changes the form contract.
+document.querySelectorAll('[data-report-calendar]').forEach(button => {
+  const field = document.getElementById(button.dataset.reportCalendar);
+  const picker = document.getElementById(field.id + '-calendar');
+  if (typeof picker.showPicker !== 'function') return;
+  button.hidden = false;
+  button.addEventListener('click', () => {
+    const parts = field.value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    picker.value = parts ? `${parts[3]}-${parts[2]}-${parts[1]}` : '';
+    picker.showPicker();
+  });
+  picker.addEventListener('change', () => {
+    if (!picker.value) return;
+    const [year, month, day] = picker.value.split('-');
+    field.value = `${day}/${month}/${year}`;
+    field.dispatchEvent(new Event('input', {bubbles:true}));
+    field.dispatchEvent(new Event('change', {bubbles:true}));
+    button.focus();
+  });
+});

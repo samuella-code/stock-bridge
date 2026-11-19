@@ -1,4 +1,4 @@
-# Weekly platform reports — staged backend, delivery off
+# Weekly platform reports — staging delivery
 
 The report page, CSV and weekly email use the same verified payment rules. Bars
 sum exactly to Collected. Account counts exclude employees and administrators;
@@ -11,9 +11,8 @@ contract is unchanged.
 ## Persistence and consent
 
 Prepared migration: `0021_admin_weekly_reports`, after `0020_admin_customer_tools`.
-It adds `admin_report_preference` and `admin_report_delivery`. It has not been run
-by this change. Do not deploy the page before a separately approved schema review
-and migration; retain the build-time migration skip guard.
+It adds `admin_report_preference` and `admin_report_delivery`. It was separately approved, applied and verified on staging before the initial
+Reports release. Retain the build-time migration skip guard; do not rerun it.
 
 `POST /admin/reports/weekly-email` requires the existing admin session, MFA guard,
 verified email and CSRF token. It changes only the signed-in admin's preference.
@@ -22,9 +21,11 @@ are audited. Security/auth-version changes require fresh opt-in. A newly require
 MFA policy requires enrolment and fresh MFA-verified report consent. There is no
 email send during the preference request.
 
-## Delivery activation — separate approval required
+## Delivery activation
 
-No configuration, scheduler, recipient or SMTP setting is enabled by this patch.
+Staging delivery was approved for odofintosin20@gmail.com and
+ezeogesamuella@gmail.com. Each administrator must still opt in with the Weekly
+email switch. SMTP settings are reused without alteration.
 The rollout is staging-only and fails closed for local, missing, conflicting or
 production deployment identity. Inventory and staff email gates are unchanged.
 
@@ -56,7 +57,19 @@ repeat within that morning until `idle`; this drains every opted-in admin
 through separate bounded invocations. Alternatively an approved scheduled worker
 can run `flask --app wsgi:app admin dispatch-weekly-reports --limit 20`, repeating
 bounded batches as needed. Do not put secrets in command arguments or URLs.
-No scheduler has been created. Vercel native Cron runs on Production deployments,
+The dedicated Cloudflare Worker `stockbridge-staging-admin-reports` runs
+`0,5 7 * * MON`: Monday 08:00 WAT, with a recovery pass at 08:05. Each run makes
+at most three sequential calls (two approved admins plus an idle check). It has
+no public dispatch handler and no database or SMTP credentials. Its dedicated
+`REPORT_DISPATCH_SECRET` binding matches the encrypted Vercel dispatch secret.
+It uses the existing canonical staging admin branch host, rejects redirects, and
+logs result categories only. Existing inventory scheduling remains separate.
+
+Source: `scripts/cloudflare/admin_report_scheduler.mjs`; disconnected checks:
+`node tests/admin_report_scheduler.mjs`. On each approved staging code release,
+update `ADMIN_REPORT_EMAILS_APPROVED_SHA` to that exact SHA or delivery fails closed.
+
+Vercel native Cron runs on Production deployments,
 so a Preview staging rollout needs a separately approved Preview-capable
 scheduler rather than silently adding a Production cron job. See the official
 [Flask deployment guidance](https://vercel.com/kb/guide/ship-a-flask-app-on-vercel).

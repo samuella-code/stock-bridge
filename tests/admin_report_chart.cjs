@@ -21,6 +21,12 @@ const fs=require('node:fs');const path=require('node:path');const assert=require
    return route.fulfill({body:fs.readFileSync(path.join(base,fixture,'page.html'),'utf8'),contentType:'text/html',headers:{'Content-Security-Policy':fs.readFileSync(path.join(base,fixture,'csp.txt'),'utf8')}});
   });
   await page.goto('http://reports.invalid/admin/reports');
+  await page.getByRole('link',{name:'Pick dates',exact:true}).click();
+  const calendarButton=page.getByRole('button',{name:'Choose from date from calendar',exact:true});
+  assert(await calendarButton.isVisible());
+  const size=await calendarButton.boundingBox();assert(size.width>=44 && size.height>=44);
+  await page.locator('#report-start-calendar').fill('2026-10-22');
+  assert.equal(await page.locator('#report-start').inputValue(),'22/10/2026');
   const result=await page.evaluate(()=>{
    const chart=document.querySelector('.report-chart').getBoundingClientRect();
    const email=document.querySelector('.report-email').getBoundingClientRect();

@@ -29,3 +29,10 @@
 @media (min-width: 640px) { .report-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .report-custom { grid-template-columns: repeat(2, minmax(0, 1fr)) auto; } .report-custom > p { grid-column: 1 / -1; } .report-weeks.report-columns-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); } .report-weeks.report-columns-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .report-weeks.report-columns-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } .report-weeks.report-columns-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } .report-weeks.report-columns-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); } .report-weeks.report-columns-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); } .report-weeks.report-columns-7 { grid-template-columns: repeat(7, minmax(0, 1fr)); } .report-bar { height: calc(var(--sb-chart-height) + var(--sb-20)); } }
 @media (min-width: 900px) { .report-panels { grid-template-columns: minmax(0, 5fr) minmax(0, 3fr); } }
 @media (min-width: 1160px) { .report-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.report-date-field { display: flex; align-items: center; position: relative; min-width: 0; gap: var(--sb-2); }
+.report-date-field > input[type=text] { min-width: 0; flex: 1; }
+.report-date-field .report-calendar-button { width: var(--sb-touch); flex-shrink: 0; min-width: var(--sb-touch); padding: var(--sb-2); }
+.report-calendar-button svg { width: var(--sb-6); height: var(--sb-6); fill: none; stroke: currentColor; stroke-width: var(--sb-focus); }
+
+.report-date-field > .report-native-calendar { position: absolute; right: 0; top: 0; width: var(--sb-touch); height: var(--sb-touch); opacity: 0; pointer-events: none; }

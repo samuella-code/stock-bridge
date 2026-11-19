@@ -30,6 +30,10 @@ def test_chart_uses_csp_safe_geometry(client, monkeypatch, tmp_path, count):
     assert all(r['height']=='0' and r['y']=='100' for r in rects[1:])
     assert f'report-columns-{min(count,7)}' in html
     assert 'aria-live="polite"></p>' in html
+    pickers=[attrs for tag,attrs in elements if tag=='input' and attrs.get('type')=='date']
+    assert len(pickers)==2 and all('name' not in p for p in pickers)
+    assert {p['id'] for p in pickers}=={'report-start-calendar','report-end-calendar'}
+    assert 'name="start" type="text"' in html and 'name="end" type="text"' in html
     # Browser regression test consumes this exact rendered response and header.
     (tmp_path/'page.html').write_text(html)
     (tmp_path/'csp.txt').write_text(response.headers['Content-Security-Policy'])
