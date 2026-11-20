@@ -19,14 +19,19 @@ def test_explicit_replay_and_reactivation(client, monkeypatch, kind):
     monkeypatch.setattr('app.admin.routes.safely_send', lambda *a, **k: emails.append(k))
     model, ident=(User,uid) if kind=='users' else (Business,bid)
     path=f'/admin/{kind}/{ident}/suspension'
-    assert client.post(path,data=form()).status_code==302
-    assert client.post(path,data=form()).status_code==409
+    def status_form(desired='suspend', stamp=''):
+        data=form(desired,stamp)
+        if kind=='businesses':
+            data.update(business_name='Shop',reason='Other' if desired=='suspend' else 'Review complete',email_owner='on')
+        return data
+    assert client.post(path,data=status_form()).status_code==302
+    assert client.post(path,data=status_form()).status_code==409
     with client.application.app_context():
         stamp=db.session.get(model,ident).suspended_at.isoformat()
         assert AuditLog.query.filter(AuditLog.action.like('%_SUSPENDED')).count()==1
     assert len(emails)==1
-    assert client.post(path,data=form('reactivate',stamp)).status_code==302
-    assert client.post(path,data=form('reactivate',stamp)).status_code==409
+    assert client.post(path,data=status_form('reactivate',stamp)).status_code==302
+    assert client.post(path,data=status_form('reactivate',stamp)).status_code==409
     assert len(emails)==2
     with client.application.app_context():
         assert db.session.get(model,ident).suspended_at is None
