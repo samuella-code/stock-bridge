@@ -64,18 +64,18 @@ def test_assistant_scope_and_closed_mobile_flow(authenticated,endpoint,marker):
     html=environment().get_template('components/assistant.html').render(**ctx)
     assert (f'data-assistant-page="{marker}"' in html) if marker else ('data-assistant-page=' not in html)
     css=(ROOT/'app/static/css/assistant.css').read_text()
-    assert '.customer-app .sb-assistant:not([data-assistant-open])' in css
-    assert '.sb-assistant[data-assistant-page="home"]:not([data-assistant-open])' in css
-    assert 'position:static;margin:12px 16px;display:flex;justify-content:flex-end;' in css
-    assert '.sb-assistant{position:fixed;' in css
-    assert '.sb-assistant-history{min-height:60px;overflow-y:auto;' in css
+    assert '.sb-assistant {' in css and 'position: fixed;' in css
+    assert '.sb-assistant [hidden], .sb-assistant[hidden]' in css
+    assert 'min-height: var(--sb-touch)' in css
+    assert 'env(safe-area-inset-bottom)' in css and 'prefers-reduced-motion: reduce' in css
+
 
 
 def test_disclosure_hooks_and_design_system_keep_native_semantics():
     paths=('products/basket.html','restocking/index.html','subscriptions/billing.html')
     for path in paths:
         text=(ROOT/'app/templates'/path).read_text()
-        assert ('basket-browse' if path=='products/basket.html' else 'ui-disclosure') in text
+        assert ('basket-browse' if path=='products/basket.html' else 'sb-sale-options' if path=='restocking/index.html' else 'sb-billing-disclosure') in text
         assert '<summary' in text and '</details>' in text
     css=(ROOT/'app/static/css/style.css').read_text()
     for fragment in ('summary::-webkit-details-marker{display:none}', 'summary::marker{content:""}',
@@ -94,7 +94,7 @@ def test_home_comparison_retains_table_relationships_and_values():
     for value in ('<thead>','<tbody>','scope="row"','scope="col"','Basic','Plus','Pro',
                   'Up to 2','Up to 5','₦3,000','₦5,000','₦10,000'):
         assert value in html
-    assert 'role="region" aria-label="Basic, Plus and Pro comparison" tabindex="0"' in html
+    assert 'role="region" aria-labelledby="plan-comparison-heading"' in html
     css=(ROOT/'app/static/css/entry.css').read_text()
     assert '.entry-home .plan-comparison table{min-width:38rem;overflow-wrap:normal;word-break:normal}' in css
     assert 'hyphens:none' in css and 'overflow-x:auto' in css

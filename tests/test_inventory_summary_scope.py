@@ -4,6 +4,7 @@ import re
 
 import pytest
 from flask import template_rendered
+from tests.presentation_helpers import text,naira
 
 from app import db
 from app.models import Product
@@ -44,20 +45,23 @@ def get_catalogue(app, client, query):
         response = client.get('/products/', query_string=query)
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert HEADING in html and EXPLANATION in html
-    assert html.index(HEADING) < html.index('class="inventory-summary"') < html.index('class="inventory-toolbar"')
-    assert 'role="group" aria-labelledby="inventory-summary-heading" aria-describedby="inventory-summary-scope"' in html
+    assert 'aria-label="Stock summary"' in html or 'aria-label="Product summary"' in html
+    assert html.index('sb-catalogue-summary')<html.index('sb-catalogue-filter')
     assert 'PRIVATE_NOT_FOR_THIS_BUSINESS' not in html
     return html, contexts[0]
 
 
 def assert_summary(html, context, count=3, low=2, value=Decimal('1500')):
     assert (context['total_products'], context['low_stock_count'], context['inventory_value']) == (count, low, value)
-    summary = re.search(r'<div class="inventory-summary"[^>]*>(.*?)</div>', html, re.S).group(1)
-    assert f'<span>Active products</span><strong>{count}</strong>' in summary
-    assert f'<span>Running low or out</span><strong>{low}</strong>' in summary
-    assert f'<strong>₦{value:,.2f}</strong>' in summary
-    assert 'Current stock × latest unit cost' in summary
+    summary=html.split('sb-catalogue-summary',1)[1].split('</section>',1)[0]
+    if 'sb-inventory-summary' in summary:
+        assert 'Needs restocking' in summary and f'<dd>{low}</dd>' in summary
+        assert naira(value) in summary
+        assert 'across all active products' in summary and 'Active products on this page' in summary
+    else:
+        assert 'Active products' in summary and f'<dd>{count}</dd>' in summary
+        assert 'Average margin' in summary and 'on this page' in summary
+
 
 
 @pytest.mark.parametrize('view', ['', 'inventory'], ids=['products','inventory'])
@@ -81,9 +85,9 @@ def test_summary_scope_is_explicit_and_unchanged_by_filters(app, view, query, na
     assert context['category'] == query.get('category','')
     assert context['stock_filter'] == query.get('stock','all')
     if not names:
-        assert 'No matching products' in html
+        assert 'No products match these filters.' in html
     for name in names:
-        assert f'<strong>{name}</strong>' in html
+        assert name in text(html)
 
 
 @pytest.mark.parametrize('view', ['', 'inventory'], ids=['products','inventory'])

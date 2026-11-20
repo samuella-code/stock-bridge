@@ -57,7 +57,7 @@ def test_password_reset_updates_login_password(client, app):
         data={"email": "reset@example.com", "password": "newpassword123"},
         follow_redirects=True,
     )
-    assert b"Welcome back" in response.data
+    assert b"Here is how" in response.data
 
 
 def test_forgot_password_does_not_reveal_unknown_email(client):

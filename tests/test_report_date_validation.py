@@ -7,6 +7,7 @@ import pytest
 from flask import template_rendered
 from markupsafe import escape
 
+from tests.presentation_helpers import field as input_field
 from app import db
 from app.models import Expense, Product, Restock, Sale, SaleItem
 from tests.test_multi_business import app, seed, login
@@ -50,11 +51,13 @@ def test_invalid_custom_dates_preserve_input_and_hide_all_results(app, values, f
         response = client.get('/reports', query_string={'period':period, **values})
     assert response.status_code == 400 and 'Location' not in response.headers
     html = response.get_data(as_text=True)
-    assert '<option value="custom" selected>' in html
+    assert input_field(html, 'period')['value'] == 'custom'
+    assert 'sb-report-custom" open' in html
     assert 'role="alert" aria-labelledby="report-date-error-title"' in html
-    assert 'No report has been generated.' in html and message in html
+    assert 'Correct the dates below and select Apply' in html and message in html
     assert f'href="#report-{field}"' in html
-    assert f'aria-invalid="true" aria-describedby="report-{field}-error"' in html
+    control=input_field(html,field)
+    assert control['aria-invalid']=='true' and f'report-{field}-error' in control['aria-describedby'].split()
     for key in ('from', 'to'):
         assert f'name="{key}" value="{escape(values.get(key, ""))}"' in html
     if values.get(field):
@@ -82,11 +85,12 @@ def test_valid_empty_report_is_200_with_zero_totals(app, start, end, period):
         response = client.get('/reports', query_string={'period':period,'from':start,'to':end})
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert 'data-report-results' in html and 'No sales in this period.' in html
+    assert 'data-report-results' in html and 'Record your first sale to see your best sellers here.' in html
     assert 'No report has been generated.' not in html and 'aria-invalid="true"' not in html
     assert all(value == 0 for value in contexts[0]['metrics'].values())
     assert contexts[0]['period'] == 'custom'
-    assert '<option value="custom" selected>' in html
+    assert input_field(html, 'period')['value'] == 'custom'
+    assert 'sb-report-custom" open' in html
     assert contexts[0]['start'] == datetime.fromisoformat(start)
     assert contexts[0]['end'] == datetime.fromisoformat(end)
 
@@ -132,7 +136,7 @@ def test_correcting_invalid_dates_restores_inclusive_financial_results(app, peri
         'number_of_sales':2,'units_sold':5,'revenue':Decimal('1600'),'cogs':Decimal('900'),
         'gross_profit':Decimal('700'),'expenses':Decimal('150'),'net_profit':Decimal('550'),
         'inventory_purchased':Decimal('1000'),'inventory_value':Decimal('2700')}
-    assert b'1,600.00' in response.data and b'550.00' in response.data
+    assert '₦1,600' in response.get_data(as_text=True) and '₦550' in response.get_data(as_text=True)
     assert Sale.query.count() == 4 and Expense.query.count() == 1 and Restock.query.count() == 1
 
 
@@ -167,8 +171,8 @@ def test_exact_staging_reversed_dates_are_rejected_before_calculation(app, perio
 def test_reports_load_scoped_date_controls(app):
     client, _ = authenticated_client(app)
     response = client.get('/reports')
-    assert b'data-report-period' in response.data
-    assert b'js/report-dates.js' in response.data
+    assert b'class="sb-report-presets"' in response.data
+    assert b'js/overview-format.js' in response.data
     dashboard = client.get('/dashboard')
     assert b'data-report-period' not in dashboard.data
     assert b'js/report-dates.js' not in dashboard.data

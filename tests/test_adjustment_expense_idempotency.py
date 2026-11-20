@@ -32,7 +32,7 @@ def test_replay_and_distinct_tokens(client, operation, direction):
     else:
         assert Expense.query.count() == 1
         assert str(Expense.query.one().amount) == '50.00'
-        assert b'50.00' in client.get('/expenses/').data
+        assert '₦50'.encode() in client.get('/expenses/').data
     changed = dict(data, note='Different')
     assert client.post(path, data=changed).status_code == 409
     data = with_operation_token(client, path, data)

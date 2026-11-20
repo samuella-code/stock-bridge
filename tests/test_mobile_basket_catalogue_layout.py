@@ -14,7 +14,7 @@ def test_basket_legend_remains_semantic_but_moves_into_card_layout():
     script = (ROOT / 'app/static/js/basket.js').read_text()
     assert "document.createElement('fieldset')" in script
     assert "document.createElement('legend')" in script
-    assert 'title.textContent=product.name' in script
+    assert 'title.textContent=displayName(product.name)' in script
     assert 'grid-template-columns:repeat(2,minmax(0,1fr))' in css
 
 
@@ -29,7 +29,7 @@ def test_catalogue_sort_has_full_width_mobile_hook_and_original_options(view):
         low_stock_count=0, inventory_value=0, query='', categories=[], category='',
         stock_filter='all', sort='priority', products=[], catalogue_navigation={},
         url_for=lambda endpoint, **kw: '/' + endpoint)
-    assert '<label class="catalogue-sort">Sort<select name="sort">' in html
+    assert '<label>Sort' in html and '<select name="sort">' in html
     for value, label in [('recent', 'Recently added'), ('name', 'Name'),
                          ('stock', 'Quantity'), ('price', 'Selling price'),
                          ('cost', 'Cost price'), ('value', 'Stock value'),

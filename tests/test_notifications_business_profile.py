@@ -158,7 +158,7 @@ def test_unread_mark_read_all_order_and_business_isolation(app):
     first = product(client, 'Earlier')
     second = product(client, 'Later')
     html = client.get('/notifications/').get_data(as_text=True)
-    history = html.split('<div class="notification-list">', 1)[1]
+    history = html.split('class="sb-notification-list"', 1)[1]
     assert history.index('Later was added') < history.index('Earlier was added')
     assert 'Notifications, 2 unread' in html
     n = Notification.query.filter_by(resource_id=first.id).one()
@@ -202,7 +202,7 @@ def test_badge_caps_large_counts_and_pagination(app):
     db.session.commit()
     html = client.get('/notifications/').get_data(as_text=True)
     assert '99+' in html and 'Page 1 of 5' in html
-    assert html.count('notification-row ') == 25
+    assert html.count('data-notification-item') == 25
 
 
 def test_preferences_scoped_without_email(app):

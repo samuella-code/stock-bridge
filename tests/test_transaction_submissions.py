@@ -218,7 +218,7 @@ def test_incomplete_claim_is_not_reported_as_changed_payload(client, operation, 
     with patch(module + '.claim', side_effect=SubmissionIncomplete('Incomplete receipt')):
         response = client.post(path, data=data)
     assert response.status_code == 409
-    assert b'no confirmed completed result' in response.data
+    assert b'Saving could not be confirmed. Check' in response.data
     assert b'already used with different contents' not in response.data
     assert Sale.query.count() == Restock.query.count() == Expense.query.count() == 0
     assert TransactionSubmission.query.count() == 0

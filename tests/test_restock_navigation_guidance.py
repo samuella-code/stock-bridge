@@ -36,7 +36,7 @@ def test_empty_notification_history_accurate():
     source = (ROOT / 'app/templates/notifications/index.html').read_text()
     env = Environment(loader=DictLoader({'base.html': '{% block content %}{% endblock %}',
         'notifications/preferences.html': '', 'page.html': source}))
-    for total, expected in [(0, 'No notifications yet'), (10, 'No notifications on this page')]:
+    for total, expected in [(0, 'Activity and stock alerts will appear here.'), (10, 'There are no notifications on this page.')]:
         html = env.get_template('page.html').render(business=SimpleNamespace(name='Store'),
             notifications=SimpleNamespace(items=[], total=total, pages=1), csrf_token=lambda: '', url_for=lambda *a, **k: '/')
         assert expected in html and "You're all caught up" not in html
@@ -48,8 +48,8 @@ def test_basket_guidance_and_tokens_in_both_forms():
     env = Environment(loader=FileSystemLoader(ROOT / 'app/templates'))
     for mode in ['sale', 'restock']:
         html = env.get_template('products/basket.html').render(mode=mode, url_for=lambda *a: '/lookup')
-        assert '<noscript>' in html and 'JavaScript is required to add products and submit this form.' in html
+        assert '<noscript>' in html and 'Enable JavaScript in your browser, then reload to add products.' in html
     for path in ['sales/index.html', 'restocking/index.html']:
         source = (ROOT / 'app/templates' / path).read_text()
         assert 'name="submission_token"' in source and 'name="csrf_token"' in source
-        assert "'disabled' if not has_products" in source
+        assert 'not has_products' in source and 'disabled' in source

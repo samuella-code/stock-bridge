@@ -35,7 +35,7 @@ def test_public_pages_have_no_retired_marketing(app, enabled, path):
     if path in ('/', '/plans/', '/subscription-terms'):
         for spec in PLANS.values(): assert f'{spec["amount"]/100:,.0f}' in html
     if not enabled and path in ('/', '/plans/'):
-        assert 'checkout is not currently available' in html
+        assert 'checkout and trials are unavailable' in html
         assert 'start free trial' not in html
 
 @pytest.mark.parametrize('kind', ['lifetime', 'lifetime_plus'])

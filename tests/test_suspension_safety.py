@@ -68,7 +68,8 @@ def test_business_scope_and_plan_slots(app, kind):
     assert browser.post(f'/businesses/{shops[0].id}/switch').headers['Location'].endswith('/businesses/')
     if kind!='plus': assert browser.post(f'/businesses/{shops[1].id}/switch').headers['Location'].endswith('/businesses/')
     shops[1].suspended_at=datetime.utcnow();db.session.commit()
-    assert b'No eligible active business available' in browser.get('/businesses/').data
+    assert b'Open dashboard' not in browser.get('/businesses/').data
+    assert b'>Suspended</span>' in browser.get('/businesses/').data
     user.suspended_at=datetime.utcnow();db.session.commit()
     for path in ['/dashboard','/businesses/','/plans/','/products/']:
         assert browser.get(path).status_code==403

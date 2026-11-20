@@ -14,7 +14,7 @@ def test_first_time_and_checklist_unchanged(app):
     user,shops=seed('plus',businesses=2);client=app.test_client();login(client,user)
     html=client.get('/dashboard').data
     assert b'Start Tour' in html and b'Skip Tour' in html
-    assert b'0 of 3 setup actions completed' in html
+    assert b'Finish setting up' not in html and b'Here is how' in html
     assert AuditLog.query.count()==0
     for model in (Product,Sale,Restock,Expense): assert model.query.count()==0
     state=post(client,'start',0).json
@@ -108,7 +108,8 @@ def test_mobile_rules_and_reference_label():
     assert '@media(max-width:820px)' in css and 'max-height:42dvh' in css
     assert 'min-height:44px' in css and 'prefers-reduced-motion' in css
     source=(root/'app/templates/restocking/index.html').read_text()
-    assert "Restock Reference: {{receipt.reference.split(':',1)[1]}}" in source
+    assert "Restock Reference" not in source
+    assert "Recent restocks" in source and "receipt.item_count" in source
 
 
 @pytest.mark.parametrize('terminal',[None,'skip','finish'])

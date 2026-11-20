@@ -26,8 +26,9 @@ def test_component_has_only_public_rollout_settings_and_fixed_links(subscription
     assert set(data) == {'subscriptions','provider','scope','links'}
     assert data['subscriptions'] is subscriptions and data['provider'] is provider
     assert all(url.startswith('/fixed/') for url in data['links'].values())
-    assert 'Automated guided help' in html and 'not generative AI' in html
-    assert '<form' not in html and 'type="submit"' not in html
+    assert 'Guided answers, not AI.' in html and 'I can’t see your records.' in html
+    assert '<form class="sb-assistant-compose">' in html
+    assert 'action=' not in html and 'name="password"' not in html
 
 
 def test_keyboard_labels_and_decorative_icon():
@@ -35,7 +36,7 @@ def test_keyboard_labels_and_decorative_icon():
     assert 'aria-controls="sb-assistant-panel"' in html
     assert 'aria-labelledby="sb-assistant-title"' in html
     assert 'for="sb-assistant-question"' in html and 'maxlength="300"' in html
-    for label in ('Minimize assistant','Close assistant','Conversation','Suggested questions'):
+    for label in ('Close help','Conversation','Send question'):
         assert f'aria-label="{label}"' in html
     assert 'aria-live="polite"' in html and 'focusable="false"' in html
 
@@ -64,7 +65,7 @@ def test_admin_callback_and_business_safety_scope():
     js=(ROOT/'app/static/js/assistant.js').read_text()
     for forbidden in ('fetch(', 'XMLHttpRequest', 'sendBeacon', 'localStorage', 'innerHTML', '.submit(', 'formData', 'document.cookie'):
         assert forbidden not in js
-    assert 'sessionStorage' in js and "topics:ids.slice(-LIMIT)" in js
+    assert 'sessionStorage' in js and "ids = [...ids, id].slice(-LIMIT)" in js
 
 
 def test_prices_match_authoritative_plan_configuration():
@@ -77,10 +78,10 @@ def test_prices_match_authoritative_plan_configuration():
 
 def test_mobile_rules_are_scoped_and_navigation_takes_precedence():
     css=(ROOT/'app/static/css/assistant.css').read_text()
-    assert 'calc(100vw - 24px)' in css and 'env(safe-area-inset-bottom)' in css
-    assert 'body.navigation-open .sb-assistant{visibility:hidden}' in css
-    assert 'min-height:44px' in css and 'prefers-reduced-motion:reduce' in css
-    assert 'padding-bottom:calc(80px' in css
+    assert 'calc(100vw - 2 * var(--sb-assistant-edge))' in css and 'env(safe-area-inset-bottom)' in css
+    assert 'body.navigation-open .sb-assistant { visibility: hidden; }' in css
+    assert 'min-height: var(--sb-touch)' in css and 'prefers-reduced-motion: reduce' in css
+    assert '--sb-touch: 44px' in (ROOT/'app/static/css/design-tokens.css').read_text()
 
 
 def test_admin_login_is_not_given_customer_assistant(client):

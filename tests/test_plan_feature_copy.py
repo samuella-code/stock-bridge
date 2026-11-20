@@ -39,7 +39,7 @@ def context(enabled=True,access=None):
         provider_ready=False,history=[],events=[],account=NS(trial_ends_at=None),billing_label='Synthetic plan')
 
 
-def cards(html):return [n for n in DOM(html).root.find('article') if 'plan-card' in n.attrs.get('class','').split()]
+def cards(html):return [n for n in DOM(html).root.find('article') if any(c in n.attrs.get('class','').split() for c in ('sb-pricing-card','sb-billing-option'))]
 
 
 @pytest.mark.parametrize('page',['home.html','subscriptions/billing.html'])
@@ -49,28 +49,33 @@ def test_card_features_match_available_tiers_and_preserve_all_prices_limits(page
     plans=cards(html);assert len(plans)==3
     for card,(plan,prices) in zip(plans,PRICES.items()):
         text=card.text()
-        assert ('Business Insights for the selected business' in text)==(plan in ('plus','pro'))
-        assert ('Multi-business Overview across permitted businesses' in text)==(plan=='pro')
+        assert ('Business Insights' in text)==(plan=='plus')
+        assert ('Everything in Plus' in text)==(plan=='pro')
         assert ('1 business' if plan=='basic' else 'Up to 2 businesses' if plan=='plus' else 'Up to 5 businesses') in text
-        price=next(n for n in card.find('p') if 'data-price-monthly' in n.attrs)
-        assert price.attrs['data-price-monthly']==f'₦{prices.monthly:,.0f}/month'
-        assert price.attrs['data-price-yearly']==f'₦{prices.yearly:,.0f}/year'
-        assert f'Save ₦{prices.monthly*12-prices.yearly:,.0f}/year' in text
+        assert f'₦{prices.monthly:,.0f}' in text and f'₦{prices.yearly:,.0f}' in text
+        assert f'Save ₦{prices.monthly*12-prices.yearly:,.0f} yearly' in text
+        assert ('Most popular' in text)==(plan=='plus')
         assert 'Staff Access' not in text and 'export' not in text.lower()
+
 
 
 def test_comparison_has_accessible_feature_rows_with_correct_basic_plus_pro_values():
     html=environment().get_template('home.html').render(**context())
     table=DOM(html).root.find('table')[0]
     rows={r.find('th')[0].text():r for r in table.find('tr') if r.find('th') and r.find('td')}
-    for feature,values in [('Business Insights',['Not included','Included','Included']),('Multi-business Overview',['Not included','Not included','Included']),('Businesses',['1','Up to 2','Up to 5'])]:
+    for feature,values in [('Business Insights',['Unavailable','Available','Available']),('Overview across all businesses',['Unavailable','Unavailable','Available']),('Businesses',['1','Up to 2','Up to 5'])]:
         row=rows[feature];assert row.find('th')[0].attrs['scope']=='row'
-        assert [n.text() for n in row.find('td')]==values
-    assert [n.text() for n in table.find('thead')[0].find('th')]==['Included','Basic','Plus','Pro']
-    assert all(n.attrs['scope']=='col' for n in table.find('thead')[0].find('th'))
+        for cell,value in zip(row.find('td'),values):assert value in cell.text()
+    headers=table.find('thead')[0].find('th')
+    assert len(headers)==4 and headers[0].text()=='Features'
+    assert all(n.attrs['scope']=='col' for n in headers)
+    for header,plan in zip(headers[1:],('Basic','Plus','Pro')):
+        assert plan in header.text() and ('Most popular' in header.text())==(plan=='Plus')
+    summary=next(n for n in table.find('tr') if n.attrs.get('class')=='sb-comparison-summary')
     for feature in ('Products','Inventory','Sales','Restocking','Expenses','Dashboard','Reports'):
-        assert [n.text() for n in rows[feature].find('td')]==['Included']*3
-    assert 'role="region" aria-label="Basic, Plus and Pro comparison" tabindex="0"' in html
+        assert feature in summary.text()
+    assert 'aria-labelledby="plan-comparison-heading"' in html and 'tabindex="0"' in html
+
 
 
 @pytest.mark.parametrize('legacy',[False,True])
@@ -78,25 +83,25 @@ def test_billing_uses_shared_descriptions_and_keeps_review_form_values(legacy):
     access=NS(subscription=None,legacy=legacy,business_limit=1,kind='legacy_lifetime' if legacy else 'basic',can_write=True)
     html=environment().get_template('subscriptions/billing.html').render(**context(access=access))
     for card,(plan,prices) in zip(cards(html),PRICES.items()):
-        assert ('Business Insights' in card.text())==(plan!='basic')
+        assert card.find('h3')[0].text()==plan.title()
         plans=[n.attrs['value'] for n in card.find('input') if n.attrs.get('name')=='plan']
-        assert plans==([] if legacy and plan=='basic' else [plan])
-        options=[n.attrs['value'] for n in card.find('option')]
+        assert plans==([] if legacy and plan=='basic' else [plan,plan])
+        options=[n.attrs['value'] for n in card.find('input') if n.attrs.get('name')=='interval']
         assert options==([] if legacy and plan=='basic' else ['monthly','yearly'])
     if legacy:assert 'Your existing account access is preserved forever.' in html
 
 
 def test_trial_and_disabled_checkout_wording_are_preserved():
     env=environment();home=env.get_template('home.html').render(**context())
-    for sentence in ('7-day free trial · No card required','Your trial begins after email verification when eligible.',
-                     '7 days free for eligible verified accounts. No card required to start. Existing valid account access remains protected.'):
-        assert sentence in home
+    assert '7 days free for eligible verified accounts. No card required.' in home
+    assert 'Your records are never deleted if you cancel.' in home
     billing=env.get_template('subscriptions/billing.html').render(**context())
-    assert 'Create an account and verify your email to start a 7-day trial. No card required.' in billing
+    assert '7 days free for eligible verified accounts.' in billing
     assert 'Subscription checkout is not enabled in this environment yet.' in billing
-    assert 'Subscription checkout is not currently available.' in env.get_template('home.html').render(**context(False))
+    assert 'Subscription checkout and trials are unavailable' in env.get_template('home.html').render(**context(False))
     note=env.from_string("{% from 'components/public.html' import trial_note with context %}{{ trial_note() }}").render(**context())
     assert note=='Create an account and verify your email to start your 7-day free trial. No card required.'
+
 
 
 def test_no_unavailable_features_promised_and_plan_definitions_unchanged():

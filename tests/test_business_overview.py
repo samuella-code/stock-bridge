@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
 import re
+from tests.presentation_helpers import field as input_field, text, naira
 from unittest.mock import patch
 import pytest
 from flask import template_rendered
@@ -68,12 +69,15 @@ def test_exact_combined_and_per_business_totals_with_saved_costs_and_zero_activi
     assert data['previous_start']==datetime(2026,10,1)
     html=response.get_data(as_text=True)
     assert f'data-overview-business="{empty.id}"' in html
-    assert 'No recorded sales or operating expenses in the selected period.' in html
-    combined_cards=html.split('<div class="metric-grid">',1)[1].split('</div>',1)[0]
-    assert re.findall(r'<strong>₦([^<]+)</strong>',combined_cards)==[f'{data["current"][key]:,.2f}' for key,_ in METRICS]
+    assert 'No activity' in html
+    combined_cards=html.split('<dl class="sb-insights-metrics">',1)[1].split('</dl>',1)[0]
+    keys=('revenue','cogs','expenses','net_profit')
+    assert re.findall(r'<dd>(₦[^<]+)</dd>',combined_cards)==[naira(data['current'][key]) for key in keys]
     for bid,values in expected.items():
-        card=re.search(r'data-overview-business="'+str(bid)+r'">(.*?)</article>',html,re.S)[1]
-        assert re.findall(r'<strong>₦([^<]+)</strong>',card)==[f'{values[key]:,.2f}' for key,_ in METRICS]
+        row=re.search(r'data-overview-business="'+str(bid)+r'">(.*?)</tr>',html,re.S)[1]
+        cells=re.findall(r'<td(?: [^>]*)?>(.*?)</td>',row,re.S)
+        assert [text(cell) for cell in cells[:4]]==[naira(values[key]) for key in keys]
+
 
 
 @pytest.mark.parametrize('kind,allowed',[('basic',False),('plus',False),('trial',False),
@@ -145,7 +149,7 @@ def test_permitted_set_and_totals_are_independent_of_selected_header(app):
         assert context['subscription_business'].id==expected_header.id
         html=response.get_data(as_text=True)
         assert f'Active business: {expected_header.name}. Switch business' in html
-        assert 'independent of the selected-business header' in html
+        assert 'The business switcher does not affect these totals.' in html
         for secret in [shops[0].name,shops[5].name,foreign[0].name]:assert secret not in html
         with client.session_transaction() as state:assert state.get('active_business_id')==active
 
@@ -175,8 +179,9 @@ def test_invalid_dates_preserved_accessible_without_financial_reads(app,values,f
         response=page(app,user,period='month',**values)
     assert response.status_code==400 and b'data-overview-results' not in response.data
     html=response.get_data(as_text=True)
-    assert f'aria-describedby="overview-{field}-error"' in html
-    assert '<option value="custom" selected>' in html and '<script>' not in html
+    control=input_field(html,field)
+    assert control['aria-invalid']=='true' and f'overview-{field}-error' in control['aria-describedby'].split()
+    assert 'name="period" value="custom"' in html and 'sb-report-custom" open' in html and '<script>' not in html
 
 
 @pytest.mark.parametrize('last,incomplete',[('2026-10-27',False),('2026-10-28',True),('2026-11-01',True)])
@@ -199,7 +204,7 @@ def test_zero_cost_warning_combined_and_per_business_comparisons(app,cost_period
         sale(shop,p,START-timedelta(days=1),price='20',cost='0' if i==0 and cost_period=='previous' else '5')
     db.session.commit()
     response,context=captured_page(app,user);data=context['overview']
-    assert data['zero_cost'] and b'Review zero saved costs.' in response.data
+    assert data['zero_cost'] and b'Some items sold have a saved cost of zero.' in response.data
     assert data['trends']['gross_profit']['state']=='cost-review'
     assert data['trends']['net_profit']['state']=='cost-review'
     assert data['rows'][0]['trends']['gross_profit']['state']=='cost-review'
@@ -256,7 +261,7 @@ def test_no_permitted_businesses_anonymous_and_disabled(app):
     assert response.status_code==200 and not context['overview']['rows']
     assert all(value==0 for value in context['overview']['current'].values())
     assert shops[0].name.encode() not in response.data
-    assert b'No financial records were queried' in response.data
+    assert b'There are no available businesses to show.' in response.data
     app.config['SUBSCRIPTIONS_ENABLED']=False
     assert page(app,user).status_code==403
 

@@ -25,8 +25,8 @@ def test_billing_prices_and_entitlement_presentation(app,kind):
     for plan in ('basic','plus'):
         for interval in ('monthly','yearly'):
             assert f'{PLANS[(plan,interval)]["amount"]/100:,.0f}' in html
-    assert 'Save ₦6,000/year' in html and 'Save ₦10,000/year' in html
-    assert 'type="button" data-price-interval="yearly"' in html
+    assert '₦30,000' in html and '₦50,000' in html
+    assert 'name="display-billing-interval" value="yearly"' in html
     assert 'switcher is coming' not in html
     if kind in ('basic','plus'):
         assert 'action="/plans/checkout"' not in html
@@ -37,7 +37,7 @@ def test_billing_prices_and_entitlement_presentation(app,kind):
 def test_cancelled_subscription_does_not_claim_renewal(app):
     user,_=seed('plus');sub=RecurringSubscription.query.one();sub.cancel_at_period_end=True;db.session.commit()
     client=app.test_client();login(client,user);html=client.get('/plans/').get_data(as_text=True)
-    assert 'Renewal stopped.' in html and 'Next renewal:' not in html
+    assert 'Renewal is off.' in html and 'Next renewal:' not in html
 
 def test_reports_current_navigation_and_inventory_view(app):
     user,_=seed();client=app.test_client();login(client,user)
@@ -45,14 +45,14 @@ def test_reports_current_navigation_and_inventory_view(app):
     active=re.findall(r'<a class="nav-link active"[^>]*href="([^"]+)"',html)
     assert active==['/reports']
     html=client.get('/products/?view=inventory').get_data(as_text=True)
-    assert '<h2>Inventory</h2>' in html and 'name="view" value="inventory"' in html
+    assert '<h1 id="catalogue-title">Inventory</h1>' in html and 'name="view" value="inventory"' in html
 
 def test_downgrade_prompt_has_no_false_active_business(app):
     user,shops=seed('plus',2);sub=RecurringSubscription.query.one();sub.plan_code='basic';db.session.commit()
     client=app.test_client();login(client,user);html=client.get('/businesses/').get_data(as_text=True)
-    assert 'Choose your active business' in html
+    assert 'Choose the business you want to keep active' in html
     assert 'Working in' not in html
-    assert 'All businesses and their records are safely stored' in html
+    assert 'Your other businesses and their records are kept.' in html
 
 def test_public_home_has_no_customer_redesign_assets(app):
     html=app.test_client().get('/').get_data(as_text=True)

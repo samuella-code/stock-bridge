@@ -78,7 +78,7 @@ def test_end_to_end_stock_and_profit(client):
         assert report["net_profit"]==Decimal("-850")
         assert report["inventory_purchased"]==Decimal("5600")
     assert b"32" in client.get(f"/products/{pid}").data
-    assert b"650" in client.get("/dashboard").data
+    assert '₦-850' in client.get("/dashboard").get_data(as_text=True)
     assert b"650" in client.get("/reports").data
 
 def test_multi_product_sale_atomic_and_history(client):

@@ -402,9 +402,11 @@ def test_restock_email_preference_label_on_both_settings_surfaces(app):
         response = client.get(path)
         assert response.status_code == 200
         html = response.get_data(as_text=True)
-        assert 'Restocking email alerts' in html
         assert 'Restocking in-app notifications' not in html
-        assert 'name="restocking"' in html
+        if path=='/profile/':
+            assert 'Restock reminders' in html and 'name="restocking"' in html
+        else:
+            assert 'Choose which alerts you get in Settings.' in html and 'name="restocking"' not in html
 
 
 def test_click_to_read_count_idempotency_persistence_and_history(app):

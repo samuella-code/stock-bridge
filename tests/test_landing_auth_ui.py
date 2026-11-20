@@ -69,7 +69,7 @@ def test_original_input_attributes_and_form_contract_preserved(page):
     old_fields=[a for t,a in old if t=='input']
     new_fields=[{k:v for k,v in a.items() if k!='id'} for t,a in new if t=='input']
     assert new_fields==old_fields
-    assert [a for t,a in old if t=='form']==[a for t,a in new if t=='form']
+    assert [{k:v for k,v in a.items() if k!='class'} for t,a in old if t=='form']==[{k:v for k,v in a.items() if k!='class'} for t,a in new if t=='form']
 
 
 def test_toggle_not_inside_label():
@@ -99,9 +99,9 @@ def test_workspace_has_only_sidebar_and_stage_in_grid():
 
 def test_auth_dots_have_no_visible_numbered_controls():
     html=render('auth/login.html')
-    assert 'data-auth-indicators' in html
+    assert 'sb-signin-preview' in html
     assert 'data-auth-step' not in html
-    assert 'Pause preview' in html
+    assert 'Pause preview' not in html and 'Next view' not in html
 
 
 def test_social_confirmation_loads_shared_animation():

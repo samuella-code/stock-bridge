@@ -6,6 +6,7 @@ import re
 from types import SimpleNamespace
 import unittest
 from jinja2 import DictLoader, Environment, select_autoescape
+from tests.presentation_helpers import field
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -21,6 +22,7 @@ class ReportsMobilePresentation(unittest.TestCase):
         exec(compile(ast.Module(body=functions, type_ignores=[]), '<date-helpers-only>', 'exec'), cls.functions)
         cls.env = Environment(loader=DictLoader({
             'reports.html': (ROOT / 'app/templates/reports.html').read_text(),
+            'components/presentation.html': (ROOT / 'app/templates/components/presentation.html').read_text(),
             'components/assistant.html': (ROOT / 'app/templates/components/assistant.html').read_text(),
             'base.html': '{% block content %}{% endblock %}{% block scripts %}{% endblock %}',
             'components/ui.html': '{% macro help_panel(title) %}{{ caller() }}{% endmacro %}',
@@ -50,8 +52,8 @@ class ReportsMobilePresentation(unittest.TestCase):
                 html, errors = self.render_report(dict(period=preset, **{'from':'2026-10-01','to':'2026-10-02'}))
                 self.assertFalse(errors)
                 self.assertIn('data-report-results', html)
-                self.assertIn('data-report-period', html)
-                self.assertIn('01 Oct 2026 to 02 Oct 2026', html)
+                self.assertIn('class="sb-report-presets"', html)
+                self.assertIn('01/10/2026 to 02/10/2026', html)
 
     def test_reversed_and_incomplete_ranges_preserve_accessible_errors(self):
         for values in ({'from':'2026-10-22','to':'2026-10-20'},
@@ -62,7 +64,7 @@ class ReportsMobilePresentation(unittest.TestCase):
                 self.assertNotIn('data-report-results', html)
                 self.assertIn('role="alert"', html)
                 for field in errors:
-                    self.assertIn(f'aria-describedby="report-{field}-error"', html)
+                    self.assertIn(f'report-{field}-error', html)
                     self.assertIn(f'id="report-{field}-error"', html)
                 for field,value in values.items():
                     self.assertIn(f'name="{field}" value="{value}"', html)

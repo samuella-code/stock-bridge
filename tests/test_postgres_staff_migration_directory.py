@@ -71,7 +71,7 @@ def test_relative_directory_reproduces_system_exit_when_staff_revision_absent(tm
     import shutil
     from flask_migrate import upgrade
     directory=tmp_path/'migrations'
-    shutil.copytree(ROOT/'migrations',directory,ignore=shutil.ignore_patterns('0018_staff_foundation.py'))
+    shutil.copytree(ROOT/'migrations',directory,ignore=lambda directory,names:[name for name in names if name.endswith('.py') and name[:4].isdigit() and int(name[:4])>=18])
     monkeypatch.chdir(tmp_path)
     def resolve_only(config,revision,**kwargs):
         ScriptDirectory.from_config(config).get_revision(revision)

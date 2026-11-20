@@ -11,12 +11,14 @@ from tests.test_product_lists import paste, edit
 
 def test_help_authentication(client):
     response=client.get('/help')
-    assert b'Back to Dashboard' in response.data and b'>Sign In<' not in response.data
+    header=response.data.split(b'<header class="sb-help-header">',1)[1].split(b'</header>',1)[0]
+    assert b'Back to dashboard' in header and b'>Sign in<' not in header
     assert b'aria-label="Guide topics"' in response.data
     client.post('/auth/logout')
     response=client.get('/help')
-    assert response.status_code==200 and b'>Sign In<' in response.data
-    assert b'Back to Dashboard' not in response.data
+    header=response.data.split(b'<header class="sb-help-header">',1)[1].split(b'</header>',1)[0]
+    assert response.status_code==200 and b'>Sign in<' in header
+    assert b'Back to dashboard' not in response.data
 
 
 def test_headerless_excel():

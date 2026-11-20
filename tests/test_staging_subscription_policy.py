@@ -169,7 +169,7 @@ def test_pro_business_slots_and_repeated_downgrade_choices(app, fake):
     assert not accessible_business(user, foreign)
     assert not accessible_business(user, shops[0])
     assert accessible_business(user, shops[4]) and not accessible_business(user, shops[5])
-    assert 'StockBridge Pro' in access_label(user)
+    assert 'Pro' in access_label(user)
     sub.plan_code = 'plus'; db.session.commit()
     assert accessible_business(user, shops[1]) and not accessible_business(user, shops[2])
     assert Business.query.filter_by(user_id=user.id).count() == 6
@@ -213,7 +213,7 @@ def test_plan_review_and_public_prices(app, client, plan, interval, amount, limi
     assert f"₦{amount//100:,}" in html
     assert ('1 business' if limit == 1 else f'Up to {limit} businesses') in html
     assert 'Continue to Paystack' in html
-    assert 'StockBridge Pro' in client.get('/plans/').get_data(as_text=True)
+    assert 'Pro' in client.get('/plans/').get_data(as_text=True)
     client.post('/auth/logout')
     assert '₦100,000' in client.get('/').get_data(as_text=True)
 

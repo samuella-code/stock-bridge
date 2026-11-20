@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
 import re
+from tests.presentation_helpers import field as input_field, text, naira
 from unittest.mock import patch
 
 import pytest
@@ -189,7 +190,7 @@ def test_plan_gate_and_navigation_preserve_reports(app, kind, allowed, interval)
     client=app.test_client(); login(client,user)
     html=client.get('/reports').get_data(as_text=True)
     assert ('href="/insights"' in html) is allowed
-    assert 'Stock counts and inventory value reflect today' in html
+    assert 'Stock figures show today; sales figures follow the period you choose.' in html
 
 
 @pytest.mark.parametrize('state,allowed', [('expired',False),('ends-now',False),('starts-now',True),
@@ -287,7 +288,7 @@ def test_one_business_context_for_queries_content_header_and_switcher(app,plan,l
     assert {b.id for b in context['business_choices']}==expected_ids
     assert context['insight']['current']['revenue']==Decimal(100+shops.index(expected))
     html=response.get_data(as_text=True)
-    assert f'<p class="eyebrow">{expected.name}</p>' in html
+    assert f'<p class="sb-insights-business">{expected.name}</p>' in html
     first_strong=re.search(r'<div class="topbar-business">.*?<strong>(.*?)</strong>',html,re.S)
     assert first_strong and re.sub('<[^>]+>','',first_strong[1]).strip().endswith(expected.name)
     if len(expected_ids)>1:
@@ -339,8 +340,9 @@ def test_invalid_dates_accessible_preserved_no_activity_queries(app,args,field):
         response=request_page(app,user,period='month',**args)
     assert response.status_code==400
     html=response.get_data(as_text=True)
-    assert f'aria-describedby="insight-{field}-error"' in html
-    assert '<option value="custom" selected>' in html
+    control=input_field(html,field)
+    assert control['aria-invalid']=='true' and f'insight-{field}-error' in control['aria-describedby'].split()
+    assert 'name="period" value="custom"' in html and 'sb-report-custom" open' in html
     assert 'data-insight-results' not in html and '<script>' not in html
 
 
@@ -354,8 +356,8 @@ def test_explicit_dates_override_preset_and_correction(app):
     assert captured[-1]['insight']['previous_start']==datetime(2026,10,1)
     html=response.get_data(as_text=True)
     assert 'value="2026-10-08"' in html and 'value="2026-10-14"' in html
-    assert 'Separate stock review, independent of the selected financial dates.' in html
-    assert 'type="date"' in html and 'data-report-period' in html
+    assert 'The stock review uses its own 30 complete reporting days' in html
+    assert 'type="date"' in html and 'class="sb-report-presets"' in html
 
 
 @pytest.mark.parametrize('volume',[10,100])

@@ -1,13 +1,13 @@
 """Synthetic template checks only: no Flask, ORM, application or database imports."""
 import ast
-import hashlib
 from datetime import datetime
 from html.parser import HTMLParser
 import json
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace as NS
 import pytest
-from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
+from jinja2 import Environment, FileSystemLoader, DictLoader, ChoiceLoader, StrictUndefined, select_autoescape
 
 ROOT = Path(__file__).resolve().parents[1]
 STATES = ('manage','empty','roles-full','delivery-sent','delivery-disabled','delivery-failed',
@@ -15,8 +15,10 @@ STATES = ('manage','empty','roles-full','delivery-sent','delivery-disabled','del
           'invite','new-credentials','existing-identity','home','revoked-home','verify-email','restocking-only','error')
 
 
-def environment(template_root=None):
-    env=Environment(loader=FileSystemLoader(template_root or ROOT/'app/templates'),
+def environment(template_root=None, overrides=None):
+    # Isolate page forms from unrelated account menus and Help composer forms.
+    shell="""<form method="POST" action="{{ url_for('auth.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button>Log out</button></form>{% block content %}{% endblock %}"""
+    env=Environment(loader=ChoiceLoader([DictLoader({'base.html':shell,'staff/base.html':shell,**(overrides or {})}),FileSystemLoader(template_root or ROOT/'app/templates')]),
         autoescape=select_autoescape(['html']),undefined=StrictUndefined)
     links={'staff.home':'staff-home.html','staff.manage':'staff-manage.html',
            'staff.invite_page':'staff-invite.html','auth.verification_pending':'staff-verify-email.html'}
@@ -59,7 +61,7 @@ class FormContract(HTMLParser):
     def __init__(self):super().__init__();self.forms=[];self.current=None
     def handle_starttag(self,tag,attrs):
         values=dict(attrs)
-        if tag=='form':self.current=[];self.forms.append([values,self.current])
+        if tag=='form':self.current=[];self.forms.append([{k:v for k,v in values.items() if k in ('method','action')},self.current])
         elif self.current is not None and tag in ('input','select','option','button'):
             self.current.append([tag,{k:v for k,v in values.items() if k in ('name','value','type','maxlength','minlength','required','disabled','checked','selected','autocomplete','data-review-invite')}])
     def handle_endtag(self,tag):
@@ -70,30 +72,61 @@ def contract(html):
     parser=FormContract();parser.feed(html);return parser.forms
 
 
+def submission_contract(forms):
+    """Ignore layout order and equivalent select/radio or submit-button markup."""
+    normalized=[]
+    for attributes, fields in forms:
+        result=[]; radios={}; i=0
+        while i<len(fields):
+            tag,a=fields[i]; i+=1
+            if tag=='button' and not a.get('name'): continue
+            if tag=='input' and a.get('type')=='radio':
+                radios.setdefault(a['name'],[]).append(a); continue
+            if tag=='select':
+                options=[]
+                while i<len(fields) and fields[i][0]=='option':
+                    options.append(fields[i][1]); i+=1
+                chosen=next((o.get('value','') for o in options if 'selected' in o), options[0].get('value','') if options else '')
+                result.append(['choice',dict(a,options=sorted(o.get('value','') for o in options),chosen=chosen)])
+            else: result.append([tag,a])
+        for name, options in radios.items():
+            chosen=next((o['value'] for o in options if 'checked' in o),options[0]['value'])
+            result.append(['choice',dict(name=name,options=sorted(o['value'] for o in options),chosen=chosen)])
+        normalized.append([attributes,sorted(result,key=lambda v:json.dumps(v,sort_keys=True))])
+    return sorted(normalized,key=lambda v:json.dumps(v,sort_keys=True))
+
+
 @pytest.mark.parametrize('state',STATES)
 def test_form_contract_preserves_every_field_except_approved_manager_finance_default(state):
     template,data=context(state);html=environment().get_template(template).render(**data)
     expected=json.loads((ROOT/'tests/fixtures/staff_ui_form_contract.json').read_text())
     assert expected['baseline_commit']=='6a4593c61c852440dfb1fdc2cbf7c7b6b87eba62'
     forms=contract(html)
-    # Keep the original contract fixture: only the explicitly approved Manager
-    # financial checkbox default may differ. Every other form field stays exact.
+    # Compare against the reviewed original form contract. Layout order, CSS
+    # classes and equivalent radio/select controls are presentation details.
     for attributes,fields in forms:
         if (any(values.get('name')=='role_key' and values.get('value')=='manager' for tag,values in fields)
                 and any(values.get('name')=='action' and values.get('value')=='role_save' for tag,values in fields)):
             finance=[values for tag,values in fields if values.get('name')=='permissions' and values.get('value')=='financial_view']
             assert len(finance)==1 and 'checked' in finance[0]
             finance[0].pop('checked')
-    assert hashlib.sha256(json.dumps(forms,sort_keys=True).encode()).hexdigest()==expected['states'][state]
+    original=subprocess.check_output(['git','show',expected['baseline_commit']+':app/templates/'+template],cwd=ROOT,text=True)
+    baseline=contract(environment(overrides={template:original}).get_template(template).render(**data))
+    for attributes,fields in baseline:
+        if (any(v.get('name')=='role_key' and v.get('value')=='manager' for tag,v in fields)
+                and any(v.get('name')=='action' and v.get('value')=='role_save' for tag,v in fields)):
+            for tag,v in fields:
+                if v.get('name')=='permissions' and v.get('value')=='financial_view':v.pop('checked',None)
+    assert submission_contract(forms)==submission_contract(baseline)
     assert 'original coverage anchor' not in html and 'grant for the current' not in html
     assert 'synthetic-inert' in html  # CSRF fields retained.
 
 
 def test_separate_limits_shared_impact_and_individual_assignments():
     template,data=context('manage');html=environment().get_template(template).render(**data)
-    for text in ('2 of 5 employee seats occupied','4 of 5 active roles','Your owner account counts toward neither limit',
+    for text in ('Employee seats','2 of 5','Active roles','4 of 5','Your owner account counts toward neither limit',
         'Roles do not use employee seats','Editing a role changes it for every employee and pending invitation',
-        'affects that employee only','Restore access','Removed employees need a new invitation','Staff setup only'):
+        'Edit assignments','Restore access','Removed employees need a new invitation','Staff setup only'):
         assert text in html
     assert 'Archive this role' in html and 'No private link is shown here' not in html
 
@@ -102,7 +135,7 @@ def test_separate_limits_shared_impact_and_individual_assignments():
     ('delivery-configuration_required','Email setup needs attention'),('delivery-failed','Email could not be sent'),('delivery-sent','Email sent'),('delivery-suppressed','Email not sent')])
 def test_email_statuses_use_plain_labels_without_private_links(state,label):
     template,data=context(state);html=environment().get_template(template).render(**data)
-    assert '<h2>'+label+'</h2>' in html and 'No private link is shown here' in html
+    assert label in html and 'No private link is shown here' in html
     assert '#token=' not in html and 'A'*43 not in html
     assert 'Acceptance transfers that occupied seat to the employee; it does not free it.' in html
     assert 'until it expires, is accepted or is cancelled' not in html
@@ -119,3 +152,19 @@ def test_copy_retains_owner_only_permissions_and_disabled_workflows():
     css=(ROOT/'app/static/css/staff.css').read_text()
     assert 'minmax(0,1fr)' in css and '@media(max-width:480px)' in css
     assert 'overflow:hidden' not in css
+
+
+@pytest.mark.parametrize('change', ['csrf','permission','required','target'])
+def test_submission_contract_detects_security_relevant_changes(change):
+    import copy
+    forms=[[{'method':'POST','action':'/fixed'},[
+        ['input',{'name':'csrf_token','value':'synthetic'}],
+        ['input',{'name':'email','type':'email','required':None}],
+        ['input',{'name':'permissions','value':'sales_create','type':'checkbox','checked':None}],
+    ]]]
+    changed=copy.deepcopy(forms)
+    if change=='csrf':changed[0][1][0][1]['value']='different'
+    elif change=='permission':changed[0][1][2][1]['value']='financial_view'
+    elif change=='required':changed[0][1][1][1].pop('required')
+    else:changed[0][0]['action']='/different'
+    assert submission_contract(forms)!=submission_contract(changed)

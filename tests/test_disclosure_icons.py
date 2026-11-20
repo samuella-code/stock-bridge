@@ -30,4 +30,5 @@ def test_sales_help_preserves_native_disclosure_and_accessible_text():
     assert 'aria-hidden' not in html
     assert '▶' not in html
     sales = (ROOT / 'app/templates/sales/index.html').read_text()
-    assert "help_panel('Sales')" in sales
+    assert "help_panel('Sales')" not in sales
+    assert 'aria-labelledby="record-sale-title"' in sales

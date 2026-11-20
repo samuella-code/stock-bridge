@@ -63,7 +63,7 @@ def test_three_entry_methods_and_no_scanner_ui(client):
         links=[]
         def handle_starttag(self,tag,attrs):
             attrs=dict(attrs)
-            if tag=='a' and attrs.get('class')=='entry-choice':
+            if tag=='a' and attrs.get('href') in ('/products/new','/products/quick-add','/products/import') and attrs.get('href') not in self.links:
                 self.links.append(attrs['href'])
     parser=Choices();parser.feed(client.get('/products/').data.decode())
     assert parser.links==['/products/new','/products/quick-add','/products/import']
@@ -91,7 +91,7 @@ def test_retained_barcode_is_never_read_or_overwritten(client):
     assert result['name']=='Updated' and 'barcode' not in result
     assert client.get('/products/lookup?q=retained-private-identifier').json['products']==[]
     search=client.get('/products/?q=retained-private-identifier').data
-    assert b'No matching products' in search and b'<strong>Updated</strong>' not in search
+    assert b'No products match these filters.' in search and b'<strong>Updated</strong>' not in search
     assert client.get('/products/lookup?barcode=retained-private-identifier').status_code==400
 
 @pytest.mark.parametrize('extension',['csv','xlsx'])

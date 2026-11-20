@@ -41,11 +41,11 @@ def test_picker_and_sales_action_accessibility(client):
     owner(client);add(client,'Rice',5)
     for url in ['/sales/','/restocking/']:
         html=client.get(url).data
-        assert b'<details class="basket-browse">' in html
+        assert b'aria-controls="' in html and b'class="basket-results"' in html
         assert b'<details class="basket-browse" open' not in html
         assert b'Search products by name' in html
     restock=client.get('/restocking/').data
-    assert b'Review: 0 products' in restock and b'Expected stock is an estimate' in restock
+    assert b'0 products selected' in restock and b'Add a product to preview its stock change.' in restock
     source=(Path(__file__).resolve().parents[1]/'app/templates/sales/index.html').read_text()
     assert '>⋯</summary>' in source and '>⋯ Actions</summary>' not in source
     assert 'aria-label="Actions for sale' in source
@@ -63,8 +63,9 @@ def test_receipt_item_wording_preserves_counts_and_amounts(client, count):
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     if count:
-        assert f' · {count} {"item" if count == 1 else "items"} · ₦{count * 200:,.2f}' in html
+        from tests.presentation_helpers import text
+        assert f'· {count} {"item" if count == 1 else "items"} · ₦{count * 200:,}' in text(html)
         assert '1 items' not in html
     else:
-        assert 'No restocks recorded yet' in html
+        assert 'Your recent restocks will appear here.' in html
     assert Restock.query.count() == count

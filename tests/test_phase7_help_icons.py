@@ -5,6 +5,7 @@ from jinja2 import Environment, FileSystemLoader
 from tests.test_business_workflows import client, owner
 from app import db
 from unittest.mock import patch
+from tests.presentation_helpers import nodes
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -17,7 +18,7 @@ def test_help_is_public_read_only_and_links_to_existing_workflows(client):
                    'adjustments', 'expenses', 'reports', 'interrupted', 'businesses'):
         assert f'id="{anchor}"' in html and f'href="#{anchor}"' in html
     assert 'Official contact details remain pending' in html
-    assert '<form' not in html
+    assert all(a.get('class')=='sb-assistant-compose' and not a.get('action') for a in nodes(html,'form'))
     assert client.post('/help').status_code in (400, 405)
     with patch.object(db.session, 'execute', side_effect=AssertionError('DB lookup')):
         assert client.get('/help').status_code == 200
@@ -28,8 +29,8 @@ def test_help_authenticated_and_always_discoverable(client):
     assert client.get('/help').status_code == 200
     html = client.get('/dashboard').get_data(as_text=True)
     assert 'Help Centre' in html and 'href="/help"' in html
-    assert 'only when they happen' in html
-    assert 'Review your inventory' in html
+    assert 'Needs attention' not in html  # No low-stock products in this fixture.
+    assert 'Record sale' in html and 'Restock' in html
 
 
 def test_shared_navigation_icons_are_decorative_and_keep_active_state():
@@ -46,9 +47,9 @@ def test_shared_navigation_icons_are_decorative_and_keep_active_state():
 def test_plus_connection_is_separate_from_business_cards(client):
     client.application.config['SUBSCRIPTIONS_ENABLED'] = True
     html = client.get('/').get_data(as_text=True)
-    assert 'pair-connection' in html and '↔' not in html
+    assert 'sb-home-businesses' in html and '↔' not in html
     assert 'Example Mini Mart' in html and 'Example Fashion Shop' in html
-    assert 'Its stock. Its sales. Its reports.' in html
+    assert 'Its own products, inventory and sales.' in html and 'Its own expenses, stock and reports.' in html
     css = (ROOT / 'app/static/css/entry.css').read_text()
     assert '.business-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))' in css
     assert 'grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr)' in css
@@ -95,9 +96,9 @@ def test_normal_route_still_starts_eligible_trial(client):
 
 def test_help_navigation_reuses_responsive_focus_styles(client):
     html = client.get('/help').get_data(as_text=True)
-    assert 'class="policy-navigation"' in html and 'class="policy-links"' in html
-    css = (ROOT / 'app/static/css/legal.css').read_text()
-    assert 'flex-wrap:wrap' in css and '.legal-public a:focus-visible' in css
+    assert 'aria-label="Guide topics"' in html and 'sb-help-topic-links' in html
+    css = (ROOT / 'app/static/css/help-presentation.css').read_text()
+    assert '@media' in css and ':focus-visible' in css
 
 
 def test_page_header_caller_actions_and_help_panel_are_independent():

@@ -30,11 +30,11 @@ def records(business, *, sale=False, expense=False, voided=False):
 def test_empty_business_welcome_and_real_setup(app, kind):
     user, shops = seed(kind); client = app.test_client(); login(client, user)
     html = client.get('/dashboard').get_data(as_text=True)
-    assert 'Welcome to StockBridge' in html and '0 of 3 setup actions completed' in html
-    assert f'stockbridge:welcome:v1:{user.id}:{shops[0].id}' in html
-    assert 'data-welcome-dismiss hidden' in html
-    assert 'Explore your reports' in html
-    assert len(re.findall('data-complete="false"', html)) == 3
+    assert 'Here is how '+shops[0].name+' is doing today.' in html
+    assert setup_progress(shops[0])['completed']==0
+    assert 'business-setup' not in html and 'Finish setting up' not in html
+    for action in ('Record sale','Restock','Add expense'):assert action in html
+
 
 
 @pytest.mark.parametrize('sale,expense,count', [(False,False,1),(True,False,2),(False,True,2),(True,True,3)])
@@ -44,7 +44,8 @@ def test_setup_completes_from_all_dates_and_hides_when_finished(app, sale, expen
     client = app.test_client(); login(client, user)
     html = client.get('/dashboard?period=today').get_data(as_text=True)
     assert 'Welcome to StockBridge' not in html
-    assert ('id="business-setup"' in html) == (count < 3)
+    assert 'id="business-setup"' not in html
+    assert setup_progress(shops[0])['completed']==count
     if count == 2:
         assert 'id="business-setup" open' not in html  # Existing transaction history stays compact.
     assert Product.query.one().stock_quantity == 90
@@ -74,9 +75,9 @@ def test_switching_uses_each_business_setup_and_empty_states(app):
     assert 'id="business-setup"' not in client.get('/dashboard').get_data(as_text=True)
     assert client.post(f'/businesses/{shops[1].id}/switch').status_code == 302
     html=client.get('/dashboard').get_data(as_text=True)
-    assert '0 of 3 setup actions completed' in html and f'Setup for {shops[1].name}' in html
-    assert f'stockbridge:welcome:v1:{user.id}:{shops[1].id}' in html
-    assert 'No products yet' in client.get('/products/').get_data(as_text=True)
+    assert f'Here is how {shops[1].name} is doing today.' in html
+    assert setup_progress(shops[1])['completed']==0
+    assert 'Your products and prices will appear here once you add a product.' in client.get('/products/').get_data(as_text=True)
     client.post(f'/businesses/{shops[0].id}/switch')
     assert 'id="business-setup"' not in client.get('/dashboard').get_data(as_text=True)
 
@@ -86,19 +87,19 @@ def test_other_account_records_cannot_complete_setup(app):
     user, other=seed('basic', email='other@example.invalid')
     assert setup_progress(other[0])['completed']==0
     client=app.test_client();login(client,user)
-    assert '0 of 3 setup actions completed' in client.get('/dashboard').get_data(as_text=True)
+    assert f'Here is how {other[0].name} is doing today.' in client.get('/dashboard').get_data(as_text=True)
 
 
-@pytest.mark.parametrize('path,title,action', [('/products/','No products yet','Add Product'),
-    ('/products/?view=inventory','No inventory yet','Add Product'),
-    ('/sales/','No sales recorded yet','Add Product'),
-    ('/restocking/','No restocks recorded yet','Add Product'),
-    ('/expenses/','No expenses recorded yet','Add Expense')])
+@pytest.mark.parametrize('path,title,action', [('/products/','Your products and prices will appear here','Add product'),
+    ('/products/?view=inventory','Your stock levels will appear here','Add product'),
+    ('/sales/','Your sales will appear here once recorded.','Add product'),
+    ('/restocking/','Your recent restocks will appear here.','Add a product'),
+    ('/expenses/','Your expenses will appear here once recorded.','Add expense')])
 def test_useful_no_data_states(app,path,title,action):
     user,_=seed();client=app.test_client();login(client,user)
     html=client.get(path).get_data(as_text=True)
     assert title in html and action in html
-    assert 'context-help' in html and '<summary>Learn about' in html
+    assert '<summary>Learn about' not in html and 'sb-empty' in html
 
 
 @pytest.mark.parametrize('path', ['/products/?q=missing','/products/?view=inventory&stock=low', '/restocking/?q=missing'])
@@ -124,7 +125,7 @@ def test_trial_banner_uses_real_account_date_not_legacy_business_date(app):
     shops[0].trial_ends_at=datetime(2040,1,1);db.session.commit()
     before=(account.trial_started_at,account.trial_ends_at)
     client=app.test_client();login(client,user);html=client.get('/dashboard').get_data(as_text=True)
-    assert f'Ends {account.trial_ends_at:%d %b %Y} UTC.' in html
+    assert account.trial_ends_at.strftime('%d/%m/%Y') in html and 'data-sb-wat="date"' in html
     assert 'Free Trial · 3 days remaining' in html and 'No card required.' in html
     assert '2040' not in html
     assert (account.trial_started_at,account.trial_ends_at)==before
@@ -144,7 +145,7 @@ def test_expired_guidance_preserves_write_guard(app):
     account.trial_ends_at=datetime.utcnow()-timedelta(seconds=1);db.session.commit()
     client=app.test_client();login(client,user);html=client.get('/dashboard').get_data(as_text=True)
     assert 'trial-status' not in html and 'data-welcome-key' not in html
-    assert 'Trial expired' in html and 'Your records are available to view.' in html
+    assert 'Trial expired' in html and 'Your records are safe. Choose a plan to add or change records.' in html
     assert client.post('/products/new',data={'name':'Forbidden'}).status_code==302
     assert Product.query.count()==0
 
@@ -152,7 +153,6 @@ def test_expired_guidance_preserves_write_guard(app):
 def test_reports_explains_preserved_financial_formulas(app):
     user,shops=seed();records(shops[0],sale=True,expense=True)
     client=app.test_client();login(client,user);html=client.get('/reports?period=month').get_data(as_text=True)
-    assert '<summary>Learn about Reports</summary>' in html
-    assert 'Gross profit is revenue minus the cost saved when each item was sold.' in html
-    assert 'Net profit is gross profit minus recorded operating expenses.' in html
-    assert 'not deducted a second time' in html
+    assert '<summary>More figures</summary>' in html
+    assert 'What you sold minus what the goods cost you' in html
+    assert 'Estimated net profit' in html and 'Voided sales and expenses are excluded from totals.' in html

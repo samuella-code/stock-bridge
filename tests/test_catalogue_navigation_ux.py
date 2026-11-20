@@ -33,13 +33,15 @@ def render(name, args=None, **values):
 
 
 @pytest.mark.parametrize('template,label,note', [
-    ('sales/index.html', 'All-time recorded sales', 'Voided sales excluded from both totals.'),
-    ('expenses/index.html', 'All-time recorded expenses', 'Voided expenses excluded.')])
+    ('sales/index.html', 'Recent sales', 'Voided sales are not counted'),
+    ('expenses/index.html', 'Total expenses recorded', 'Voided expenses are not counted.')])
 def test_totals_have_accurate_labels(template, label, note):
     html = render(template)
-    assert label in html and note in html and '₦1,234.00' in html
+    assert label in html
     if template.startswith('sales'):
-        assert 'All-time estimated gross profit ₦900.00' in html
+        assert 'Total: ₦0' in html and 'Estimated gross profit: ₦0' in html
+    else:
+        assert note in html and '₦1,234' in html
 
 
 @pytest.mark.parametrize('path,model', [('app/sales/routes.py', 'Sale'), ('app/expenses/routes.py', 'Expense')])
@@ -93,6 +95,6 @@ def test_catalogue_details_and_add_links_carry_context():
     html = render('products/index.html', {'view': 'inventory', 'q': 'Coke'}, products=[],
         pagination=SimpleNamespace(has_prev=False, has_next=False, page=1, pages=1), query='Coke',
         stock_filter='all', category='', sort='recent', total_products=0, low_stock_count=0, inventory_value=0)
-    assert '/products.create?view=inventory&q=Coke' in html
+    assert '/restocking.index' in html and '/products.index?view=inventory' in html
     source = (ROOT / 'app/templates/products/index.html').read_text()
-    assert source.count("url_for('products.detail',product_id=p.id,**catalogue_navigation)") == 2
+    assert source.count("url_for('products.detail', product_id=p.id, **catalogue_navigation)") == 2

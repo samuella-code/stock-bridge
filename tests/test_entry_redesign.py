@@ -68,24 +68,24 @@ def test_rollout_flag_controls_email_signup_trial_and_customer_copy(app,enabled,
 
 def test_homepage_workflow_prices_navigation_faq_and_ctas(app):
     html=app.test_client().get('/').get_data(as_text=True)
-    for anchor in ('features','how-it-works','pricing','faq'):
+    for anchor in ('features','how-it-works','pricing'):
         assert f'href="#{anchor}"' in html and f'id="{anchor}"' in html
     for page in ('Products','Inventory','Sales','Restocking','Expenses','Dashboard','Reports'):
         assert page in html
-    assert html.count('<details>')==12
-    for label in ('Save ₦6,000/year','Save ₦10,000/year','7-day free trial','No card required','Up to 2'):
+    assert 'id="faq"' in html and html.count('<details>')==6
+    for label in ('Save ₦6,000 yearly','Save ₦10,000 yearly','7-day free trial','No card required','Up to 2'):
         assert label in html
     assert 'href="/auth/signup"' in html and 'href="/auth/login"' in html
-    assert 'Illustrative StockBridge' in html and 'Example figures' in html
+    assert 'Example Mini Mart' in html and 'Sample figures' in html
     assert 'quarterly' not in html and 'biannual' not in html
-    assert 'data-price-monthly="₦3,000/month"' in html
-    assert 'data-price-yearly="₦50,000/year"' in html
+    assert '₦3,000' in html and 'per month' in html
+    assert '₦50,000' in html and 'per year' in html
 
 
 @pytest.mark.parametrize('path',['/auth/login','/auth/signup'])
 def test_auth_labels_preserved_fields_and_social_actions(app,path):
     html=app.test_client().get(path).get_data(as_text=True)
-    assert 'entry-auth' in html and '<label>Email address' in html
+    assert 'sb-signin' in html and 'Email address' in html and 'name="email"' in html
     assert '<label for="login-password">Password</label>' in html if path.endswith('login') else '<label for="signup-password">Password</label>' in html
     assert 'action="/auth/google/start"' in html and 'action="/auth/apple/start"' not in html
     assert 'name="csrf_token"' in html and 'autocomplete="email"' in html
@@ -152,10 +152,10 @@ def test_review_current_selection_and_other_accounts_rejected(app):
 def test_current_plan_trial_and_legacy_presentation(app,kind):
     user,_=seed(kind); client=app.test_client();login(client,user)
     html=client.get('/plans/').get_data(as_text=True)
-    assert 'Your current plan' in html and 'Save ₦6,000/year' in html
+    assert 'Current plan' in html and 'Change plan' in html
     if kind=='trial':
         from app.models import AccountBilling
-        assert AccountBilling.query.one().trial_ends_at.strftime('%d %b %Y %H:%M UTC') in html
+        assert AccountBilling.query.one().trial_ends_at.strftime('%d/%m/%Y') in html
         assert '7 days remaining' in html
     else:assert 'Your trial has' not in html
     if kind.startswith('lifetime'):
@@ -193,7 +193,7 @@ def test_public_visuals_render_without_database_queries(app, path):
     try:
         response=app.test_client().get(path)
         assert response.status_code==200
-        assert b'Representative demo' in response.data
+        assert any(label in response.data for label in (b'Sample figures',b'Example workspace',b'What you get on day one'))
         assert not queries
     finally:
         event.remove(db.engine, 'before_cursor_execute', record_query)

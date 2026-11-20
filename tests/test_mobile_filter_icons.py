@@ -34,5 +34,5 @@ def test_dashboard_preserves_custom_date_parameters(app):
     html = response.get_data(as_text=True)
     assert 'name="from" value="2026-10-01"' in html
     assert 'name="to" value="2026-10-09"' in html
-    assert '<button class="secondary-btn">Apply</button>' in html
+    assert '<button class="sb-button sb-button-secondary" type="submit">Apply</button>' in html
     assert 'aria-label="Main navigation"' in html

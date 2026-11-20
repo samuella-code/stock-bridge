@@ -248,7 +248,7 @@ def test_two_business_end_to_end_and_all_route_isolation(app):
     expense=Expense.query.filter_by(business_id=shops[0].id).one()
     assert client.post(f'/sales/{sale.id}/delete',data={'reason':'attack'}).status_code==404
     assert client.post(f'/expenses/{expense.id}/delete').status_code==404
-    assert b'No matching products' in client.get('/products/?q=Coke&business_id='+str(shops[0].id)).data
+    assert b'No products match these filters.' in client.get('/products/?q=Coke&business_id='+str(shops[0].id)).data
     client.post('/restocking/receive',data=with_restock_token(client, {'product_id':shirt.id,'quantity':'2','unit_cost':'4000'}))
     assert db.session.get(Product,coke.id).stock_quantity==90
     assert Restock.query.one().business_id==fashion.id
