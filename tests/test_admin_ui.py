@@ -106,7 +106,8 @@ def test_historical_payment_links_do_not_point_to_subscription_details(client, r
         response = client.get(path)
         assert response.status_code == 200
         assert f"/admin/payments/{records['legacy']}".encode() not in response.data
-        assert b'LEGACY-hidden' in response.data
+        if path!='/admin/notifications':assert b'LEGACY-hidden' in response.data
+        else:assert b'Failed payments' in response.data  # Decision counts replace raw legacy references.
     assert f"/admin/payments/{records['payment']}".encode() in client.get(f"/admin/users/{records['customer']}").data
 
 

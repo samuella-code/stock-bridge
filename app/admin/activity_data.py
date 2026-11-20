@@ -20,6 +20,13 @@ SECURITY = ('ADMIN_LOGIN_SUCCESS', 'ADMIN_LOGIN_FAILED', 'ADMIN_LOGOUT', 'ADMIN_
             'ADMIN_MFA_ENROLLED', 'ADMIN_MFA_FAILED', 'ADMIN_MFA_RECOVERY_USED')
 EMAIL = re.compile(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 VERBS = {
+    'ADMIN_REMINDER_CLAIMED': 'prepared a reminder email',
+    'ADMIN_REMINDER_RESULT': 'recorded a reminder email result',
+    'ADMIN_ALERT_PREFERENCE_UPDATED': 'saved admin alert preferences',
+    'ADMIN_REMINDER_SCHEDULE_UPDATED': 'saved automatic reminder timings',
+    'REMINDERS_STOPPED': 'stopped optional reminder emails',
+    'REMINDER_FEEDBACK_RECEIVED': 'shared optional plan feedback',
+    'ADMIN_ALERT_RESULT': 'recorded an admin alert email result',
     'SALE_CREATED': 'recorded a sale', 'SALE_VOIDED': 'voided a sale', 'SALE_DELETED': 'voided a sale',
     'EXPENSE_CREATED': 'added an expense', 'EXPENSE_VOIDED': 'voided an expense',
     'RESTOCK_CREATED': 'recorded a restock', 'PRODUCT_CREATED': 'added a product',

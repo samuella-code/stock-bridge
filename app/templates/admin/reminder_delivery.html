@@ -1,0 +1,4 @@
+{% extends 'admin/customers_base.html' %}
+{% block title %}Reminder delivery · StockBridge Admin{% endblock %}
+{% block extra_styles %}{{super()}}<link rel="stylesheet" href="{{url_for('static',filename='css/admin-notifications.css')}}">{% endblock %}
+{% block customer_content %}<div class="notification-shell"><h1>Reminder delivery</h1><section class="card"><dl><dt>Sent by</dt><dd>{{actor_name}}</dd><dt>To</dt><dd>{{email}}</dd><dt>When</dt><dd>{{at}}</dd><dt>Status</dt><dd>{{row.email_status}}</dd><dt>Type</dt><dd>{{row.kind|replace('_',' ')}}{% if row.is_test %} · Test{% endif %}</dd>{% if row.override_reason %}<dt>Frequency override reason</dt><dd>{{row.override_reason}}</dd>{% endif %}</dl><h2>Message</h2><p class="reminder-body">{{body}}</p><p>Dispatched messages include a stop-reminders link.</p></section><a class="btn" href="{{url_for('admin.activity')}}">Activity</a></div>{% endblock %}

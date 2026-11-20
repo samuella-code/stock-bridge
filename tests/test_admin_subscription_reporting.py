@@ -215,7 +215,9 @@ def test_alerts_use_entitlements(client, setup, kind, alert):
     elif kind == 'suspended-business': shops[0].suspended_at = datetime.utcnow()
     db.session.commit()
     admin_login(client)
-    assert (b'ALERT-SUBJECT' in client.get('/admin/notifications').data) is alert
+    # Business-marker disagreement was removed from Notifications by design;
+    # current owner trial/renewal decisions have their own cards.
+    assert b'ALERT-SUBJECT' not in client.get('/admin/notifications').data
 
 
 def test_api_compatibility_and_read_only_gets(client, setup):

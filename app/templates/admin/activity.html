@@ -23,7 +23,7 @@
 <time datetime="{{e.timestamp}}">{{e.time}}</time>
 <details><summary>Event details</summary><dl><dt>Event ID</dt><dd>{{e.id}}</dd><dt>Action</dt><dd>{{e.action}}</dd>
 {% if e.target %}<dt>Record type</dt><dd>{{e.target}}</dd>{% endif %}{% if e.target_id is not none %}<dt>Record ID</dt><dd>{{e.target_id}}</dd>{% endif %}
-<dt>Recorded details</dt><dd>{{e.description or 'No additional details recorded.'}}</dd></dl></details>
+{% if e.target=='Reminder Delivery' %}<dt>Message</dt><dd><a class="btn" href="{{url_for('admin.reminder_delivery',delivery_id=e.target_id)}}">View reminder message and delivery</a></dd>{% endif %}<dt>Recorded details</dt><dd>{{e.description or 'No additional details recorded.'}}</dd></dl></details>
 </div></li>{% endfor %}</ol></section>{% else %}<p class="card">No activity matches these filters.</p>{% endfor %}
 </div>
 <nav id="activity-pagination" class="activity-pagination" aria-label="Activity pages">

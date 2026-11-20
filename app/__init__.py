@@ -93,6 +93,10 @@ def create_app(test_config=None):
                     return redirect(url_for("admin.index"))
                 return redirect(f"https://{customer_host}{request.full_path.rstrip('?')}")
             abort(404)
+        # Signed public reminder links confirm their own narrow actions. They
+        # must not start a trial or depend on the browser's existing login role.
+        if request.endpoint in {'admin.stop_reminders', 'admin.reminder_feedback'}:
+            return None
         # Old admin cookies on the customer host should not hide customer login.
         if host == customer_host and current_user.is_authenticated and session.get("admin_session"):
             logout_user()
@@ -145,7 +149,7 @@ def create_app(test_config=None):
 
     @app.context_processor
     def subscription_context():
-        if has_request_context() and request.blueprint == 'staff':
+        if has_request_context() and (request.blueprint == 'staff' or request.endpoint in {'admin.stop_reminders','admin.reminder_feedback'}):
             return {}
         if has_request_context() and request.endpoint in {'main.insights', 'main.business_overview'}:
             # Each premium reporting route authorizes once at its UTC instant.
