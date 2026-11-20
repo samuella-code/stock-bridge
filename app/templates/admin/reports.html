@@ -34,5 +34,6 @@
 <label class="report-switch"><span>Weekly email</span><span class="report-switch-control"><input type="checkbox" name="weekly_email" role="switch" {% if email_opt_in_active %}checked{% endif %} aria-describedby="weekly-email-hint"><span aria-hidden="true"></span></span></label><button class="btn" data-save-preference type="submit">Save email preference</button></form>
 <p class="caption muted" id="weekly-email-hint">{% if email_preference and email_preference.weekly_enabled and not email_opt_in_active %}Turn Weekly email on again to confirm your choice after the account security change.{% elif not email_delivery_ready %}Your choice is saved when you change the switch. Scheduled delivery is not enabled yet.{% else %}Sent only to your verified admin email. Turn off the switch to stop weekly reports.{% endif %}</p>
 </section></div>
+<section class="card"><h2>Why owners stopped</h2><p class="muted">Optional win-back answers received in this period.</p><dl>{% for reason,count in metrics.reminder_feedback.items() %}<dt>{{reason}}</dt><dd>{{count}}</dd>{% endfor %}</dl></section>
 {% endif %}
 {% endblock %}

@@ -81,6 +81,14 @@ class Config:
  APPLE_PRIVATE_KEY=os.getenv("APPLE_PRIVATE_KEY", "")
  APPLE_REDIRECT_URI=os.getenv("APPLE_REDIRECT_URI", "")
 
+ # Reminder/alert delivery has independent exact staging identity, SHA and recipient gates.
+ ADMIN_REMINDERS_EMAIL_ENABLED=os.getenv('ADMIN_REMINDERS_EMAIL_ENABLED', '')
+ ADMIN_REMINDERS_AUTOMATION_ENABLED=os.getenv('ADMIN_REMINDERS_AUTOMATION_ENABLED', '')
+ ADMIN_REMINDERS_APPROVED_SHA=os.getenv('ADMIN_REMINDERS_APPROVED_SHA', '')
+ ADMIN_REMINDERS_ALLOWED_RECIPIENTS=os.getenv('ADMIN_REMINDERS_ALLOWED_RECIPIENTS', '')
+ ADMIN_REMINDERS_ORIGIN=os.getenv('ADMIN_REMINDERS_ORIGIN', 'https://stock-bridge-staging.vercel.app')
+ ADMIN_REMINDERS_DISPATCH_SECRET=os.getenv('ADMIN_REMINDERS_DISPATCH_SECRET', '')
+
  # Inventory email dispatch is deliberately off until environment-specific setup.
  INVENTORY_EMAILS_ENABLED=os.getenv('INVENTORY_EMAILS_ENABLED', 'false').lower()=='true'
  # Independent, opt-in admin reporting. Never inherits inventory/staff delivery flags.

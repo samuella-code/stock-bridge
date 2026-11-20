@@ -82,7 +82,8 @@ def report(window, legacy_query, now):
     for week in weeks:
         week['percent'] = round(100*week['amount']/peak, 2) if peak else 0
     paying = current_subscription_accounts(owners, now=now)
-    return dict(new_customers=sum(window['start'] <= u.created_at < window['end'] for u in owners),
+    from app.admin.reminder_service import feedback_summary
+    return dict(reminder_feedback=feedback_summary(window['start'],window['end']),new_customers=sum(window['start'] <= u.created_at < window['end'] for u in owners),
         verified=sum(bool(u.email_verified_at and window['start'] <= u.email_verified_at < window['end']) for u in owners),
         payment_count=payment_count, suspended=sum(u.suspended_at is not None for u in owners),
         by_plan={plan:sum(intervals.values()) for plan,intervals in paying['by_plan'].items()},

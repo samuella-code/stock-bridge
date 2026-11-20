@@ -841,33 +841,15 @@ def period_metrics(start,end, *, current_accounts=None):
 @admin_bp.get("/notifications")
 @admin_required
 def notifications():
-    pending=Payment.query.filter(Payment.product=="lifetime",Payment.status.in_(("initialized","pending")),
-        Payment.created_at<datetime.utcnow()-timedelta(days=2)).order_by(Payment.created_at.asc()).limit(10).all()
-    payment_issues=payment_issues_query().filter(Payment.status=="success").order_by(Payment.created_at.desc()).limit(10).all()
-    failed=Payment.query.filter_by(product="lifetime",status="failed").order_by(Payment.created_at.desc()).limit(10).all()
-    recent=AuditLog.query.filter(AuditLog.action.in_(("USER_REGISTERED","ACCESS_PAYMENT_SUCCESSFUL","USER_SUSPENDED","BUSINESS_SUSPENDED"))).order_by(AuditLog.created_at.desc()).limit(20).all()
-    # An old active business marker is not itself a current entitlement.
-    # Do not flag intentionally suspended accounts/businesses as billing anomalies.
-    from app.subscriptions.entitlements import EntitlementSnapshot
-    entitlement_now=datetime.utcnow()
-    candidates=customer_business_query().filter(Business.subscription_status=="active",
-        Business.suspended_at.is_(None),User.suspended_at.is_(None)).options(joinedload(Business.owner)).order_by(Business.id).all()
-    snapshot=EntitlementSnapshot([b.owner for b in candidates],now=entitlement_now)
-    access_without_payment=[]
-    legacy_ids={p.business_id for p in verified_payments_query().all()}
-    for business in candidates:
-        if snapshot.access(business.owner,business=business).can_write:
-            continue
-        if not current_app.config.get("SUBSCRIPTIONS_ENABLED") and business.id in legacy_ids:
-            continue
-        access_without_payment.append(business)
-        if len(access_without_payment)==10:
-            break
-    security_alerts=db.session.query(AdminLoginAttempt.identifier).filter(
-        AdminLoginAttempt.attempted_at>=datetime.utcnow()-timedelta(minutes=15)
-    ).group_by(AdminLoginAttempt.identifier).having(func.count(AdminLoginAttempt.id)>=5).count()
-    return render_template("admin/notifications.html",pending=pending,failed=failed,payment_issues=payment_issues,
-        access_without_payment=access_without_payment,recent=recent,security_alerts=security_alerts)
+    from app.admin import notification_data
+    from app.admin.reminder_service import email_gate, TIMINGS
+    from app.models import AdminAlertPreference, AdminReminderSchedule
+    now=datetime.utcnow()
+    preference=db.session.get(AdminAlertPreference,current_user.id)
+    return render_template('admin/notifications.html',notices=notification_data.page(now),
+        preference=preference,timings=TIMINGS,schedules={r.key:r for r in AdminReminderSchedule.query.all()},
+        email_ready=email_gate()[0]=='ready')
+
 
 @admin_api_bp.get("/dashboard")
 @admin_required
@@ -945,3 +927,5 @@ def api_reports():
 from app.admin import customers as customer_tools
 from app.admin import payment_checks as payment_check_tools
 from app.admin import report_emails as report_email_tools
+
+from app.admin import reminders as reminder_tools

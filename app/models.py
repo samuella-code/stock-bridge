@@ -417,3 +417,66 @@ class AdminCustomerMessage(db.Model):
         db.UniqueConstraint('actor_id', 'request_key', name='uq_admin_message_request'),
         db.CheckConstraint("status IN ('sending','sent','failed','unknown')", name='ck_admin_message_status'),
     )
+
+
+class AdminAlertPreference(db.Model):
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), primary_key=True)
+    failed_payments = db.Column(db.Boolean, nullable=False, default=False)
+    security_alerts = db.Column(db.Boolean, nullable=False, default=False)
+    daily_summary = db.Column(db.Boolean, nullable=False, default=False)
+    version = db.Column(db.Integer, nullable=False, default=0)
+    auth_version = db.Column(db.Integer, nullable=False, default=0)
+    mfa_verified = db.Column(db.Boolean, nullable=False, default=False)
+
+
+class AdminReminderSchedule(db.Model):
+    key = db.Column(db.String(40), primary_key=True)
+    enabled = db.Column(db.Boolean, nullable=False, default=False)
+    actor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    auth_version = db.Column(db.Integer, nullable=False)
+    mfa_verified = db.Column(db.Boolean, nullable=False, default=False)
+    version = db.Column(db.Integer, nullable=False, default=0)
+
+
+class CustomerReminderPreference(db.Model):
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), primary_key=True)
+    stopped_at = db.Column(db.DateTime)
+    last_contact_at = db.Column(db.DateTime)
+
+
+class AdminReminderBatch(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    actor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    request_key = db.Column(db.String(100), nullable=False)
+    content_digest = db.Column(db.String(64), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint('actor_id', 'request_key', name='uq_reminder_batch_request'),)
+
+
+class AdminReminderDelivery(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    batch_id = db.Column(db.Integer, db.ForeignKey('admin_reminder_batch.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    kind = db.Column(db.String(30), nullable=False)
+    is_test = db.Column(db.Boolean, nullable=False, default=False)
+    is_automatic = db.Column(db.Boolean, nullable=False, default=False)
+    schedule_key = db.Column(db.String(40))
+    recipient_digest = db.Column(db.String(64), nullable=False)
+    body = db.Column(db.Text, nullable=False)
+    email_status = db.Column(db.String(16), nullable=False, default='unused')
+    override_reason = db.Column(db.String(300), nullable=False, default='')
+    include_feedback = db.Column(db.Boolean, nullable=False, default=False)
+    # Immutable eligibility period: a renewed/extended subscription is a new decision.
+    period_end = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime)
+    __table_args__ = (
+        db.UniqueConstraint('batch_id', 'user_id', name='uq_reminder_batch_recipient'),
+        db.CheckConstraint("email_status IN ('unused','sending','sent','failed','unknown','suppressed')", name='ck_reminder_email_status'),
+    )
+
+
+class AdminReminderFeedback(db.Model):
+    delivery_id = db.Column(db.Integer, db.ForeignKey('admin_reminder_delivery.id', ondelete='CASCADE'), primary_key=True)
+    reason = db.Column(db.String(30), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)

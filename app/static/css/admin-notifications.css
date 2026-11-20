@@ -1,0 +1,74 @@
+.notification-shell { display:grid;gap:var(--sb-6);min-width:0;font-family:var(--sb-font);color:var(--sb-ink);font-size:var(--sb-body); }
+.notification-shell h1 {font-size:var(--sb-title);font-weight:600;}
+.notification-shell h2,.notification-shell h3 {font-size:var(--sb-5);font-weight:600;margin:0 0 var(--sb-4);}
+.notification-shell p {line-height:1.6;}
+.notification-shell .card,.reminder-public .card {padding:var(--sb-6);border:var(--sb-stroke) solid var(--sb-border);border-radius:var(--sb-card-radius);background:var(--sb-surface);min-width:0;}
+.notification-shell .notification-clear {background:var(--sb-admin-clear);}
+.notification-shell .notification-worth {border-left:var(--sb-1) solid var(--sb-warning-bar);}
+.notification-shell .notification-attention {background:var(--sb-warning-bg);border-color:var(--sb-warning-border);color:var(--sb-warning-text);}
+.notification-grid {display:grid;grid-template-columns:minmax(0,1fr);gap:var(--sb-6);}
+.notification-list {list-style:none;padding:0;margin:0;}
+.notification-list li {display:flex;align-items:center;justify-content:space-between;gap:var(--sb-4);flex-wrap:wrap;padding:var(--sb-4) 0;border-bottom:var(--sb-stroke) solid var(--sb-border);}
+.notification-list small,.notification-recipient small,.notification-switch small {display:block;color:var(--sb-muted);font-size:var(--sb-caption);line-height:1.6;}
+.notification-switch,.notification-recipient {display:flex;align-items:center;gap:var(--sb-4);min-height:var(--sb-touch);padding:var(--sb-3) 0;cursor:pointer;}
+.notification-switch {justify-content:space-between;}
+.notification-switch input {appearance:none;flex-shrink:0;width:var(--sb-switch-width);height:var(--sb-6);border:var(--sb-stroke) solid var(--sb-muted);border-radius:var(--sb-pill);background:var(--sb-muted);cursor:pointer;}
+.notification-switch input:before {content:'';display:block;width:var(--sb-4);height:var(--sb-4);margin:var(--sb-lift);border-radius:var(--sb-pill);background:var(--sb-surface);}
+.notification-switch input:checked {background:var(--sb-primary);}
+.notification-switch input:checked:before {margin-left:var(--sb-5);}
+.notification-recipient input {width:var(--sb-6);height:var(--sb-6);flex-shrink:0;accent-color:var(--sb-primary);}
+.notification-shell input[type=text],.notification-shell textarea {width:100%;max-width:100%;box-sizing:border-box;border:var(--sb-stroke) solid var(--sb-input-border);border-radius:var(--sb-control-radius);padding:var(--sb-3);min-height:var(--sb-touch);font:inherit;color:var(--sb-ink);background:var(--sb-surface);}
+.notification-shell textarea {resize:vertical;}
+.notification-shell fieldset,.reminder-public fieldset {min-width:0;border:var(--sb-stroke) solid var(--sb-border);border-radius:var(--sb-control-radius);padding:var(--sb-4);}
+.notification-shell legend {font-weight:600;}
+.notification-shell .actions {display:flex;flex-wrap:wrap;gap:var(--sb-2);}
+.notification-shell .btn,.reminder-public .btn {display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-height:var(--sb-touch);padding:var(--sb-3) var(--sb-5);border:var(--sb-stroke) solid var(--sb-input-border);border-radius:var(--sb-control-radius);background:var(--sb-surface);color:var(--sb-ink);font:inherit;font-weight:600;text-decoration:none;cursor:pointer;max-width:100%;}
+.notification-shell .btn.primary,.reminder-public .btn.primary {background:var(--sb-primary);color:var(--sb-surface);border-color:var(--sb-primary);}
+.notification-shell button:disabled {opacity:1;color:var(--sb-muted);background:var(--sb-app);cursor:not-allowed;}
+.notification-shell :focus-visible,.reminder-public :focus-visible {outline:var(--sb-focus) solid var(--sb-primary);outline-offset:var(--sb-1);}
+.notification-shell label[for=reminder-message] {display:block;margin:var(--sb-4) 0 var(--sb-2);}
+.reminder-form {display:grid;gap:var(--sb-6);min-width:0;}
+.reminder-body {white-space:pre-wrap;overflow-wrap:anywhere;}
+.reminder-public {margin:0;padding:var(--sb-4);background:var(--sb-app);color:var(--sb-ink);font-family:var(--sb-font);font-size:var(--sb-body);}
+.reminder-public main {max-width:var(--sb-assistant-height);margin:var(--sb-8) auto;}
+.reminder-public h1 {font-size:var(--sb-title);font-weight:600;}
+@media (min-width:768px) {.notification-grid {grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media (prefers-reduced-motion:reduce) {.notification-shell *,.reminder-public * {animation:none!important;transition:none!important;}}
+
+/* Reference layout: stacked notices beside preferences, then a two-card composer. */
+.notification-columns,.notification-main,.notification-preferences {display:grid;gap:var(--sb-4);min-width:0;align-content:start;}
+.notification-main>h2 {margin-bottom:0;}
+.notification-preferences {align-self:start;}
+.notification-shell .notification-clear {border-color:var(--sb-input-border);}
+.notification-worth p {color:var(--sb-muted);margin:0 0 var(--sb-4);}
+.notification-shell .notification-worth {border-left-width:var(--sb-1);}
+.notification-events .notification-list li {padding:var(--sb-2) 0;border:0;}
+.notification-events .notification-list p {margin:0;}
+.notification-text-link {display:inline-flex;align-items:center;min-height:var(--sb-touch);color:var(--sb-primary);font-weight:600;overflow-wrap:anywhere;}
+.notification-preferences .notification-switch {border-bottom:var(--sb-stroke) solid var(--sb-border);padding:var(--sb-4) 0;}
+.notification-preferences button {margin-top:var(--sb-4);}
+.reminder-page-heading p {color:var(--sb-muted);}
+.reminder-explainer dl {margin:0;}
+.reminder-explainer dt {text-transform:uppercase;font-size:var(--sb-caption);font-weight:600;color:var(--sb-muted);margin-top:var(--sb-4);}
+.reminder-explainer dd {margin:var(--sb-1) 0 0;line-height:1.6;}
+.notification-shell .reminder-trial {border-top:var(--sb-1) solid var(--sb-warning-bar);}
+.notification-shell .reminder-winback {border-top:var(--sb-1) solid var(--sb-primary);}
+.reminder-compose-grid {align-items:start;}
+.reminder-audience {background:var(--sb-app);border-radius:var(--sb-control-radius);padding:var(--sb-3) var(--sb-4);margin-bottom:var(--sb-3);}
+.reminder-audience .notification-recipient {padding:var(--sb-2) 0;}
+.reminder-send-panel .heading {align-items:center;margin-bottom:var(--sb-2);}
+.reminder-send-panel .heading h2 {margin:0;}
+.notification-shell .reminder-send-by {margin-top:var(--sb-4);font-size:var(--sb-body);}
+.reminder-email-pill {display:inline-flex;align-items:center;min-height:var(--sb-touch);padding:var(--sb-2) var(--sb-5);border-radius:var(--sb-pill);background:var(--sb-segment-bg);font-weight:600;}
+.reminder-message-example {padding:var(--sb-4);border:var(--sb-stroke) solid var(--sb-input-border);border-radius:var(--sb-control-radius);line-height:2;overflow-wrap:anywhere;margin-bottom:var(--sb-5);}
+.reminder-token {display:inline-block;border-radius:var(--sb-pill);padding:0 var(--sb-2);background:var(--sb-primary);color:var(--sb-surface);font-size:var(--sb-caption);}
+.notification-shell [data-placeholder] {border-radius:var(--sb-pill);font-size:var(--sb-caption);padding:var(--sb-2) var(--sb-3);}
+.reminder-reason-chips {display:flex;flex-wrap:wrap;gap:var(--sb-2);}
+.reminder-reason-chips span {border:var(--sb-stroke) solid var(--sb-input-border);border-radius:var(--sb-pill);padding:var(--sb-2) var(--sb-3);font-size:var(--sb-caption);}
+.reminder-timing-grid {display:grid;gap:var(--sb-4);min-width:0;}
+@media (min-width:900px) {
+ .notification-columns {grid-template-columns:minmax(0,5fr) minmax(0,3fr);gap:var(--sb-6);}
+ .reminder-compose-grid {grid-template-columns:minmax(0,6fr) minmax(0,5fr);}
+ .reminder-timing-grid {grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+.reminder-send-panel .heading [aria-label="Close send panel"] {min-width:var(--sb-touch);justify-content:center;}

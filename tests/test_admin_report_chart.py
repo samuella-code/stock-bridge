@@ -18,7 +18,7 @@ def test_chart_uses_csp_safe_geometry(client, monkeypatch, tmp_path, count):
     monkeypatch.setattr(report_data, 'report', lambda *args,**kwargs: dict(
         new_customers=1,verified=1,collected=1300000,payment_count=2,active=7,
         suspended=0,paying=3,by_plan=dict(basic=1,plus=1,pro=1),
-        generated='19/11/2026 · 19:34 WAT',weeks=weeks))
+        generated='19/11/2026 · 19:34 WAT',weeks=weeks,reminder_feedback={}))
     response=client.get('/admin/reports?period=30d')
     assert response.status_code==200
     html=response.get_data(as_text=True); elements=Elements(html).items
