@@ -137,6 +137,10 @@
     }
     document.getElementById('customer-action-title').textContent = ({message:'Send message',trial:'Extend trial',suspension:'Change account status',resend:'Resend invitation',cancel:'Cancel invitation',remove:'Remove employee access'})[kind];
     actionForm.innerHTML = fields + '<label><input type="checkbox" name="confirm" required>Confirm this action.</label><button class="btn primary" type="submit">Confirm</button>';
+    if (kind === 'message') {
+      actionForm.elements.subject.value = button.dataset.messageSubject || '';
+      actionForm.elements.body.value = button.dataset.messageBody || '';
+    }
     document.getElementById('action-status').textContent = '';
     if (!actionDialog.open) actionDialog.showModal();
     actionForm.onsubmit = async event => {

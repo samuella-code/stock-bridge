@@ -604,30 +604,36 @@ def businesses_export():
 @admin_required
 def business_detail(business_id):
     b=customer_business_query().filter(Business.id==business_id).first_or_404()
-    metrics={"products":Product.query.filter_by(business_id=b.id).count(),
-        "sales":Sale.query.filter_by(business_id=b.id).count(),
-        "restocks":Restock.query.filter_by(business_id=b.id).count(),
-        "expenses":Expense.query.filter_by(business_id=b.id).count()}
-    payments=Payment.query.filter_by(business_id=b.id).order_by(Payment.created_at.desc()).limit(5).all()
-    activity=AuditLog.query.filter_by(business_id=b.id).order_by(AuditLog.created_at.desc()).limit(8).all()
-    return render_template("admin/business_detail.html",business=b,metrics=metrics,payments=payments,activity=activity)
+    from app.admin.business_detail_data import details
+    return render_template("admin/business_detail.html",business=b,detail=details(b,datetime.utcnow()))
 
 @admin_bp.post("/businesses/<int:business_id>/suspension")
 @admin_required
 def suspend_business(business_id):
-    b=db.session.get(Business,business_id)
+    b=Business.query.filter_by(id=business_id).populate_existing().with_for_update().first()
     if not b: abort(404)
     if b.owner.role=="admin" or b.owner.admin_enabled:
         abort(403)
-    if request.form.get("confirm")!="on":
-        flash("Confirm the business status change first.","error")
+    if request.form.get("confirm")!="on" or request.form.get("business_name", "") != b.name:
+        flash("Type the business name exactly to confirm this change.","error")
         return redirect(url_for("admin.business_detail",business_id=b.id))
     reason=request.form.get("reason","").strip()
     if not reason:
         flash("Enter a reason for this action.","error")
         return redirect(url_for("admin.business_detail",business_id=b.id))
-    active=change_suspension(b, target_type="business", description=f"Business {b.id}: ", business_id=b.id)
-    safely_send(send_account_status_email,b.owner,active=active,business=b)
+    from app.admin.business_detail_data import SUSPEND_REASONS, REACTIVATE_REASONS
+    choices = REACTIVATE_REASONS if request.form.get('desired_state') == 'reactivate' else SUSPEND_REASONS
+    note = request.form.get('note', '').strip()
+    if reason not in choices or len(note) > 200 or request.form.get('email_owner', '') not in ('', 'on'):
+        abort(400, description='Choose a listed reason and a note of at most 200 characters.')
+    # Preserve the existing compare-and-set, stale-state and audit transaction.
+    active=change_suspension(b, target_type="business", description=(note + ' — ' if note else ''), business_id=b.id)
+    flash('Business reactivated.' if active else 'Business suspended.', 'success')
+    if request.form.get('email_owner') == 'on':
+        sent = safely_send(send_account_status_email,b.owner,active=active,business=b)
+        flash('Owner email handed to the mail service.' if sent is True else
+            'The status change is saved, but email delivery could not be confirmed. Check before sending again.',
+            'success' if sent is True else 'warning')
     return redirect(url_for("admin.business_detail",business_id=b.id))
 
 def subscription_payments_query():

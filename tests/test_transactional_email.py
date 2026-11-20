@@ -199,13 +199,13 @@ def test_admin_suspension_and_reactivation_send_after_commit(app, messages):
               "expected_suspended_at": suspended_at.isoformat()}).status_code == 302
     assert len(messages) == 2 and "reactivated" in messages[1]["Subject"]
     assert client.post(f"/admin/businesses/{business_id}/suspension",
-        data={"confirm": "on", "reason": "Inventory review",
+        data={"confirm": "on", "business_name": "Ada Mart", "email_owner": "on", "reason": "Other", "note": "Inventory review",
               "desired_state": "suspend", "expected_state": "active"}).status_code == 302
     with app.app_context():
         business_suspended_at = db.session.get(Business, business_id).suspended_at
         assert business_suspended_at
     assert client.post(f"/admin/businesses/{business_id}/suspension",
-        data={"confirm": "on", "reason": "Resolved",
+        data={"confirm": "on", "business_name": "Ada Mart", "email_owner": "on", "reason": "Review complete",
               "desired_state": "reactivate", "expected_state": "suspended",
               "expected_suspended_at": business_suspended_at.isoformat()}).status_code == 302
     assert len(messages) == 4

@@ -86,8 +86,13 @@ def test_suspension_form_contracts_preserved(client, records, target):
     fields = {i.get('name'): i for i in dom.get('input')}
     for name in ('csrf_token', 'desired_state', 'expected_state', 'expected_suspended_at', 'reason', 'confirm'):
         assert name in fields
-    assert 'required' in fields['reason'] and fields['reason']['maxlength'] == '300'
-    assert 'required' in fields['confirm'] and fields['confirm']['type'] == 'checkbox'
+    if target == 'customer':
+        assert 'required' in fields['reason'] and fields['reason']['maxlength'] == '300'
+        assert 'required' in fields['confirm'] and fields['confirm']['type'] == 'checkbox'
+    else:
+        assert fields['reason']['type'] == 'radio' and 'required' in fields['reason']
+        assert fields['confirm']['type'] == 'hidden' and fields['confirm']['value'] == 'on'
+        assert fields['business_name']['maxlength'] == '140' and 'required' in fields['business_name']
     assert fields['desired_state']['value'] == 'suspend'
     assert fields['expected_state']['value'] == 'active'
 

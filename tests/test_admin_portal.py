@@ -188,7 +188,7 @@ def test_suspension_is_audited_and_blocks_business_features(client):
     with client.application.app_context():
         stamp=db.session.get(User,user_id).suspended_at.isoformat()
     client.post(f"/admin/users/{user_id}/suspension",data={"reason":"Review complete","confirm":"on","desired_state":"reactivate","expected_state":"suspended","expected_suspended_at":stamp})
-    client.post(f"/admin/businesses/{bid}/suspension",data={"reason":"Compliance check","confirm":"on","desired_state":"suspend","expected_state":"active"})
+    client.post(f"/admin/businesses/{bid}/suspension",data={"reason":"Violated rules","confirm":"on","business_name":"Shop","desired_state":"suspend","expected_state":"active"})
     client.post("/admin/logout")
     assert client.post("/auth/login",data={"email":"owner@example.com","password":"customer-password123"}).status_code==302
     # Already signed-in users are blocked on their next protected request.
