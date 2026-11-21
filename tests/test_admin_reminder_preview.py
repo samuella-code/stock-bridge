@@ -1,5 +1,5 @@
 """Read-only reminder projection/preview. SQLite and forbidden SMTP only."""
-from datetime import timedelta
+from datetime import datetime, timedelta
 from html.parser import HTMLParser
 import re
 
@@ -10,6 +10,16 @@ from app.models import User, CustomerReminderPreference, AdminReminderBatch, Adm
 from app.admin import reminder_service as service
 from tests.test_admin_reminders import client, records, approved, subscription, NOW, disconnected
 from tests.test_admin_portal import admin_login
+
+
+@pytest.fixture(autouse=True)
+def fixed_preview_clock(monkeypatch):
+    # Match the shared reminder fixtures without changing session/CSRF clocks.
+    class Clock(datetime):
+        @classmethod
+        def utcnow(cls):
+            return NOW
+    monkeypatch.setattr('app.admin.reminders.datetime', Clock)
 
 
 class Inputs(HTMLParser):
