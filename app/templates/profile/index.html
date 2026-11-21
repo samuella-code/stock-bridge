@@ -2,7 +2,7 @@
 {% block title %}Profile & settings · StockBridge{% endblock %}
 {% block topbar_heading %}{% endblock %}
 {% block extra_styles %}
-  {% for stylesheet in ('design-tokens', 'presentation', 'overview', 'notifications-presentation', 'settings-presentation') %}
+  {% for stylesheet in ('design-tokens', 'presentation', 'overview', 'notifications-presentation', 'settings-presentation', 'toggle') %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/' ~ stylesheet ~ '.css') }}">
   {% endfor %}
 {% endblock %}
@@ -36,5 +36,6 @@
 {% endblock %}
 
 {% block scripts %}
+  <script src="{{url_for('static',filename='js/toggle.js')}}" defer></script>
   <script src="{{ url_for('static', filename='js/overview-format.js') }}" defer></script>
 {% endblock %}

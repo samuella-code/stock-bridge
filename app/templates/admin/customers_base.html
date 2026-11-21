@@ -5,6 +5,7 @@
 <meta name="csrf-token" content="{{ csrf_token() }}">
 {% endblock %}
 {% block extra_styles %}
+<link rel="stylesheet" href="{{url_for('static',filename='css/toggle.css')}}"><script src="{{url_for('static',filename='js/toggle.js')}}" defer></script>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/design-tokens.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-dashboard.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-customers.css') }}">

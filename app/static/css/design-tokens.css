@@ -63,7 +63,9 @@
   --sb-eyebrow-size: 12px;
   --sb-touch: 44px;
   --sb-step: 30px;
-  --sb-switch-width: 42px;
+  --sb-switch-width: 44px;
+  --sb-switch-knob: 18px;
+  --sb-switch-inset: 3px;
   --sb-sidebar-width: 240px;
   --sb-public-width: 1160px;
   --sb-comparison-min-width: 640px;

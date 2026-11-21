@@ -1,3 +1,4 @@
+{% from 'components/toggle.html' import toggle %}
 <section id="notificationPreferences" class="sb-card sb-notification-preferences" aria-labelledby="alert-settings-title">
   <h2 id="alert-settings-title">Alerts</h2>
   <p class="sb-notification-meta">For {{ business.name }}. Your choices apply to future activity for this business.</p>
@@ -14,14 +15,7 @@
       ('sales', 'Sales', 'Get an in-app alert when a sale is recorded.'),
       ('product_added', 'New products', 'Get an in-app alert when a product is added.')
     ] %}
-      <label class="sb-alert-setting">
-        <input type="checkbox" role="switch" name="{{ field }}" aria-labelledby="setting-{{ field }}-label" aria-describedby="setting-{{ field }}-description"{% if preferences is none or preferences|attr(field) %} checked{% endif %}>
-        <span class="sb-alert-switch" aria-hidden="true"></span>
-        <span class="sb-settings-alert-copy">
-          <strong id="setting-{{ field }}-label">{{ label }}</strong>
-          <small id="setting-{{ field }}-description">{{ description }}</small>
-        </span>
-      </label>
+      {{toggle(field,label,preferences is none or preferences|attr(field),description)}}
     {% endfor %}
     <button class="sb-button sb-button-secondary" type="submit">Save alerts</button>
   </form>

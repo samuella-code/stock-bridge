@@ -1,0 +1,9 @@
+/* Shared native-checkbox switch. The wrapping label is the full hit target. */
+label.sb-toggle-row {display:flex;align-items:center;justify-content:space-between;gap:var(--sb-4);min-height:var(--sb-touch);padding:var(--sb-3) 0;cursor:pointer;font:inherit;color:var(--sb-ink);}
+.sb-toggle-row>span {min-width:0;}
+.sb-toggle-row small {display:block;font-size:var(--sb-caption);color:var(--sb-muted);line-height:1.6;}
+label.sb-toggle-row input.sb-toggle {appearance:none;display:block;position:relative;flex:0 0 var(--sb-switch-width);width:var(--sb-switch-width);height:var(--sb-6);min-height:0;margin:0;padding:0;border:0;border-radius:var(--sb-pill);background:var(--sb-input-border);cursor:pointer;box-sizing:border-box;opacity:1;}
+label.sb-toggle-row input.sb-toggle::before {content:'';position:absolute;top:var(--sb-switch-inset);left:var(--sb-switch-inset);width:var(--sb-switch-knob);height:var(--sb-switch-knob);border-radius:var(--sb-pill);background:var(--sb-surface);margin:0;}
+label.sb-toggle-row input.sb-toggle:checked {background:var(--sb-primary);}
+label.sb-toggle-row input.sb-toggle:checked::before {left:calc(100% - var(--sb-switch-knob) - var(--sb-switch-inset));}
+label.sb-toggle-row input.sb-toggle:focus-visible {outline:var(--sb-focus) solid var(--sb-primary);outline-offset:var(--sb-1);}
