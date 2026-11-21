@@ -106,8 +106,16 @@ def test_all_clear_and_email_only_ui(client,records):
         response=client.get('/admin/reminders/'+kind)
         assert response.status_code==200
         assert b'Email delivery needs separate approval' in response.data
-        assert b'owner@example.com' not in response.data and b'WhatsApp' not in response.data
-        assert b'name="message"' in response.data and b'Send a test to me' in response.data
+        assert b'owner@example.com' not in response.data
+        assert b'WhatsApp' not in response.data
+        assert b'>Both' not in response.data
+        assert b'Win-back wording' not in response.data and b'Open trial reminder panel' not in response.data
+        assert (b'name="feedback"' in response.data) == (kind == 'winback')
+        assert b'Insert placeholder' not in response.data and b'data-placeholder=' not in response.data
+        assert b'data-save-timings disabled' in response.data
+        assert b'aria-checked="false"' in response.data
+        assert b'name="message"' in response.data and b'Send a test to me' not in response.data
+        assert b'value="test"' not in response.data
         assert response.data.count(b'role="switch"')==6
 
 

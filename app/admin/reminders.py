@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from app import db
 from app.admin.routes import admin_bp, admin_required
 from app.admin import reminder_service as service, notification_data
+from app.admin.reminder_presentation import recipient_page
 from app.admin.customer_data import masked_email, local_time
 from app.models import (AdminAlertPreference, AdminReminderBatch, AdminReminderDelivery,
     AdminReminderFeedback, AdminReminderSchedule, CustomerReminderPreference, User)
@@ -107,11 +108,8 @@ def reminder_panel(kind):
 def render_panel(kind,now,error=None):
     target=request.args.get('owner',type=int)
     rows,excluded=service.audience(kind,now,override=True,user_id=target)
-    page=max(1,request.args.get('page',1,type=int));shown=[]
-    for facts in rows[(page-1)*25:page*25]:
-        owner=facts['user'];_,reason=service.candidate(owner,kind,now)
-        shown.append(dict(id=owner.id,name=owner.full_name,email=masked_email(owner.email),business=facts['business'].name,
-            end=local_time(facts['end']),recent=reason=='recent_contact'))
+    page=max(1,request.args.get('page',1,type=int))
+    shown,display_total=recipient_page(kind,now,rows,page=page,target=target)
     deliveries=[]
     batch_id=request.args.get('batch',type=int)
     if batch_id:
@@ -122,11 +120,41 @@ def render_panel(kind,now,error=None):
     if rows:
         variants={service.automatic_message(kind,f,now) for f in rows[:25]}
         if len(variants)==1:template=variants.pop()
-    return render_template('admin/reminders.html',kind=kind,rows=shown,excluded=excluded,total=len(rows),
+    return render_template('admin/reminders.html',kind=kind,rows=shown,excluded=excluded,total=len(rows),display_total=display_total,
         template=request.form.get('message',template) if error else template,page=page,target=target,placeholders=service.PLACEHOLDERS,request_key=secrets.token_urlsafe(24),
         email_ready=ready=='ready',error=error,deliveries=deliveries,timings=service.TIMINGS,
         schedules={r.key:r for r in AdminReminderSchedule.query.all()},
         disabled_ids={r['id'] for r in shown if r['email'] and db.session.get(User,r['id']).email.lower() not in allowed})
+
+
+@admin_bp.post('/reminders/<kind>/preview')
+@admin_required
+def reminder_preview(kind):
+    actor()
+    if kind not in service.TIMINGS:abort(404)
+    response=None
+    try:
+        owner_value=request.form.get('owner','')
+        if not owner_value.isascii() or not owner_value.isdigit() or len(owner_value)>10 or int(owner_value)<1:
+            raise ValueError('Choose an eligible owner to preview.')
+        owner_id=int(owner_value)
+        override=switch('override')
+        reason=request.form.get('override_reason','')
+        if override and (len(reason)>300 or len(reason.strip())<10):raise ValueError('Explain a frequency override in at least 10 characters.')
+        feedback=switch('feedback')
+        if feedback and kind!='winback':raise ValueError('The optional question belongs to win-back messages.')
+        now=datetime.utcnow()
+        owner=db.session.get(User,owner_id)
+        facts,excluded=service.candidate(owner,kind,now,override=override)
+        if excluded:raise ValueError('This owner is no longer eligible. Refresh the audience.')
+        body=service.render_message(request.form.get('message',''),facts,now)
+        body=service.email_body(body,owner,include_feedback=feedback,preview=True)
+        response=jsonify(name=owner.full_name,body=body,
+            notice='Preview links are inactive. Working links are generated when the email is sent.')
+    except ValueError as error:
+        response=jsonify(error=str(error));response.status_code=409
+    response.headers['Cache-Control']='private, no-store'
+    return response
 
 
 @admin_bp.get('/reminders/deliveries/<int:delivery_id>')

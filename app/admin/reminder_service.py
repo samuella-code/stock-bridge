@@ -158,6 +158,16 @@ def token(user, purpose, delivery_id=None):
         dict(user=user.id,email=digest(user.email.lower()),purpose=purpose,delivery=delivery_id))
 
 
+def email_body(body, owner, *, include_feedback=False, delivery_id=None, preview=False):
+    """One footer formatter; preview tokens cannot be used for public actions."""
+    stop_purpose='preview_stop' if preview else 'stop'
+    feedback_purpose='preview_feedback' if preview else 'feedback'
+    body += '\n\nStop reminders: '+ORIGIN+'/admin/reminders/stop/'+token(owner,stop_purpose)
+    if include_feedback:
+        body += '\nOptional: why did you stop? '+ORIGIN+'/admin/reminders/feedback/'+token(owner,feedback_purpose,delivery_id)
+    return body
+
+
 def token_user(value, purpose):
     try:
         data=URLSafeTimedSerializer(current_app.config['SECRET_KEY'],salt='stockbridge-reminders-v1').loads(value,max_age=365*86400)
@@ -271,9 +281,7 @@ def deliver(batch_id, *, auth_version=None, mfa_verified=False, now=None):
         if not ok:
             status='suppressed'
         else:
-            body=row.body+'\n\nStop reminders: '+ORIGIN+'/admin/reminders/stop/'+token(owner,'stop')
-            if row.include_feedback:
-                body+='\nOptional: why did you stop? '+ORIGIN+'/admin/reminders/feedback/'+token(owner,'feedback',row.id)
+            body=email_body(row.body,owner,include_feedback=row.include_feedback,delivery_id=row.id)
             row.body=body
             # Keep the same owner lock through transport and recording. Account
             # and opt-out changes committed before this lock win the send race.

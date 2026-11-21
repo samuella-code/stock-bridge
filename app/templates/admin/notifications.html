@@ -1,3 +1,4 @@
+{% from 'components/toggle.html' import toggle %}
 {% extends 'admin/customers_base.html' %}
 {% block title %}Notifications · StockBridge Admin{% endblock %}
 {% block extra_styles %}{{super()}}<link rel="stylesheet" href="{{url_for('static',filename='css/admin-notifications.css')}}">{% endblock %}
@@ -14,7 +15,7 @@
 <section class="card notification-events"><h2>Important events</h2><ul class="notification-list">{% for event in notices.events %}<li><div><p>{{event.sentence}}</p><small>{{event.date}} · {{event.time}}</small></div></li>{% else %}<li>No important events yet.</li>{% endfor %}</ul><a class="notification-text-link" href="{{url_for('admin.activity')}}">View all events</a></section></div>
 <aside class="notification-preferences"><section class="card"><h2>How should we alert you?</h2><p>Choose optional emails for your verified admin address.</p>
 <form method="post" action="{{url_for('admin.notification_preferences')}}"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><input type="hidden" name="version" value="{{preference.version if preference else 0}}">
-{% for key,label,hint in [('failed_payments','Email for failed payments','A daily alert when failed payments need attention.'),('security_alerts','Email for security alerts','A daily alert when repeated sign-in failures need attention.'),('daily_summary','Daily summary','A summary at 08:00 WAT.')] %}<label class="notification-switch"><span>{{label}}<small>{{hint}}</small></span><input type="checkbox" name="{{key}}" role="switch" {% if preference and preference[key] and preference.auth_version==current_user.admin_auth_version %}checked{% endif %}></label>{% endfor %}<button class="btn primary" type="submit">Save alert preferences</button></form></section>
+{% for key,label,hint in [('failed_payments','Email for failed payments','A daily alert when failed payments need attention.'),('security_alerts','Email for security alerts','A daily alert when repeated sign-in failures need attention.'),('daily_summary','Daily summary','A summary at 08:00 WAT.')] %}{{toggle(key,label,preference and preference[key] and preference.auth_version==current_user.admin_auth_version,hint)}}{% endfor %}<button class="btn primary" type="submit">Save alert preferences</button></form></section>
 <a class="notification-text-link" href="{{url_for('admin.reminder_panel',kind='trial')}}#automatic-messages">Reminder settings and timings →</a></aside></div>
 {% if not email_ready %}<p class="muted">Choices can be saved now. Email delivery and automatic scheduling require separate approval before messages can be sent.</p>{% endif %}
 </div>{% endblock %}
