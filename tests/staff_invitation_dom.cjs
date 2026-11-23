@@ -44,3 +44,13 @@ check(teamTemplate.includes('New employees verify their own email.'));
 check(remindersTemplate.includes('Email delivery needs separate approval and configuration. No message will be sent.'));
 check(!manageTemplate.includes('email_labels.get(invitation.delivery_status'));
 console.log('PASS: staff invitation presentation contract and admin reminder warning preservation');
+
+// Route passes only the freshly generated secret and matching invitation identity
+// to the private, no-store success response on both staff invitation surfaces.
+const staffRoutes = fs.readFileSync('app/staff/routes.py','utf8');
+check(staffRoutes.includes("fresh_invite_token=raw, invited_email=invitation.email, invitation_action=action"));
+check(staffRoutes.includes("fresh_invite_token=raw,invited_email=row.email,invitation_action=action"));
+check(teamTemplate.includes("Invitation created for {{invited_email}}."));
+check(teamTemplate.includes("Invitation link refreshed for {{invited_email}}."));
+check(manageTemplate.includes("Invitation created for {{ invited_email }}."));
+console.log('PASS: fresh invitation identity and token are wired to both private success views');
