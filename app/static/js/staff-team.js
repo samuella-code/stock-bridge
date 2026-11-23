@@ -32,15 +32,17 @@
     activate(location.hash.slice(1));
     addEventListener('hashchange',()=>activate(location.hash.slice(1)));
   }
-  const copy=document.querySelector('[data-copy-team-invite]');
-  copy?.addEventListener('click',async () => {
-    const input=document.querySelector('#team-invite-link');
-    const status=document.querySelector('[data-copy-status]');
-    try {
-      await navigator.clipboard.writeText(new URL(input.value,location.origin).href);
-      status.textContent='Invite link copied. Only share it with the invited person.';
-    } catch {
-      input.focus();input.select();status.textContent='Select and copy the invitation link above.';
-    }
+  document.querySelectorAll('[data-copy-team-invite]').forEach(copy => {
+    copy.addEventListener('click',async () => {
+      const input=document.querySelector('#team-invite-link');
+      const status=copy.parentElement.querySelector('[data-copy-status]');
+      if (!input || !input.value) return;
+      try {
+        await navigator.clipboard.writeText(new URL(input.value,location.origin).href);
+        status.textContent='Invite link copied. Only share it with the invited person.';
+      } catch {
+        input.type='text';input.focus();input.select();status.textContent='Select and copy the invitation link above.';
+      }
+    });
   });
 })();
