@@ -23,3 +23,24 @@ const fileLink={value:'/staff/invite#token='+'A'.repeat(43)};
 vm.runInNewContext(source,{URL,URLSearchParams,document:{querySelector:s=>s==='[data-invite-link]'?fileLink:null},window:{location:{protocol:'file:',origin:'null'}}});
 check(fileLink.value.startsWith('/staff/invite#token='));
 console.log('PASS: local-file preview does not attempt an invalid origin conversion');
+
+
+// Staff invitation presentation contract: staff-facing warnings are removed,
+// admin reminder delivery guidance remains, and invitation controls stay visible.
+const manageTemplate = fs.readFileSync('app/templates/staff/manage.html','utf8');
+const teamTemplate = fs.readFileSync('app/templates/staff/team_manage.html','utf8');
+const remindersTemplate = fs.readFileSync('app/templates/admin/reminders.html','utf8');
+for (const template of [manageTemplate, teamTemplate]) {
+  check(!/Email (?:sending|delivery) is off|needs separate approval|until approved|site administrator to check email delivery/i.test(template));
+  check(template.includes('The employee gets a link to accept. You can also copy the link and send it yourself.'));
+  check(template.includes('Copy invite link'));
+  check(template.includes('Resend invitation'));
+}
+check(manageTemplate.includes('An expired invitation does not use a seat.'));
+check(manageTemplate.includes('without using an extra seat'));
+check(teamTemplate.includes('An invitation holds a seat until it is accepted or expires.'));
+check(teamTemplate.includes('Resending replaces the old link and does not use another seat.'));
+check(teamTemplate.includes('New employees verify their own email.'));
+check(remindersTemplate.includes('Email delivery needs separate approval and configuration. No message will be sent.'));
+check(!manageTemplate.includes('email_labels.get(invitation.delivery_status'));
+console.log('PASS: staff invitation presentation contract and admin reminder warning preservation');
