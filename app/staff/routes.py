@@ -4,7 +4,7 @@ from flask_login import current_user, login_required, login_user
 from sqlalchemy.exc import IntegrityError
 from app import db
 from app.models import User, StaffMembership, StaffInvitation, StaffMembershipBusiness
-from app.staff import service, roles as role_service, delivery
+from app.staff import service, roles as role_service, delivery, presentation
 
 staff_bp = Blueprint('staff', __name__, url_prefix='/staff')
 
@@ -16,6 +16,13 @@ def staff_workflow_flags():
     from app.staff.operations_access import enabled as operations_enabled
     return dict(staff_sales_enabled=enabled(), staff_stock_enabled=stock_enabled(), staff_operations_enabled=operations_enabled())
 
+
+
+@staff_bp.context_processor
+def staff_navigation():
+    if not current_user.is_authenticated:return dict(can_manage_teams=False,owner_dashboard_available=False)
+    return dict(can_manage_teams=bool(presentation.team_choices(actor(),datetime.utcnow())),
+        owner_dashboard_available=not current_user.staff_only)
 
 
 def actor():
@@ -150,26 +157,22 @@ def delegated_context(owner, user, now):
         try: delegated.target(auth,row)
         except ValueError: continue
         invitations.append(row)
-    return dict(authority=auth,team_owner=owner,choices=choices,roles=roles,
+    context=dict(authority=auth,team_owner=owner,choices=choices,roles=roles,
         role_count=len(all_roles),seats=service.seat_count(owner.id,now=now),
         catalogue=role_service.CATALOGUE,authority_catalogue=policy.CATALOGUE,
         memberships=members,invitations=invitations,assignments=assigned,names=names)
+    context.update(presentation.team_details(context,now))
+    return context
 
 
 @staff_bp.get('/teams')
 @login_required
 def teams():
     from app.staff import delegation_access as delegated
-    candidates={actor().id}
-    candidates.update(m.owner_id for m in StaffMembership.query.filter_by(user_id=actor().id,state='active'))
-    available=[];now=datetime.utcnow()
-    for owner_id in sorted(candidates):
-        owner=db.session.get(User,owner_id)
-        if not owner:continue
-        try: delegated.mutation(owner,actor(),now=now)
-        except ValueError:continue
-        available.append(owner)
-    return render_template('staff/teams.html',teams=available)
+    now=datetime.utcnow()
+    choices=presentation.team_choices(actor(),now)
+    return render_template('staff/teams.html',teams=[owner for owner,_,_ in choices],
+        team_cards=[presentation.team_card(owner,auth,businesses,now) for owner,auth,businesses in choices])
 
 
 @staff_bp.route('/team/<int:owner_id>',methods=['GET','POST'])
@@ -212,5 +215,5 @@ def team_manage(owner_id):
         except Exception:db.session.rollback();status='unknown'
         try:context=delegated_context(owner,user,datetime.utcnow())
         except ValueError:abort(403)
-        return render_template('staff/team_manage.html',delivery_result=status,**context)
+        return render_template('staff/team_manage.html',delivery_result=status,fresh_invite_token=raw,**context)
     return redirect(url_for('staff.team_manage',owner_id=owner.id))
