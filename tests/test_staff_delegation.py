@@ -230,7 +230,7 @@ def test_manager_context_hides_whole_records_and_roles_outside_scope():
     def shared(auth,key,old,new):auth.shared_role(key,old,new,[(9,{99})] if key=='outside' else [])
     adapter=NS(mutation=lambda *a,**k:(auth,[NS(id=10,name='Allowed shop')]),target=target,shared=shared,assignments=lambda row:row.businesses)
     scope=dict(StaffMembership=NS(query=Query(member_rows),id=Column()),StaffInvitation=NS(query=Query(invite_rows),id=Column()),User=object,
-        role_service=NS(options=lambda id:roles,CATALOGUE={'sales_view':'View sales'}),service=NS(seat_count=lambda *a,**k:5),
+        role_service=NS(options=lambda id:roles,CATALOGUE={'sales_view':'View sales'}),service=NS(seat_count=lambda *a,**k:5),presentation=NS(team_details=lambda *a:{}),
         db=NS(session=NS(get=lambda model,id:NS(full_name='Allowed employee '+str(id)))),
         __builtins__=fake_imports({'app.staff':NS(delegation_access=adapter,delegation=policy)}))
     result=function('app/staff/routes.py','delegated_context',scope)(NS(id=1),NS(id=2),NOW)
@@ -252,7 +252,7 @@ def test_forged_manager_authority_fields_fail_before_dispatch(action):
     assert result[1]==400 and rollback.call_count==1 and not commit.called and not services.mock_calls
 
 
-def test_manager_invite_dispatch_uses_actual_actor_and_does_not_render_token():
+def test_manager_invite_dispatch_uses_actual_actor_and_returns_fresh_link_once():
     class Form(dict):
         def getlist(self,key):return self.get(key,[])
     owner=NS(id=1);user=NS(id=2);invite=Mock(return_value=(NS(id=8),'synthetic-raw-link'));deliver=Mock(return_value='disabled')
@@ -263,21 +263,21 @@ def test_manager_invite_dispatch_uses_actual_actor_and_does_not_render_token():
     result=function('app/staff/routes.py','team_manage',scope)(1)
     assert invite.call_args.kwargs['actor'] is user and invite.call_args.args[0] is owner
     deliver.assert_called_once_with(8,'synthetic-raw-link',actor_id=2)
-    assert result=={'safe':True,'delivery_result':'disabled'}
+    assert result=={'safe':True,'delivery_result':'disabled','fresh_invite_token':'synthetic-raw-link'}
 
 
 @pytest.mark.parametrize('owner',[True,False])
 def test_new_template_shows_sensitive_grants_and_restoration_only_to_owner(owner):
     from tests.test_staff_presentation import environment,context
     _,data=context('manage');auth=manager(actor_id=1 if owner else 2)
-    data.update(authority=auth,team_owner=NS(id=1,full_name='Synthetic Owner'),authority_catalogue=policy.CATALOGUE)
+    data.update(authority=auth,team_owner=NS(id=1,full_name='Synthetic Owner'),authority_catalogue=policy.CATALOGUE,member_statuses={1:dict(label='Access paused',tone='warning',paused_due_pro=True,can_restore=True)})
     if not owner:
         data['roles']={'salesperson':data['roles']['salesperson']};data['memberships']=data['memberships'][:1];data['choices']=data['choices'][:1]
     html=environment().get_template('staff/team_manage.html').render(**data)
     assert ('name="authority_permissions"' in html) is owner
     assert ('value="reconfirm"' in html) is owner
-    assert 'Exports are disabled' in html
-    assert 'Acceptance transfers that occupied seat to the employee; it does not free it.' in html
+    assert 'Exports are not available yet' in html
+    assert 'Accepted employees continue to use their seat.' in html
     if not owner:assert 'Synthetic Corner Shop' not in html
     assert 'action="export"' not in html
 

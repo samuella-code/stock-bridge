@@ -1,0 +1,60 @@
+.sb-team-shell,.sb-team-shell * {box-sizing:border-box;}
+body.sb-team-shell {margin:0;padding:var(--sb-6);background:var(--sb-app);font:var(--sb-body)/1.6 var(--sb-font);color:var(--sb-ink);overflow-wrap:anywhere;}
+.sb-team-shell main {max-width:var(--sb-public-width);padding:var(--sb-8) 0;}
+.sb-team-shell h1 {font-size:var(--sb-title);font-weight:600;margin:0 0 var(--sb-2);letter-spacing:normal;}
+.sb-team-shell h2,.sb-team-shell h3 {font-size:var(--sb-5);font-weight:600;margin:0 0 var(--sb-3);}
+.sb-team-shell h4 {font-size:var(--sb-body);font-weight:600;}
+.sb-team-shell p {margin:var(--sb-2) 0 var(--sb-4);}
+.sb-team-shell a {color:var(--sb-primary);}
+.team-heading {margin-bottom:var(--sb-6);}
+.team-heading p,.team-muted {color:var(--sb-muted);}
+.sb-team-shell section,.sb-team-shell article,.sb-team-shell aside {min-width:0;}
+.sb-team-shell [data-team-panel] {background:none;border:0;padding:0;margin:0;}
+.sb-team-shell .team-card {background:var(--sb-surface);border:var(--sb-stroke) solid var(--sb-border);border-radius:var(--sb-card-radius);padding:var(--sb-6);margin:0;min-width:0;}
+.team-chooser,.team-stats,.team-roster,.team-role-grid,.team-layout {display:grid;gap:var(--sb-5);min-width:0;align-items:start;}
+.team-chooser,.team-stats {align-items:stretch;}
+.sb-team-shell .team-dashed {border-style:dashed;}
+.sb-team-shell .team-plan,.sb-team-shell .team-owner-grants {background:var(--sb-soft-green);}
+.sb-team-shell .team-invite {border-color:var(--sb-primary);}
+.team-badges,.team-row,.team-actions,.team-chips,.team-breadcrumb {display:flex;align-items:center;flex-wrap:wrap;gap:var(--sb-2);min-width:0;}
+.team-row {justify-content:space-between;}
+.team-breadcrumb {margin-bottom:var(--sb-4);}
+.team-breadcrumb a {display:inline-flex;align-items:center;min-height:var(--sb-touch);}
+.team-badge {display:inline-block;padding:var(--sb-1) var(--sb-3);border-radius:var(--sb-pill);background:var(--sb-segment-bg);color:var(--sb-muted);font-size:var(--sb-caption);}
+.team-badge.healthy {background:var(--sb-soft-green);color:var(--sb-primary);}
+.team-badge.warning {background:var(--sb-warning-bg);color:var(--sb-warning-text);}
+.team-badge.danger {background:var(--sb-danger-bg);color:var(--sb-danger);}
+.sb-team-shell .team-notice {padding:var(--sb-4);border:var(--sb-stroke) solid var(--sb-border);border-radius:var(--sb-control-radius);background:var(--sb-surface);}
+.sb-team-shell .team-notice.warning {background:var(--sb-warning-bg);border-color:var(--sb-warning-border);color:var(--sb-warning-text);}
+.team-value {display:block;font-size:var(--sb-kpi-value);font-weight:600;}
+.team-stats progress {width:100%;height:var(--sb-2);accent-color:var(--sb-primary);}
+.sb-team-shell .team-button {display:inline-flex;align-items:center;justify-content:center;width:auto;min-height:var(--sb-touch);max-width:100%;padding:var(--sb-2) var(--sb-4);border:var(--sb-stroke) solid var(--sb-input-border);border-radius:var(--sb-control-radius);font:500 var(--sb-body)/1.4 var(--sb-font);background:var(--sb-surface);color:var(--sb-ink);text-decoration:none;cursor:pointer;margin:0;}
+.sb-team-shell .team-button.primary {background:var(--sb-primary);border-color:var(--sb-primary);color:var(--sb-surface);}
+.sb-team-shell .team-button.danger {color:var(--sb-danger);background:var(--sb-surface);border-color:var(--sb-danger);}
+.sb-team-shell .team-button:disabled {background:var(--sb-app);color:var(--sb-muted);cursor:not-allowed;}
+.team-form {display:grid;gap:var(--sb-4);margin:var(--sb-4) 0;}
+.team-form>.team-button {justify-self:start;}
+.sb-team-shell label:not(.sb-toggle-row) {font-weight:500;margin:0;}
+.sb-team-shell input:not([type=checkbox],[type=radio],[type=hidden]),.sb-team-shell select {width:100%;min-width:0;min-height:var(--sb-touch);padding:var(--sb-3);border:var(--sb-stroke) solid var(--sb-input-border);border-radius:var(--sb-control-radius);font:inherit;background:var(--sb-surface);color:var(--sb-ink);}
+.sb-team-shell fieldset {min-width:0;border:0;padding:0;margin:0;}
+.sb-team-shell legend {font-weight:600;margin-bottom:var(--sb-2);}
+.sb-team-shell .team-owner-grants {padding:var(--sb-4);border-radius:var(--sb-control-radius);}
+.team-chips label {position:relative;cursor:pointer;}
+.team-chips input {position:absolute;width:var(--sb-stroke);height:var(--sb-stroke);clip-path:inset(50%);}
+.team-chips span {display:inline-flex;align-items:center;min-height:var(--sb-touch);padding:var(--sb-2) var(--sb-3);border:var(--sb-stroke) solid var(--sb-input-border);border-radius:var(--sb-pill);}
+.team-chips input:checked+span {background:var(--sb-primary);color:var(--sb-surface);border-color:var(--sb-primary);}
+.team-chips input:focus-visible+span {outline:var(--sb-focus) solid var(--sb-primary);outline-offset:var(--sb-focus);}
+.sb-team-shell .team-check {display:flex;align-items:center;gap:var(--sb-2);min-height:var(--sb-touch);}
+.team-tabs {display:inline-flex;flex-wrap:wrap;gap:var(--sb-1);padding:var(--sb-1);margin:var(--sb-6) 0;border-radius:var(--sb-control-radius);background:var(--sb-segment-bg);}
+.team-tabs a {display:inline-flex;align-items:center;min-height:var(--sb-touch);padding:var(--sb-2) var(--sb-4);border-radius:var(--sb-control-radius);color:var(--sb-ink);text-decoration:none;}
+.team-tabs a[aria-selected=true] {background:var(--sb-surface);}
+.sb-team-shell details {margin-top:var(--sb-3);}
+.sb-team-shell summary {cursor:pointer;min-height:var(--sb-touch);color:var(--sb-primary);}
+.sb-team-shell :is(a,button,input,select,summary):focus-visible {outline:var(--sb-focus) solid var(--sb-primary);outline-offset:var(--sb-focus);}
+.sb-team-shell [hidden] {display:none!important;}
+.sb-team-shell .sr-only {position:absolute;width:var(--sb-stroke);height:var(--sb-stroke);padding:0;clip-path:inset(50%);overflow:hidden;}
+@media(min-width:640px){.team-stats{grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media(min-width:768px){.team-chooser,.team-role-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(min-width:1000px){.team-layout{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);}}
+@media(prefers-reduced-motion:reduce){.sb-team-shell *{animation:none!important;transition:none!important;}}
+.sb-team-shell label.sb-toggle-row {margin:0;}

@@ -6,24 +6,6 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/' ~ stylesheet ~ '.css') }}">
   {% endfor %}
 {% endblock %}
-{% block staff_header %}
-<header class="sb-card sb-staff-access-header">
-  <strong>StockBridge · Staff</strong>
-  <nav aria-label="Staff navigation">
-    <a href="{{ url_for('staff.home') }}" aria-current="page">My access</a>
-    <a href="#my-businesses">My businesses</a>
-    <a href="{{ url_for('staff.teams') }}">Team management</a>
-    {% if not current_user.staff_only %}
-      <a href="{{ url_for('main.dashboard') }}">Owner dashboard</a>
-      <a href="{{ url_for('staff.manage') }}">Manage staff</a>
-    {% endif %}
-  </nav>
-  <form method="POST" action="{{ url_for('auth.logout') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button class="sb-button sb-button-secondary" type="submit">Log out</button>
-  </form>
-</header>
-{% endblock %}
 {% block content %}
   <header class="sb-staff-access-intro">
     <h1>My access</h1>

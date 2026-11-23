@@ -1,3 +1,3 @@
-{% macro toggle(name, label, checked=false, hint='') -%}
-<label class="sb-toggle-row"><span><span id="toggle-{{name}}-label">{{label}}</span>{% if hint %}<small id="toggle-{{name}}-hint">{{hint}}</small>{% endif %}</span><input class="sb-toggle" type="checkbox" role="switch" aria-checked="{{'true' if checked else 'false'}}" aria-labelledby="toggle-{{name}}-label"{% if hint %} aria-describedby="toggle-{{name}}-hint"{% endif %} name="{{name}}"{% if checked %} checked{% endif %}></label>
+{% macro toggle(name, label, checked=false, hint='', value=none, id_prefix='') -%}
+{% set key=id_prefix ~ name ~ ('-' ~ value if value is not none else '') %}<label class="sb-toggle-row"><span><span id="toggle-{{key}}-label">{{label}}</span>{% if hint %}<small id="toggle-{{key}}-hint">{{hint}}</small>{% endif %}</span><input class="sb-toggle" type="checkbox" role="switch" aria-checked="{{'true' if checked else 'false'}}" aria-labelledby="toggle-{{key}}-label"{% if hint %} aria-describedby="toggle-{{key}}-hint"{% endif %} name="{{name}}"{% if value is not none %} value="{{value}}"{% endif %}{% if checked %} checked{% endif %}></label>
 {%- endmacro %}
