@@ -35,7 +35,7 @@
   document.querySelectorAll('[data-copy-team-invite]').forEach(copy => {
     copy.addEventListener('click',async () => {
       const input=document.querySelector('#team-invite-link');
-      const status=copy.parentElement.querySelector('[data-copy-status]');
+      const status=copy.closest('.team-card')?.querySelector('[data-copy-status]');
       if (!input || !input.value) return;
       try {
         await navigator.clipboard.writeText(new URL(input.value,location.origin).href);
