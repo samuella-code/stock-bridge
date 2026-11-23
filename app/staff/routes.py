@@ -88,7 +88,7 @@ def manage():
             # Digest is already committed; a failure must not duplicate a seat or
             # trigger an uncertain SMTP retry. Never log the token/exception.
             db.session.rollback(); status = 'unknown'
-        return render_template('staff/manage.html', delivery_result=status, **owner_context(datetime.utcnow()))
+        return render_template('staff/manage.html', fresh_invite_token=raw, invited_email=invitation.email, invitation_action=action, **owner_context(datetime.utcnow()))
     return redirect(url_for('staff.manage'))
 
 
