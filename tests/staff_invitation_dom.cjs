@@ -48,15 +48,18 @@ check(remindersTemplate.includes('Email delivery needs separate approval and con
 check(!manageTemplate.includes('email_labels.get(invitation.delivery_status'));
 console.log('PASS: staff invitation presentation contract and admin reminder warning preservation');
 
-// Route passes only the freshly generated secret and matching invitation identity
-// to the private, no-store success response on both staff invitation surfaces.
+// Manage-staff mutations use Post/Redirect/Get. The raw token is carried
+// only in the fragment, never rendered into the server response. The separate
+// team-management surface retains its existing one-time success response.
 const staffRoutes = fs.readFileSync('app/staff/routes.py','utf8');
-check(staffRoutes.includes("fresh_invite_token=raw, invited_email=invitation.email, invitation_action=action"));
+check(staffRoutes.includes("return redirect(url_for('staff.manage') + '#invite-token=' + raw, code=303)"));
+check(!staffRoutes.includes("fresh_invite_token=raw, invited_email=invitation.email, invitation_action=action"));
 check(staffRoutes.includes("fresh_invite_token=raw,invited_email=row.email,invitation_action=action"));
 check(teamTemplate.includes("Invitation created for {{invited_email}}."));
 check(teamTemplate.includes("Invitation link refreshed for {{invited_email}}."));
-check(manageTemplate.includes("Invitation created for {{ invited_email }}."));
-console.log('PASS: fresh invitation identity and token are wired to both private success views');
+check(manageTemplate.includes('data-staff-invite-success'));
+check(manageTemplate.includes('data-invite-endpoint="{{ url_for(\'staff.invite_page\') }}"'));
+console.log('PASS: manage-staff invitation redirect and separate team-management success response');
 
 
 // Team-management copy control: exercise both Clipboard API success and
