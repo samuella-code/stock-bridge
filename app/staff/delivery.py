@@ -27,12 +27,12 @@ def gate(recipient, config, environ):
     allow_any_recipient = allowed == '*'
     recipients = [] if allow_any_recipient else allowed.split(',')
     if not allow_any_recipient and (not recipients or any(
-            not re.fullmatch(r'[A-Za-z0-9.!#$%&\\x27*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}', value)
+            not re.fullmatch(r'[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', value)
             or value != value.lower() or len(value) > 180 for value in recipients)):
         return 'configuration_required'
     if (not isinstance(recipient, str) or len(recipient) > 180
             or recipient != recipient.lower()
-            or not re.fullmatch(r'[A-Za-z0-9.!#$%&\\x27*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}', recipient)):
+            or not re.fullmatch(r'[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', recipient)):
         return 'suppressed'
     if not (environ.get('VERCEL') == '1' and environ.get('VERCEL_PROJECT_ID') == STAGING_PROJECT_ID
             and environ.get('VERCEL_ENV') == 'preview' and environ.get('VERCEL_TARGET_ENV') == 'preview'
