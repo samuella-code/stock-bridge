@@ -255,7 +255,7 @@ def test_forged_manager_authority_fields_fail_before_dispatch(action):
 def test_manager_invite_dispatch_uses_actual_actor_and_returns_fresh_link_once():
     class Form(dict):
         def getlist(self,key):return self.get(key,[])
-    owner=NS(id=1);user=NS(id=2);invite=Mock(return_value=(NS(id=8),'synthetic-raw-link'));deliver=Mock(return_value='disabled')
+    owner=NS(id=1);user=NS(id=2);invite=Mock(return_value=(NS(id=8,email='new@example.invalid'),'synthetic-raw-link'));deliver=Mock(return_value='disabled')
     scope=dict(db=NS(session=NS(get=lambda *a:owner,commit=Mock(),rollback=Mock())),User=object,actor=lambda:user,datetime=datetime,
         delegated_context=lambda *a:{'safe':True},request=NS(method='POST',form=Form(action='invite',email='new@example.invalid',role='cashier',business_ids=['10'])),
         service=NS(invite=invite),delivery=NS(deliver=deliver),IntegrityError=type('FakeIntegrityError',(Exception,),{}),
@@ -263,7 +263,7 @@ def test_manager_invite_dispatch_uses_actual_actor_and_returns_fresh_link_once()
     result=function('app/staff/routes.py','team_manage',scope)(1)
     assert invite.call_args.kwargs['actor'] is user and invite.call_args.args[0] is owner
     deliver.assert_called_once_with(8,'synthetic-raw-link',actor_id=2)
-    assert result=={'safe':True,'delivery_result':'disabled','fresh_invite_token':'synthetic-raw-link'}
+    assert result=={'safe':True,'fresh_invite_token':'synthetic-raw-link','invited_email':'new@example.invalid','invitation_action':'invite'}
 
 
 @pytest.mark.parametrize('owner',[True,False])
