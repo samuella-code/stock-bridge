@@ -229,7 +229,8 @@ def test_owner_only_management_csrf_auditing_and_no_token_persistence(app):
     assert client.post('/staff/manage',data={'action':'invite'}).status_code==400
     app.config['WTF_CSRF_ENABLED']=False
     response=client.post('/staff/manage',data={'action':'invite','email':'ui@example.invalid','role':'manager','business_ids':[shops[0].id]})
-    assert response.status_code==200 and b'<h2>Email delivery is off</h2>' in response.data
+    assert response.status_code==200 and b'Invitation created for ui@example.invalid.' in response.data
+    assert b'Email delivery is off' not in response.data
     assert b'#token=' not in response.data
     assert response.headers['Cache-Control']=='private, no-store'
     assert response.headers['Referrer-Policy']=='same-origin'
