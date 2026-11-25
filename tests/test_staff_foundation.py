@@ -237,6 +237,9 @@ def test_owner_only_management_csrf_auditing_and_no_token_persistence(app):
     with client.session_transaction() as state:
         assert not any('token' in k and k != 'csrf_token' for k in state)
     assert b'#token=' not in client.get('/staff/manage').data
+    issued=StaffInvitation.query.filter_by(owner_id=owner.id,email='ui@example.invalid').one()
+    assert 'token_digest' in issued.__table__.columns and len(issued.token_digest)==64
+    assert not any('token' in column.name and column.name!='token_digest' for column in issued.__table__.columns)
 
 
 
