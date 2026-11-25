@@ -32,7 +32,9 @@ def test_team_chooser_and_header_use_current_authority_without_writes(app):
     finally:event.remove(db.engine,'before_cursor_execute',capture)
     html=response.get_data(as_text=True)
     assert response.status_code==200 and html.count('<h1>')==1
-    for label in ('Choose a team to manage.','You are the owner','Seats 0 of 5','Roles 3 of 5','Pro active','Open team','Owner dashboard','My access'):assert label in html
+    for label in ('Choose a team to manage.','You are the owner','Seats 0 of 5','Roles 3 of 5','Pro active','Open team','Owner dashboard'):assert label in html
+    header=html.split('</header>',1)[0]
+    assert 'My access' not in header
     assert 'My owner dashboard' not in html and 'My staff management' not in html
     assert not statements and AuditLog.query.count()==before
 
