@@ -195,4 +195,5 @@ def test_employee_business_cards_show_role_and_permission_chips():
     for phrase in ('Role: Manager','Record sales','View stock','Restock','Expenses','Open'):
         assert phrase in html
     assert '<a class="sb-staff-access-chip" href="#preview-only">' in html
-    assert html.count('class="sb-staff-access-chip"') == 4
+    # The fixture renders two businesses; each has six enabled workflow links.
+    assert html.count('class="sb-staff-access-chip"') == 12
