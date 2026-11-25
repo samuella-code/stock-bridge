@@ -128,7 +128,7 @@ def test_delivery_revalidates_current_invitation_and_gate(app, case):
     assert not send.called
 
 
-def test_owner_http_response_contains_status_only_and_resend_requires_owner_csrf(app):
+def test_owner_invitation_response_exposes_link_once_and_resend_requires_owner_csrf(app):
     owner, shops = seed('pro'); client = app.test_client(); login(client, owner)
     config, environ = policy(); app.config.update(config); captured=[]
     def send(subject, recipient, body, *, html): captured.append(body); return True
