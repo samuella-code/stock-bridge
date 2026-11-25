@@ -9,8 +9,11 @@ for(const token of ['A'.repeat(43),'short','A'.repeat(44),'bad!'.repeat(11),''])
  const field={value:''};const button={disabled:true};const history=[];
  const form={elements:{namedItem:()=>field},querySelector:()=>button};
  const link={value:'/staff/invite#token='+'B'.repeat(43)};
- const context={URL,URLSearchParams,document:{querySelector:s=>s==='[data-invite-link]'?link:form},window:{location:{protocol:'https:',origin:'https://preview.invalid',pathname:'/staff/invite',hash:'#token='+token},history:{replaceState:(...args)=>history.push(args)}}};
+ let copyClickHandler;
+ const copyButton={addEventListener:(event,handler)=>{check(event==='click'&&typeof handler==='function');copyClickHandler=handler;}};
+ const context={URL,URLSearchParams,document:{querySelector:s=>s==='[data-invite-link]'?link:s==='[data-copy-staff-invite]'?copyButton:form},window:{location:{protocol:'https:',origin:'https://preview.invalid',pathname:'/staff/invite',hash:'#token='+token},history:{replaceState:(...args)=>history.push(args)}}};
  vm.runInNewContext(source,context);
+ check(typeof copyClickHandler==='function');
  check(link.value.startsWith('https://preview.invalid/staff/invite#token='));
  check(history.length===1 && history[0][2]==='/staff/invite');
  check(button.disabled===(token!=='A'.repeat(43)));
