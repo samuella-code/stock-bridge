@@ -194,4 +194,5 @@ def test_employee_business_cards_show_role_and_permission_chips():
     html=environment().get_template(template).render(**data)
     for phrase in ('Role: Manager','Record sales','View stock','Restock','Expenses','Open'):
         assert phrase in html
-    assert '<span class="sb-staff-access-chip">' in html
+    assert '<a class="sb-staff-access-chip" href="#preview-only">' in html
+    assert html.count('class="sb-staff-access-chip"') == 4
