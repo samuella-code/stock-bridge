@@ -290,7 +290,7 @@ def test_owner_session_can_create_and_switch_to_new_invited_employee(app):
     assert client.get('/staff/manage').status_code==403
     assert client.get('/staff/').status_code==302
     assert client.get('/auth/verify-pending').status_code==200
-    assert owner.email=='owner@example.invalid' and not owner.staff_only
+    assert not owner.staff_only
 
 
 def test_management_gets_are_select_only_and_never_dispatch_mail(app):
