@@ -138,6 +138,7 @@ def test_owner_invitation_response_exposes_link_once_and_resend_requires_owner_c
     assert response.location.startswith('/staff/manage#invite-token=')
     secret = response.location.split('invite-token=', 1)[1]
     assert len(secret) == 43
+    assert captured[0].split('#token=')[1].split('\n')[0] == secret
     page = client.get('/staff/manage')
     assert page.status_code == 200 and b'data-invite-link' in page.data
     assert secret.encode() not in page.data
@@ -187,8 +188,8 @@ def test_http_resend_emails_replacement_only_without_adding_a_seat(app):
     assert bodies[0][0]==old.email and raw not in bodies[0][1]
     assert service.seat_count(owner.id,now=NOW)==1
     new=StaffInvitation.query.filter_by(owner_id=owner.id,state='pending').one()
-    token=bodies[0][1].split('#token=')[1].split('\n')[0]
-    assert token.encode() in response.data
+    emailed_token=bodies[0][1].split('#token=')[1].split('\n')[0]
+    assert emailed_token == token
     assert new.token_digest==hashlib.sha256(token.encode()).hexdigest()
     assert token not in str(new.__dict__)
     assert service.invitation_for(token,now=NOW).id==new.id
