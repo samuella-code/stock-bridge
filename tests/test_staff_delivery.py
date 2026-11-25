@@ -137,7 +137,10 @@ def test_owner_invitation_response_exposes_link_once_and_resend_requires_owner_c
     assert response.status_code == 200 and b'Invitation created for staff@example.invalid.' in response.data
     assert b'Email sent' not in response.data and b'Email could not be sent' not in response.data
     secret = captured[0].split('#token=')[1].split('\n')[0]
-    assert secret.encode() not in response.data and b'#token=' not in response.data
+    assert secret.encode() in response.data and b'#token=' in response.data
+    assert b'data-invite-link' in response.data
+    assert StaffInvitation.query.filter_by(owner_id=owner.id).one().token_digest == hashlib.sha256(secret.encode()).hexdigest()
+    assert secret not in str(StaffInvitation.query.filter_by(owner_id=owner.id).one().__dict__)
     with client.session_transaction() as state: assert secret not in json.dumps(dict(state))
     row = StaffInvitation.query.filter_by(owner_id=owner.id).one()
     other, _ = seed('pro',email='other-owner@example.invalid'); login(client,other)
