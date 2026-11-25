@@ -57,3 +57,33 @@ check(teamTemplate.includes("Invitation created for {{invited_email}}."));
 check(teamTemplate.includes("Invitation link refreshed for {{invited_email}}."));
 check(manageTemplate.includes("Invitation created for {{ invited_email }}."));
 console.log('PASS: fresh invitation identity and token are wired to both private success views');
+
+
+// Team-management copy control: exercise both Clipboard API success and
+// the manual-select fallback used when clipboard access is unavailable.
+async function runTeamCopy(clipboardWrite) {
+  let handler;
+  const input={value:'/staff/invite#token='+ 'C'.repeat(43),type:'hidden',focused:false,selected:false,
+    focus(){this.focused=true;},select(){this.selected=true;}};
+  const status={textContent:''};
+  const card={querySelector:selector=>selector==='[data-copy-status]'?status:null};
+  const button={addEventListener:(event,fn)=>{check(event==='click');handler=fn;},
+    closest:selector=>selector==='.team-card'?card:null};
+  const context={URL,location:{origin:'https://preview.invalid'},navigator:{clipboard:{writeText:clipboardWrite}},
+    document:{querySelectorAll:selector=>selector==='[data-team-tabs] a'?[]:selector==='[data-team-panel]'?[]:selector==='[data-copy-team-invite]'?[button]:[],
+      querySelector:selector=>selector==='#team-invite-link'?input:null}};
+  vm.runInNewContext(fs.readFileSync('app/static/js/staff-team.js','utf8'),context);
+  check(typeof handler==='function');
+  await handler();
+  return {input,status};
+}
+(async()=>{
+  const copied=[];
+  const success=await runTeamCopy(async value=>{copied.push(value);});
+  check(copied.length===1 && copied[0]==='https://preview.invalid/staff/invite#token='+'C'.repeat(43));
+  check(success.status.textContent==='Invite link copied. Only share it with the invited person.');
+  const fallback=await runTeamCopy(async()=>{throw new Error('clipboard unavailable');});
+  check(fallback.input.type==='text' && fallback.input.focused && fallback.input.selected);
+  check(fallback.status.textContent==='Select and copy the invitation link above.');
+  console.log('PASS: team invitation copy control and manual fallback');
+})().catch(error=>{console.error(error);process.exitCode=1;});
