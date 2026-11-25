@@ -134,11 +134,15 @@ def test_owner_invitation_response_exposes_link_once_and_resend_requires_owner_c
     def send(subject, recipient, body, *, html): captured.append(body); return True
     with patch.dict('os.environ', environ, clear=True), patch('app.staff.delivery.email_service._send_email', side_effect=send):
         response = client.post('/staff/manage', data=dict(action='invite', email='staff@example.invalid', role='manager', business_ids=[shops[0].id]))
-    assert response.status_code == 200 and b'Invitation created for staff@example.invalid.' in response.data
-    assert b'Email sent' not in response.data and b'Email could not be sent' not in response.data
-    secret = captured[0].split('#token=')[1].split('\n')[0]
-    assert secret.encode() in response.data and b'#token=' in response.data
-    assert b'data-invite-link' in response.data
+    assert response.status_code == 303
+    assert response.location.startswith('/staff/manage#invite-token=')
+    secret = response.location.split('invite-token=', 1)[1]
+    assert len(secret) == 43
+    assert captured[0].split('#token=')[1].split('\n')[0] == secret
+    page = client.get('/staff/manage')
+    assert page.status_code == 200 and b'data-invite-link' in page.data
+    assert secret.encode() not in page.data
+    assert b'Email sent' not in page.data and b'Email could not be sent' not in page.data
     assert StaffInvitation.query.filter_by(owner_id=owner.id).one().token_digest == hashlib.sha256(secret.encode()).hexdigest()
     assert secret not in str(StaffInvitation.query.filter_by(owner_id=owner.id).one().__dict__)
     with client.session_transaction() as state: assert secret not in json.dumps(dict(state))
@@ -173,14 +177,19 @@ def test_http_resend_emails_replacement_only_without_adding_a_seat(app):
     with patch.dict('os.environ',environ,clear=True), patch('app.staff.delivery.email_service._send_email',
             side_effect=lambda subject,recipient,body,*,html: bodies.append((recipient,body)) or False):
         response = client.post('/staff/manage',data=dict(action='resend',id=old.id))
-    assert response.status_code==200 and b'Invitation link refreshed for staff@example.invalid.' in response.data
-    assert b'Email sent' not in response.data and b'Email could not be sent' not in response.data
-    assert b'#token=' in response.data and old.state=='revoked'
+    assert response.status_code==303
+    assert response.location.startswith('/staff/manage#invite-token=')
+    token=response.location.split('invite-token=',1)[1]
+    assert len(token)==43 and old.state=='revoked'
+    page=client.get('/staff/manage')
+    assert page.status_code==200 and b'data-invite-link' in page.data
+    assert token.encode() not in page.data
+    assert b'Email sent' not in page.data and b'Email could not be sent' not in page.data
     assert bodies[0][0]==old.email and raw not in bodies[0][1]
     assert service.seat_count(owner.id,now=NOW)==1
     new=StaffInvitation.query.filter_by(owner_id=owner.id,state='pending').one()
-    token=bodies[0][1].split('#token=')[1].split('\n')[0]
-    assert token.encode() in response.data
+    emailed_token=bodies[0][1].split('#token=')[1].split('\n')[0]
+    assert emailed_token == token
     assert new.token_digest==hashlib.sha256(token.encode()).hexdigest()
     assert token not in str(new.__dict__)
     assert service.invitation_for(token,now=NOW).id==new.id
