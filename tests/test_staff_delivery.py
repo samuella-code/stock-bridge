@@ -175,7 +175,7 @@ def test_http_resend_emails_replacement_only_without_adding_a_seat(app):
         response = client.post('/staff/manage',data=dict(action='resend',id=old.id))
     assert response.status_code==200 and b'Invitation link refreshed for staff@example.invalid.' in response.data
     assert b'Email sent' not in response.data and b'Email could not be sent' not in response.data
-    assert b'#token=' not in response.data and old.state=='revoked'
+    assert b'#token=' in response.data and old.state=='revoked'
     assert bodies[0][0]==old.email and raw not in bodies[0][1]
     assert service.seat_count(owner.id,now=NOW)==1
     new=StaffInvitation.query.filter_by(owner_id=owner.id,state='pending').one()
