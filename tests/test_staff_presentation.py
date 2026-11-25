@@ -63,6 +63,10 @@ class FormContract(HTMLParser):
         values=dict(attrs)
         if tag=='form':self.current=[];self.forms.append([{k:v for k,v in values.items() if k in ('method','action')},self.current])
         elif self.current is not None and tag in ('input','select','option','button'):
+            # Unnamed controls (for example, the read-only copy-link display)
+            # are not submitted and must not affect the security form contract.
+            if tag == 'input' and not values.get('name'):
+                return
             self.current.append([tag,{k:v for k,v in values.items() if k in ('name','value','type','maxlength','minlength','required','disabled','checked','selected','autocomplete','data-review-invite')}])
     def handle_endtag(self,tag):
         if tag=='form':self.current=None
