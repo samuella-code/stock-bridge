@@ -88,7 +88,11 @@ def manage():
             # Digest is already committed; a failure must not duplicate a seat or
             # trigger an uncertain SMTP retry. Never log the token/exception.
             db.session.rollback(); status = 'unknown'
-        return render_template('staff/manage.html', fresh_invite_token=raw, invited_email=invitation.email, invitation_action=action, **owner_context(datetime.utcnow()))
+        # Redirect after every successful mutation. Keep the one-time raw token in
+        # the URL fragment: browsers do not send fragments in HTTP requests or
+        # Referer headers, and staff.js moves it into the copy-link control.
+        # This prevents refresh from replaying the invitation-creation POST.
+        return redirect(url_for('staff.manage') + '#invite-token=' + raw, code=303)
     return redirect(url_for('staff.manage'))
 
 
