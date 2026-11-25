@@ -180,7 +180,9 @@ def test_http_resend_emails_replacement_only_without_adding_a_seat(app):
     assert service.seat_count(owner.id,now=NOW)==1
     new=StaffInvitation.query.filter_by(owner_id=owner.id,state='pending').one()
     token=bodies[0][1].split('#token=')[1].split('\n')[0]
+    assert token.encode() in response.data
     assert new.token_digest==hashlib.sha256(token.encode()).hexdigest()
+    assert token not in str(new.__dict__)
     assert service.invitation_for(token,now=NOW).id==new.id
 
 
