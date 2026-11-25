@@ -18,11 +18,11 @@
       {% for business in businesses %}
         {% set workflow = namespace(links=[]) %}
         {% if sales_enabled|default(false) and ('sales_view' in permissions or 'sales_create' in permissions) %}
-          {% set workflow.links = workflow.links + [('Sales', 'staff.sales')] %}
+          {% set workflow.links = workflow.links + [('Record sales', 'staff.sales')] %}
         {% endif %}
         {% if staff_stock_enabled|default(false) %}
           {% if 'inventory_view' in permissions %}{% set workflow.links = workflow.links + [('View stock', 'staff.inventory')] %}{% endif %}
-          {% if 'restocking_view' in permissions or 'restocking_create' in permissions %}{% set workflow.links = workflow.links + [('Restocking', 'staff.restocking')] %}{% endif %}
+          {% if 'restocking_view' in permissions or 'restocking_create' in permissions %}{% set workflow.links = workflow.links + [('Restock', 'staff.restocking')] %}{% endif %}
         {% endif %}
         {% if staff_operations_enabled|default(false) %}
           {% if 'products_create' in permissions or 'products_edit' in permissions %}{% set workflow.links = workflow.links + [('Products', 'staff.products')] %}{% endif %}
@@ -40,9 +40,9 @@
             {% endif %}
           </div>
           {% if workflow.links %}
-            <nav class="sb-staff-access-workflows" aria-label="Workflows for {{ business.name }}">
+            <nav class="sb-staff-access-workflows" aria-label="What you can do at {{ business.name }}">
               {% for label, endpoint in workflow.links %}
-                <a class="sb-button sb-button-secondary" href="{{ url_for(endpoint, membership_id=member.id, business_id=business.id) }}">{{ label }}</a>
+                <span class="sb-staff-access-chip">{{ label }}</span>
               {% endfor %}
             </nav>
           {% else %}
@@ -53,14 +53,23 @@
     {% else %}
       <section class="sb-card sb-staff-access-empty" aria-labelledby="staff-access-empty-title">
         <span class="sb-staff-access-ring" aria-hidden="true"></span>
-        <h2 id="staff-access-empty-title">No businesses available yet</h2>
-        <p>Ask the business owner to check:</p>
+        <p class="sb-staff-access-eyebrow">Your workspaces will appear here</p>
+        <h2 id="staff-access-empty-title">No businesses assigned yet</h2>
+        <p>Once the owner assigns a business, you’ll see your access and available tasks here.</p>
+        <p class="sb-staff-access-check-intro">Ask the business owner to check:</p>
         <ul>
           <li>Your business assignments</li>
-          <li>Whether their Pro plan is active</li>
-          <li>Whether your access needs to be restored</li>
+          <li>That their Pro plan is active</li>
+          <li>That your access has been restored</li>
         </ul>
-        <a class="sb-button sb-button-secondary" href="{{ url_for('staff.home') }}">Check again</a>
+        <div class="sb-staff-access-actions">
+          {% if owner_contact %}
+            <a class="sb-button sb-button-primary" href="mailto:{{ owner_contact.email|urlencode }}?subject={{ 'StockBridge business access'|urlencode }}">Message the owner</a>
+          {% else %}
+            <span class="sb-button sb-button-primary" aria-disabled="true">Message the owner</span>
+          {% endif %}
+          <a class="sb-button sb-button-secondary" href="{{ url_for('staff.home') }}">Check again</a>
+        </div>
       </section>
     {% endfor %}
   </div>
