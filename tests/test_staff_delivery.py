@@ -25,7 +25,7 @@ def policy():
     ('STAFF_INVITATION_EMAIL_ORIGIN','https://foreign.example.invalid'),
     ('STAFF_INVITATION_EMAIL_APPROVED_SHA','b'*40),
     ('STAFF_INVITATION_EMAIL_ALLOWED_RECIPIENTS',''),
-    ('STAFF_INVITATION_EMAIL_ALLOWED_RECIPIENTS','*'),
+    ('STAFF_INVITATION_EMAIL_ALLOWED_RECIPIENTS','not-an-email'),
     ('STAFF_INVITATION_EMAIL_ALLOWED_RECIPIENTS','Staff@example.invalid')])
 def test_disabled_malformed_and_unapproved_policy_never_calls_transport(app, key, value):
     owner, shops = seed('pro'); row, raw = issue(owner, shops)
@@ -246,6 +246,36 @@ def test_documented_staging_contract_and_rejected_identities(environment,target)
 def test_preview_target_does_not_authorize_other_release_identities(field,value):
     config,environ=policy();environ[field]=value
     assert delivery.gate('staff@example.invalid',config,environ)=='configuration_required'
+
+
+@pytest.mark.parametrize('recipient', [
+    'mistresslauren574@gmail.com',
+    'new.employee@example.com',
+    'another.person+staff@company.co.uk',
+])
+def test_explicit_wildcard_allows_any_valid_employee_recipient_on_approved_staging(app, recipient):
+    config, environ = policy()
+    config['STAFF_INVITATION_EMAIL_ALLOWED_RECIPIENTS'] = '*'
+    assert delivery.gate(recipient, config, environ) == 'ready'
+
+
+@pytest.mark.parametrize('recipient', [
+    'NotLowercase@example.com',
+    'not-an-email',
+    '',
+    'employee@example.com,attacker@example.com',
+])
+def test_wildcard_still_rejects_malformed_or_noncanonical_recipients(recipient):
+    config, environ = policy()
+    config['STAFF_INVITATION_EMAIL_ALLOWED_RECIPIENTS'] = '*'
+    assert delivery.gate(recipient, config, environ) == 'suppressed'
+
+
+def test_wildcard_does_not_bypass_staging_identity_checks():
+    config, environ = policy()
+    config['STAFF_INVITATION_EMAIL_ALLOWED_RECIPIENTS'] = '*'
+    environ['VERCEL_ENV'] = 'production'
+    assert delivery.gate('anyone@example.com', config, environ) == 'configuration_required'
 
 def test_preview_target_still_suppresses_other_recipients():
     config,environ=policy()
