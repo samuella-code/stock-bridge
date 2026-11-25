@@ -128,15 +128,19 @@ def test_delivery_revalidates_current_invitation_and_gate(app, case):
     assert not send.called
 
 
-def test_owner_http_response_contains_status_only_and_resend_requires_owner_csrf(app):
+def test_owner_invitation_response_exposes_link_once_and_resend_requires_owner_csrf(app):
     owner, shops = seed('pro'); client = app.test_client(); login(client, owner)
     config, environ = policy(); app.config.update(config); captured=[]
     def send(subject, recipient, body, *, html): captured.append(body); return True
     with patch.dict('os.environ', environ, clear=True), patch('app.staff.delivery.email_service._send_email', side_effect=send):
         response = client.post('/staff/manage', data=dict(action='invite', email='staff@example.invalid', role='manager', business_ids=[shops[0].id]))
-    assert response.status_code == 200 and b'<h2>Email sent</h2>' in response.data
+    assert response.status_code == 200 and b'Invitation created for staff@example.invalid.' in response.data
+    assert b'Email sent' not in response.data and b'Email could not be sent' not in response.data
     secret = captured[0].split('#token=')[1].split('\n')[0]
-    assert secret.encode() not in response.data and b'#token=' not in response.data
+    assert secret.encode() in response.data and b'#token=' in response.data
+    assert b'data-invite-link' in response.data
+    assert StaffInvitation.query.filter_by(owner_id=owner.id).one().token_digest == hashlib.sha256(secret.encode()).hexdigest()
+    assert secret not in str(StaffInvitation.query.filter_by(owner_id=owner.id).one().__dict__)
     with client.session_transaction() as state: assert secret not in json.dumps(dict(state))
     row = StaffInvitation.query.filter_by(owner_id=owner.id).one()
     other, _ = seed('pro',email='other-owner@example.invalid'); login(client,other)
@@ -169,13 +173,16 @@ def test_http_resend_emails_replacement_only_without_adding_a_seat(app):
     with patch.dict('os.environ',environ,clear=True), patch('app.staff.delivery.email_service._send_email',
             side_effect=lambda subject,recipient,body,*,html: bodies.append((recipient,body)) or False):
         response = client.post('/staff/manage',data=dict(action='resend',id=old.id))
-    assert response.status_code==200 and b'<h2>Email could not be sent</h2>' in response.data
-    assert b'#token=' not in response.data and old.state=='revoked'
+    assert response.status_code==200 and b'Invitation link refreshed for staff@example.invalid.' in response.data
+    assert b'Email sent' not in response.data and b'Email could not be sent' not in response.data
+    assert b'#token=' in response.data and old.state=='revoked'
     assert bodies[0][0]==old.email and raw not in bodies[0][1]
     assert service.seat_count(owner.id,now=NOW)==1
     new=StaffInvitation.query.filter_by(owner_id=owner.id,state='pending').one()
     token=bodies[0][1].split('#token=')[1].split('\n')[0]
+    assert token.encode() in response.data
     assert new.token_digest==hashlib.sha256(token.encode()).hexdigest()
+    assert token not in str(new.__dict__)
     assert service.invitation_for(token,now=NOW).id==new.id
 
 

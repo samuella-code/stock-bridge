@@ -58,3 +58,5 @@ body.sb-team-shell {margin:0;padding:var(--sb-6);background:var(--sb-app);font:v
 @media(min-width:1000px){.team-layout{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);}}
 @media(prefers-reduced-motion:reduce){.sb-team-shell *{animation:none!important;transition:none!important;}}
 .sb-team-shell label.sb-toggle-row {margin:0;}
+
+.team-invite-actions {display:flex;align-items:center;flex-wrap:wrap;gap:var(--sb-2);}

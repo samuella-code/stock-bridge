@@ -88,7 +88,7 @@ def manage():
             # Digest is already committed; a failure must not duplicate a seat or
             # trigger an uncertain SMTP retry. Never log the token/exception.
             db.session.rollback(); status = 'unknown'
-        return render_template('staff/manage.html', delivery_result=status, **owner_context(datetime.utcnow()))
+        return render_template('staff/manage.html', fresh_invite_token=raw, invited_email=invitation.email, invitation_action=action, **owner_context(datetime.utcnow()))
     return redirect(url_for('staff.manage'))
 
 
@@ -215,5 +215,5 @@ def team_manage(owner_id):
         except Exception:db.session.rollback();status='unknown'
         try:context=delegated_context(owner,user,datetime.utcnow())
         except ValueError:abort(403)
-        return render_template('staff/team_manage.html',delivery_result=status,fresh_invite_token=raw,**context)
+        return render_template('staff/team_manage.html',fresh_invite_token=raw,invited_email=row.email,invitation_action=action,**context)
     return redirect(url_for('staff.team_manage',owner_id=owner.id))

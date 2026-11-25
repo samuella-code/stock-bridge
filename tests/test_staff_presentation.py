@@ -133,12 +133,14 @@ def test_separate_limits_shared_impact_and_individual_assignments():
 
 @pytest.mark.parametrize('state,label',[('delivery-disabled','Email delivery is off'),('delivery-unknown','Email delivery is uncertain'),
     ('delivery-configuration_required','Email setup needs attention'),('delivery-failed','Email could not be sent'),('delivery-sent','Email sent'),('delivery-suppressed','Email not sent')])
-def test_email_statuses_use_plain_labels_without_private_links(state,label):
+def test_manage_invitation_screen_does_not_claim_email_delivery_status(state,label):
     template,data=context(state);html=environment().get_template(template).render(**data)
-    assert label in html and 'No private link is shown here' in html
+    assert label not in html
+    assert 'No private link is shown here' not in html
     assert '#token=' not in html and 'A'*43 not in html
-    assert 'Acceptance transfers that occupied seat to the employee; it does not free it.' in html
-    assert 'until it expires, is accepted or is cancelled' not in html
+    assert 'Copy invite link' in html
+    assert 'The employee gets a link to accept. You can also copy the link and send it yourself.' in html
+    assert 'An invitation holds a seat until it is accepted or expires.' in html
 
 
 def test_copy_retains_owner_only_permissions_and_disabled_workflows():
