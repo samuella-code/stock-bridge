@@ -42,7 +42,7 @@
           {% if workflow.links %}
             <nav class="sb-staff-access-workflows" aria-label="What you can do at {{ business.name }}">
               {% for label, endpoint in workflow.links %}
-                <span class="sb-staff-access-chip">{{ label }}</span>
+                <a class="sb-staff-access-chip" href="{{ url_for(endpoint, membership_id=member.id, business_id=business.id) }}">{{ label }}</a>
               {% endfor %}
             </nav>
           {% else %}
