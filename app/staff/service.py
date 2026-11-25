@@ -159,7 +159,9 @@ def accept(raw, actor, full_name, password, confirm, *, now):
             raise ValueError('Sign in as the verified invited account before accepting.')
         user = existing
     else:
-        if actor: raise ValueError('Sign out before creating the invited account.')
+        # A valid private invitation authorizes creation of this new identity.
+        # The browser may currently be signed in as the inviting owner; the
+        # route switches the session to the new employee after acceptance.
         if not full_name.strip() or len(full_name.strip()) > 120 or not 12 <= len(password) <= 128 or password != confirm:
             raise ValueError('Enter your name and matching passwords of 12–128 characters.')
         user = User(full_name=full_name.strip(), email=row.email, staff_only=True)

@@ -269,6 +269,30 @@ def test_acceptance_http_secure_new_credentials_and_staff_login(app):
     assert response.status_code==302 and response.location.endswith('/staff/')
 
 
+def test_owner_session_can_create_and_switch_to_new_invited_employee(app):
+    owner,shops=seed('pro')
+    row,raw=issue(owner,shops,email='owner-session-staff@example.invalid')
+    client=app.test_client()
+    login(client,owner)
+    assert client.get('/staff/manage').status_code==200
+
+    response=client.post('/staff/invite',data=dict(
+        action='accept',token=raw,full_name='Owner Session Staff',
+        password='staff-password-123',confirm='staff-password-123'))
+    assert response.status_code==302
+    assert response.location.endswith('/auth/verify-pending')
+
+    employee=User.query.filter_by(email=row.email).one()
+    assert employee.id != owner.id and employee.staff_only
+    assert StaffMembership.query.filter_by(owner_id=owner.id,user_id=employee.id,state='active').count()==1
+    assert row.state=='accepted'
+    # Session must now belong to the employee: owners can manage, staff cannot.
+    assert client.get('/staff/manage').status_code==403
+    assert client.get('/staff/').status_code==302
+    assert client.get('/auth/verify-pending').status_code==200
+    assert not owner.staff_only
+
+
 def test_management_gets_are_select_only_and_never_dispatch_mail(app):
     owner,shops=seed('pro');issue(owner,shops)
     client=app.test_client();login(client,owner);statements=[]
