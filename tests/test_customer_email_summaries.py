@@ -11,7 +11,11 @@ from tests.test_notifications_business_profile import app, setup, product, sale
 @pytest.fixture(autouse=True)
 def allow_isolated_summary_tests(monkeypatch, app):
     from app.notifications.staging_email_policy import Policy
-    app.config['CUSTOMER_SUMMARY_EMAILS_ENABLED'] = True
+    app.config.update(
+        CUSTOMER_SUMMARY_EMAILS_ENABLED=True,
+        CUSTOMER_SUMMARY_EMAIL_BASE_URL='https://stock-bridge-staging.vercel.app',
+        INVENTORY_EMAIL_BASE_URL='https://stock-bridge-staging.vercel.app',
+    )
     selected = lambda now=None: Policy('production')
     monkeypatch.setattr('app.notifications.staging_email_policy.policy', selected)
     monkeypatch.setattr('app.notifications.summaries.policy', selected)
