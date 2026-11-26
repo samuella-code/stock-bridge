@@ -225,6 +225,32 @@ def cancel(user,sub):
     db.session.commit()
 
 
+def enable(user, sub):
+    """Restore an owner's cancelled renewal after an explicit in-app confirmation."""
+    if sub.user_id != user.id:
+        raise ValueError('This subscription does not belong to your account.')
+    if not sub.provider_subscription_code or not sub.cancel_at_period_end:
+        raise ValueError('This subscription does not have a pending renewal cancellation.')
+    if not sub.current_period_end or sub.current_period_end <= datetime.utcnow():
+        raise ValueError('This paid period has ended. Choose a new plan to restart access.')
+    details = subscription_details(sub)
+    token = details.get('email_token')
+    if not token:
+        raise ValueError('The subscription cannot be re-enabled safely. Contact support.')
+    provider.call('/subscription/enable', 'POST', {
+        'code': sub.provider_subscription_code,
+        'token': token,
+    })
+    sub.cancel_at_period_end = False
+    sub.cancelled_at = None
+    sub.status = 'active'
+    notice(user.id, f'renewal-restored:{sub.id}:{sub.current_period_end.isoformat()}',
+        'renewal_restored',
+        f'Renewal is back on for your {sub.plan_code.title()} {sub.billing_interval} plan.',
+        sub.id)
+    db.session.commit()
+
+
 def change_plan(user,sub,plan,interval):
     spec=plan_spec(plan,interval)
     account=account_for(user)
