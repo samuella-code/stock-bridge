@@ -95,6 +95,7 @@ def _transactional(template, subject, recipient, name, body, **context):
         "password_changed": "Your StockBridge password was changed.",
         "payment_success": "Your StockBridge payment was received and access is active.",
         "account_status": "An important update about your StockBridge account.",
+        "staff_invitation": "You have been invited to join a StockBridge team.",
     }
     context.setdefault("preheader", preheaders.get(template, "An update from StockBridge."))
     html = render_template(f"email/{template}.html", name=name, **context)
@@ -128,10 +129,10 @@ def send_welcome_email(user):
 
 def send_payment_success_email(user, business, payment):
     link = customer_url("main.dashboard")
-    paid_at = payment.paid_at.strftime("%d %b %Y %H:%M UTC")
+    paid_at = (payment.paid_at + timedelta(hours=1)).strftime("%d/%m/%Y %H:%M WAT")
     amount = f"₦{payment.amount_kobo / 100:,.2f}"
     body = (f"Hi {user.full_name.split()[0]},\n\nPayment successful. Your StockBridge Lifetime Access is active.\n"
-            f"Business: {business.name}\nAmount: {amount} ({payment.currency})\nReference: {payment.reference}\n"
+            f"Business: {business.name}\nAmount: {amount} ({payment.currency})\nReference: {payment.reference[:8]}…\n"
             f"Paid: {paid_at}\nAccess: Lifetime Access\nStatus: Active\n\n"
             f"Open StockBridge: {link}\n\nOne-time payment. No subscription. No recurring charges.")
     return _transactional("payment_success", "Your StockBridge Lifetime Access is active", user.email,
