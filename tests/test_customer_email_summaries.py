@@ -52,7 +52,7 @@ def test_daily_and_weekly_summaries_queue_once_per_business_period(app):
     assert weekly.payload['cost_of_goods'] == '750.00'
     assert weekly.payload['expenses'] == '1,200.00'
     assert weekly.payload['kept'] == '-900.00'
-    assert weekly.payload['best_seller'] == {'name': 'Coffee', 'quantity': 3}
+    assert weekly.payload['best_seller'] == {'name': 'Coffee', 'unit': 'bottles', 'quantity': 3}
     assert queue_due_summaries() == 0
     assert EmailOutbox.query.count() == 2
 
