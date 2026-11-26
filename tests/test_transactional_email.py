@@ -58,7 +58,10 @@ def test_verification_resend_and_welcome_only_on_first_verification(app, message
     with app.test_request_context("/"):
         user = db.session.get(User, user_id)
         assert send_verification_email(user)
-        token = verification_token(user.email)
+        plain = messages[0].get_body(preferencelist=("plain",)).get_content()
+        verify_url = next(line.strip() for line in plain.splitlines()
+                          if "/auth/verify/" in line)
+        token = verify_url.rsplit("/", 1)[-1]
     assert messages[0]["From"] == "StockBridge <sender@example.test>"
     assert messages[0].get_body(preferencelist=("html",)) is not None
     assert "expires in 24 hours" in messages[0].get_body(preferencelist=("plain",)).get_content()
