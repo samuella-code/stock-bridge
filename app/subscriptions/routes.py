@@ -252,7 +252,8 @@ def stop_trial_reminders(token):
     if not isinstance(payload, dict) or not isinstance(payload.get('user_id'), int):
         abort(404)
     user = db.session.get(User, payload['user_id'])
-    if not user or user.email != payload.get('email'):
+    if (not user or not isinstance(payload.get('email_digest'), str)
+            or sha256(user.email.lower().encode()).hexdigest() != payload['email_digest']):
         abort(404)
     if request.method == 'POST':
         if request.form.get('confirm') != 'yes':
