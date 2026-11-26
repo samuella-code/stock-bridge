@@ -227,6 +227,8 @@ def cancel(user,sub):
 
 def enable(user, sub):
     """Restore an owner's cancelled renewal after an explicit in-app confirmation."""
+    lock_account(user.id)
+    db.session.refresh(sub)
     if sub.user_id != user.id:
         raise ValueError('This subscription does not belong to your account.')
     if not sub.provider_subscription_code or not sub.cancel_at_period_end:
