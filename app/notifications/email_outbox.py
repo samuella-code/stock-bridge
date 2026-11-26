@@ -15,7 +15,7 @@ from app import email_service
 from app.notifications.staging_email_policy import policy, stamp_test_job
 
 worker_bp = Blueprint('inventory_email_worker', __name__)
-PREFERENCE_FIELDS = ('low_stock_email', 'out_of_stock_email', 'product_added', 'sales', 'restocking')
+PREFERENCE_FIELDS = ('low_stock_email', 'out_of_stock_email', 'product_added', 'sales', 'restocking', 'daily_summary_email', 'weekly_summary_email')
 
 
 def enabled(business_id, field):
@@ -109,7 +109,7 @@ def queue_restock_alert(business_id, items, event_key):
     return row
 def customer_origin():
     # Explicit origin: VERCEL_ENV=production also describes staging-project deploys.
-    raw = current_app.config['INVENTORY_EMAIL_BASE_URL']
+    raw = (current_app.config.get('CUSTOMER_SUMMARY_EMAIL_BASE_URL') or current_app.config['INVENTORY_EMAIL_BASE_URL'])
     url = urlsplit(raw)
     if (url.scheme != 'https' or not url.hostname or url.username or url.password
             or url.query or url.fragment or url.path not in ('', '/') or url.port not in (None, 443)):
@@ -163,7 +163,7 @@ def finish(row_id, token, status, now, **values):
 
 
 def dispatch_one(user_id=None, business_id=None, now=None):
-    if not current_app.config['INVENTORY_EMAILS_ENABLED']:
+    if not (current_app.config['INVENTORY_EMAILS_ENABLED'] or current_app.config.get('CUSTOMER_SUMMARY_EMAILS_ENABLED')):
         return 'disabled'
     if policy(now).mode == 'blocked':
         return 'disabled'
@@ -183,13 +183,14 @@ def dispatch_one(user_id=None, business_id=None, now=None):
     if (not business or not owner or business.user_id != owner.id or owner.role == 'admin'
             or owner.suspended_at or business.suspended_at or not owner.email_verified_at
             or owner.email != row.recipient_email or not valid_recipient(row.recipient_email)
-           or row.event_type not in ('low_stock', 'out_of_stock', 'restock_recorded')):
+           or row.event_type not in ('low_stock', 'out_of_stock', 'restock_recorded', 'daily_summary', 'weekly_summary')):
         finish(row_id, token, 'failed', now, last_error='RecipientUnavailable')
         return 'failed'
-    preference_field = (
-        'restocking' if row.event_type == 'restock_recorded'
-        else row.event_type + '_email'
-    )
+    preference_field = ({
+        'restock_recorded': 'restocking',
+        'daily_summary': 'daily_summary_email',
+        'weekly_summary': 'weekly_summary_email',
+    }.get(row.event_type, row.event_type + '_email'))
     if not enabled(row.business_id, preference_field):
         finish(row_id, token, 'suppressed', now, last_error=None)
         return 'suppressed'
@@ -198,7 +199,25 @@ def dispatch_one(user_id=None, business_id=None, now=None):
     first_name = owner.full_name.split()[0] if owner.full_name and owner.full_name.split() else 'there'
     attempts, maximum, kind = row.attempt_count, row.max_attempts, row.event_type
     try:
-        if kind == 'restock_recorded':
+        if kind in ('daily_summary', 'weekly_summary'):
+            link = origin + ('/restocking/' if kind == 'daily_summary' else '/')
+            summary = payload
+            if kind == 'daily_summary':
+                body_lines = [f"- {item['name']}: {item['quantity']} {item['unit']} left" for item in summary['low_stock_products']]
+                body = (f"Hi {first_name},\n\n{summary['low_stock_count']} products need restocking in {summary['business_name']}.\n"
+                    + "\n".join(body_lines) + f"\n\nRestock these products: {link}\n\nStockBridge — Know your stock. Understand your profit.")
+                preheader = f"{summary['low_stock_count']} products need restocking in {summary['business_name']}."[:90]
+            else:
+                best = summary.get('best_seller')
+                body = (f"Hi {first_name},\n\nWeekly summary for {summary['business_name']} ({summary['period_label']}).\n"
+                    f"Sales: ₦{summary['sales']:,.2f}\nCost of goods: ₦{summary['cost_of_goods']:,.2f}\n"
+                    f"Expenses: ₦{summary['expenses']:,.2f}\nKept: ₦{summary['kept']:,.2f}\nUnits sold: {summary['units_sold']}\n"
+                    + (f"Best seller: {best['name']} ({best['quantity']} units).\n" if best else "")
+                    + f"\nView business overview: {link}\n\nStockBridge — Know your stock. Understand your profit.")
+                preheader = f"Your weekly numbers for {summary['business_name']} are ready."[:90]
+            html = render_template('email/customer_summary.html', summary=summary, link=link,
+                first_name=first_name, preheader=preheader)
+        elif kind == 'restock_recorded':
             link = origin + '/restocking/'
             action = 'View Restocking'
             item_lines = [
