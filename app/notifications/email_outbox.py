@@ -227,7 +227,7 @@ def dispatch_one(user_id=None, business_id=None, now=None, event_types=None):
                 body = (f"Hi {first_name},\n\nWeekly summary for {summary['business_name']} ({summary['period_label']}).\n"
                     f"Sales: ₦{summary['sales']}\nCost of goods: ₦{summary['cost_of_goods']}\n"
                     f"Expenses: ₦{summary['expenses']}\nKept: ₦{summary['kept']}\nUnits sold: {summary['units_sold']}\n"
-                    + (f"Best seller: {best['name']} ({best['quantity']} units).\n" if best else "")
+                    + (f"Best seller: {best['name']} ({best['quantity']} {best['unit']}{'' if best['quantity'] == 1 else 's'}).\n" if best else "")
                     + f"\nView business overview: {link}\n\nStockBridge — Know your stock. Understand your profit.")
                 preheader = f"Your weekly numbers for {summary['business_name']} are ready."[:90]
             email_reason = (
