@@ -4,7 +4,7 @@ import click
 from flask import current_app
 from sqlalchemy import update
 from app import db
-from app.models import AccountBilling, BillingEvent, RecurringSubscription, StaffMembership, User
+from app.models import AccountBilling, BillingEvent, Payment, RecurringSubscription, StaffMembership, User
 from app.subscriptions.billing import lock_account, notice
 from app.subscriptions.entitlements import effective_access, PLANS
 from app.email_service import _transactional
@@ -123,11 +123,24 @@ def _billing_email(event, user, subscription):
         title, label, status = 'Your plan change is scheduled', 'View billing', 'PLAN UPDATE'
     else:
         title, label, status = 'Your StockBridge account', 'View billing', 'ACCOUNT UPDATE'
+    receipt_url = None
+    message = event.message
+    if kind == 'subscription_paid':
+        reference = event.event_key.partition('payment:')[2]
+        payment = Payment.query.filter_by(
+            reference=reference, user_id=user.id, subscription_id=event.subscription_id,
+            status='success',
+        ).first() if reference else None
+        if payment and payment.paid_at:
+            receipt_path = current_app.url_map.bind(host).build(
+                'subscriptions.receipt', {'payment_id': payment.id})
+            receipt_url = 'https://' + host + receipt_path
+            message += f"\\n\\nDownload receipt PDF: {receipt_url}"
     return _transactional(
-        'billing_notice', title, user.email, user.full_name, event.message,
-        preheader=event.message[:120], event_kind=kind, status=status,
-        headline=title, message=event.message, link=link, action_label=label,
-        **details,
+        'billing_notice', title, user.email, user.full_name, message,
+        preheader=event.message[:90], event_kind=kind, status=status,
+        headline=title, message=message, link=link, action_label=label,
+        receipt_url=receipt_url, **details,
     )
 
 
