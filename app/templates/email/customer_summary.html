@@ -8,7 +8,7 @@
 {% else %}
   <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:0 0 20px;background:#f8faf8;border:1px solid #e2ebe5;">
     {% for label, value in [('Sales', summary.sales), ('Cost of goods', summary.cost_of_goods), ('Expenses', summary.expenses), ('Kept', summary.kept)] %}
-    <tr><td style="padding:11px 14px;border-bottom:1px solid #e2ebe5;">{{ label }}</td><td align="right" style="padding:11px 14px;border-bottom:1px solid #e2ebe5;font-weight:700;">₦{{ '{:,.2f}'.format(value) }}</td></tr>
+    <tr><td style="padding:11px 14px;border-bottom:1px solid #e2ebe5;">{{ label }}</td><td align="right" style="padding:11px 14px;border-bottom:1px solid #e2ebe5;font-weight:700;">₦{{ value }}</td></tr>
     {% endfor %}
     <tr><td style="padding:11px 14px;">Units sold</td><td align="right" style="padding:11px 14px;font-weight:700;">{{ summary.units_sold }}</td></tr>
   </table>
