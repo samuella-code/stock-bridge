@@ -642,6 +642,6 @@ def test_billing_events_use_specific_email_templates_and_keep_claims(app,fake,mo
     assert by_kind['renewal_failed']['action_label']=='Update payment method'
     assert by_kind['subscription_paid']['headline']=='Thank you. Payment received.'
     assert by_kind['subscription_paid']['plan']=='Pro'
-    assert by_kind['subscription_paid']['paid_until']=='26/11/2027'
+    assert by_kind['subscription_paid']['paid_until']==(sub.current_period_end+timedelta(hours=1)).strftime('%d/%m/%Y')
     assert all(event.email_sent_at is not None for event in events)
     assert notifications.deliver(limit=10)==0
