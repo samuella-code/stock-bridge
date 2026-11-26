@@ -94,3 +94,34 @@ def test_production_sender_subject_is_not_staging_marked(app, monkeypatch):
 
     assert sent[0]["From"] == "StockBridge <sender@example.test>"
     assert sent[0]["Subject"] == "Payment received"
+
+
+def test_remaining_customer_email_templates_use_shared_visual_system(app):
+    from types import SimpleNamespace
+    from flask import render_template
+
+    payment = SimpleNamespace(
+        currency="NGN",
+        reference="SBS-1234567890",
+    )
+    business = SimpleNamespace(name="Sample Business")
+    contexts = {
+        "billing": {"name": "Amina Yusuf", "message": "Your trial ends soon.", "link": "https://example.test/billing"},
+        "payment_success": {"name": "Amina Yusuf", "business": business, "payment": payment,
+                            "amount": "₦3,000.00", "paid_at": "26/11/2026 12:00 WAT",
+                            "link": "https://example.test/billing"},
+        "account_status": {"name": "Amina Yusuf", "active": True, "kind": "account",
+                           "link": "https://example.test/login"},
+        "password_changed": {"name": "Amina Yusuf", "link": "https://example.test/reset"},
+        "welcome": {"name": "Amina Yusuf", "link": "https://example.test/dashboard"},
+        "staff_invitation": {"invitation_url": "https://example.test/staff/invite"},
+    }
+
+    with app.app_context():
+        for template, context in contexts.items():
+            html = render_template(f"email/{template}.html", preheader="A short preview line.", **context)
+            assert "max-width:600px" in html, template
+            assert "Know your stock. Understand your profit." in html, template
+            assert "Business made clearer" not in html, template
+            assert "#102437" not in html, template
+            assert "min-height:44px" in html, template
