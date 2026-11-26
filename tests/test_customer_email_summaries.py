@@ -163,7 +163,7 @@ def test_summary_scheduler_endpoint_requires_bearer_and_only_dispatches_summarie
     disabled = client.post('/internal/customer-email-summaries/run',
         headers={'Authorization': 'Bearer ' + app.config['CUSTOMER_SUMMARY_EMAIL_DISPATCH_SECRET']})
     assert disabled.status_code == 200
-    assert disabled.json == {'queued': 0, 'results': ['disabled']}
+    assert disabled.json == {'queued': 0, 'result': 'disabled'}
 
 
 
