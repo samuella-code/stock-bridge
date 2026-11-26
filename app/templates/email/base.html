@@ -1,19 +1,60 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>StockBridge</title></head>
-<body style="margin:0;background:#f3f6f5;color:#152432;font-family:Arial,Helvetica,sans-serif;">
-<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f3f6f5;"><tr><td align="center" style="padding:24px 12px;">
-<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background:#ffffff;border:1px solid #e3e9e6;border-radius:12px;">
-<tr><td style="background:#102437;padding:24px 28px;color:#ffffff;">
-<strong style="font-size:23px;letter-spacing:-0.5px;">Stock<span style="color:#5bd692;">Bridge</span></strong><br>
-<span style="color:#c9ded5;font-size:13px;">Business made clearer.</span>
-</td></tr>
-<tr><td style="padding:28px;font-size:16px;line-height:1.6;">
-{% block content %}{% endblock %}
-</td></tr>
-<tr><td style="border-top:1px solid #e3e9e6;padding:20px 28px;color:#65756f;font-size:13px;line-height:1.5;">
-StockBridge helps you keep stock, sales and business numbers in one place.<br>
-This is a service email about your StockBridge account.
-</td></tr>
-</table></td></tr></table>
-</body></html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <title>StockBridge</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f7f5;color:#17352b;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;">
+  <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">
+    {{ preheader|default('Stock, sales and business updates from StockBridge.', true) }}
+  </div>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;background-color:#f4f7f5;border-collapse:collapse;">
+    <tr><td align="center" style="padding:24px 12px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:100%;max-width:600px;background-color:#ffffff;border:1px solid #e2ebe5;border-collapse:separate;border-spacing:0;">
+        <tr>
+          <td style="padding:22px 24px;background-color:#ffffff;border-bottom:1px solid #e8eee9;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+              <td width="40" height="40" align="center" valign="middle" style="width:40px;height:40px;background-color:#16764d;border-radius:9px;color:#ffffff;font-size:14px;font-weight:700;">SB</td>
+              <td style="padding-left:11px;color:#17352b;font-size:17px;font-weight:700;">StockBridge</td>
+            </tr></table>
+          </td>
+        </tr>
+        <tr><td style="padding:28px 24px;font-size:15px;line-height:1.6;color:#29463b;">
+          {% block content %}{% endblock %}
+        </td></tr>
+        <tr>
+          <td style="padding:22px 24px;background-color:#f8faf8;border-top:1px solid #e2ebe5;color:#60756b;font-size:12px;line-height:1.6;">
+            <p style="margin:0 0 10px;color:#29463b;font-size:13px;font-weight:600;">Know your stock. Understand your profit.</p>
+            {% if config.get('EMAIL_HELP_CENTRE_URL') %}
+              <p style="margin:0 0 8px;">Need help? Visit the <a href="{{ config.get('EMAIL_HELP_CENTRE_URL') }}" style="color:#16764d;text-decoration:underline;">Help Centre</a>.</p>
+            {% endif %}
+            {% if config.get('EMAIL_WHATSAPP_URL') and config.get('EMAIL_WHATSAPP_LABEL') %}
+              <p style="margin:0 0 8px;">Need help? <a href="{{ config.get('EMAIL_WHATSAPP_URL') }}" style="color:#16764d;text-decoration:underline;">Message us on WhatsApp</a>.</p>
+            {% endif %}
+            {% if email_reason|default('', true) %}
+              <p style="margin:0 0 8px;">{{ email_reason }}</p>
+            {% else %}
+              <p style="margin:0 0 8px;">You received this email because you have a StockBridge account or requested this notification.</p>
+            {% endif %}
+            {% if change_alerts_url|default('', true) %}
+              <p style="margin:0 0 8px;"><a href="{{ change_alerts_url }}" style="color:#16764d;text-decoration:underline;">Change alerts</a>{% if stop_reminders_url|default('', true) %} &nbsp;|&nbsp; <a href="{{ stop_reminders_url }}" style="color:#16764d;text-decoration:underline;">Stop these reminders</a>{% endif %}</p>
+            {% endif %}
+            {% if config.get('EMAIL_COMPANY_ADDRESS') %}
+              <p style="margin:0 0 8px;">{{ config.get('STOCKBRIDGE_COMPANY_NAME', 'StockBridge') }} · {{ config.get('EMAIL_COMPANY_ADDRESS') }}</p>
+            {% else %}
+              <p style="margin:0 0 8px;">{{ config.get('STOCKBRIDGE_COMPANY_NAME', 'StockBridge') }}</p>
+            {% endif %}
+            <p style="margin:0;">
+              {% if config.get('EMAIL_PRIVACY_URL') %}<a href="{{ config.get('EMAIL_PRIVACY_URL') }}" style="color:#16764d;text-decoration:underline;">Privacy</a>{% endif %}
+              {% if config.get('EMAIL_PRIVACY_URL') and config.get('EMAIL_TERMS_URL') %} &nbsp;|&nbsp; {% endif %}
+              {% if config.get('EMAIL_TERMS_URL') %}<a href="{{ config.get('EMAIL_TERMS_URL') }}" style="color:#16764d;text-decoration:underline;">Terms</a>{% endif %}
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
