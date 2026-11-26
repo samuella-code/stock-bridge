@@ -40,7 +40,7 @@ def queue_alert(product, quantity, kind, event_key):
         recipient_email=owner.email, event_type=kind, event_key=event_key,
         subject=f'{label} — {name} | StockBridge'[:240],
         max_attempts=max(1, min(10, current_app.config['INVENTORY_EMAIL_MAX_ATTEMPTS'])),
-        payload={'business_name': business.name, 'product_name': product.name,
+        payload={'business_name': business.name, 'product_id': product.id, 'product_name': product.name,
             'quantity': quantity, 'threshold': product.minimum_stock_level, 'unit': product.unit})
     stamp_test_job(row)
     db.session.add(row)
@@ -221,12 +221,11 @@ def dispatch_one(user_id=None, business_id=None, now=None):
                 preheader=f"Your stock has been replenished in {payload['business_name']}.",
             )
         else:
-            link = origin + (
-                '/products/?view=inventory'
-                if kind == 'low_stock'
-                else '/restocking/'
+            product_link = (
+                f"{origin}/notifications/email/product/{business.id}/{payload['product_id']}"
             )
-            action = 'View Inventory' if kind == 'low_stock' else 'Restock Product'
+            link = product_link + ('?action=restock' if kind == 'low_stock' else '?action=restock')
+            action = f"Restock {payload['product_name']}" if kind == 'low_stock' else 'Restock now'
             body = (
                 f"Hi {first_name},\n\n{payload['product_name']} "
                 f"{'is running low' if kind == 'low_stock' else 'is out of stock'} in {payload['business_name']}.\n"
@@ -243,7 +242,7 @@ def dispatch_one(user_id=None, business_id=None, now=None):
                 link=link,
                 first_name=first_name,
                 preheader=(f"Only {payload['quantity']} {payload['unit']}{'' if payload['quantity'] == 1 else 's'} left in {payload['business_name']}." if kind == 'low_stock' else f"{payload['product_name']} is out of stock in {payload['business_name']}.")[:90],
-                inventory_link=origin + "/products/?view=inventory",
+                inventory_link=product_link,
             )
 
         db.session.commit()  # No database locks or open transaction during SMTP.
