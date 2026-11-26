@@ -233,7 +233,9 @@ def restore_renewal(subscription_id):
         if not sub.cancel_at_period_end:
             flash('This subscription has no pending renewal cancellation.', 'warning')
             return redirect(url_for('subscriptions.index'))
-        return render_template('subscriptions/restore_renewal.html', subscription=sub)
+        return render_template('subscriptions/restore_renewal.html', subscription=sub,
+            paid_until=(sub.current_period_end + timedelta(hours=1)).strftime('%d/%m/%Y'),
+            amount=f"₦{sub.amount_kobo / 100:,.2f}")
     if request.form.get('confirm') != 'yes':
         flash('Confirm that you want to turn renewal back on.', 'warning')
         return redirect(url_for('subscriptions.index'))
