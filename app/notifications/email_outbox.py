@@ -205,7 +205,8 @@ def dispatch_one(user_id=None, business_id=None, now=None):
                 for item in payload['items']
             ]
             body = (
-                f"Hi {owner.full_name.split()[0]},\n\nYour stock has been replenished in {payload['business_name']}.\n\n"
+                f"Hi {owner.full_name.split()[0]},\n\nYour stock has been replenished.\n"
+                f"Business: {payload['business_name']}\n\n"
                 "Products restocked:\n" + "\n".join(item_lines)
                 + f"\n\nView Restocking: {link}\n\n"
                 "StockBridge — Know your stock. Understand your profit."
