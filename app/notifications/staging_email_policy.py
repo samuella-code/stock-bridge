@@ -64,7 +64,8 @@ def policy(now=None):
     opted_in = config.get('STAGING_INVENTORY_EMAIL_TEST_ENABLED', False)
     continuous = config.get('STAGING_INVENTORY_EMAIL_CONTINUOUS_ENABLED', False)
     project = os.getenv('VERCEL_PROJECT_ID')
-    raw_origin = config.get('INVENTORY_EMAIL_BASE_URL', '')
+    raw_origin = (config.get('CUSTOMER_SUMMARY_EMAIL_BASE_URL')
+                  or config.get('INVENTORY_EMAIL_BASE_URL', ''))
     origin = raw_origin.rstrip('/') if isinstance(raw_origin, str) else ''
     # Unrestricted delivery requires positive production identity. Absence of
     # staging signals (including a missing/wrong origin) is never authorization.
