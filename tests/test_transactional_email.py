@@ -120,6 +120,8 @@ def test_verified_webhook_and_callback_send_only_one_receipt(app, messages, monk
     plain = messages[0].get_body(preferencelist=("plain",)).get_content()
     assert "₦3,000.00" in plain and "NGN" in plain and "SB-recei…" in plain
     assert "One-time payment. No subscription. No recurring charges." in plain
+    assert "Download receipt PDF:" in plain and "/plans/receipt/" in plain
+    assert "Download receipt PDF" in messages[0].get_body(preferencelist=("html",)).get_content()
     with app.app_context():
         assert Business.query.one().has_write_access
         assert Payment.query.one().receipt_email_sent_at
