@@ -1,4 +1,4 @@
-"""Explicit worker; never scheduled by application startup or deployment."""
+"""Explicit billing-notification worker; never scheduled by application startup or deployment."""
 from datetime import datetime, timedelta
 import click
 from flask import current_app
@@ -6,52 +6,150 @@ from sqlalchemy import update
 from app import db
 from app.models import AccountBilling, BillingEvent, RecurringSubscription, User
 from app.subscriptions.billing import lock_account, notice
-from app.subscriptions.entitlements import effective_access
+from app.subscriptions.entitlements import effective_access, PLANS
 from app.email_service import _transactional
 
 
+def _eligible_customer(user):
+    return bool(user and user.role == 'user' and not user.admin_enabled
+                and not user.staff_only and user.email_verified_at and not user.suspended_at)
+
+
+def _wat(value):
+    return (value + timedelta(hours=1)).strftime('%d/%m/%Y')
+
+
 def queue_due(now=None):
+    """Queue day-five/trial-ended and three-day renewal notices idempotently."""
     now = now or datetime.utcnow()
     for account in AccountBilling.query.filter(AccountBilling.trial_ends_at.isnot(None)).yield_per(100):
-        user=db.session.get(User,account.user_id)
-        if not user or user.staff_only or user.role != 'user' or user.admin_enabled:
+        user = db.session.get(User, account.user_id)
+        if not _eligible_customer(user):
             continue
         lock_account(user.id)
-        if effective_access(user,now=now).kind == 'trial' and now >= account.trial_ends_at-timedelta(days=2):
-            notice(user.id,f'trial-ending:{user.id}','trial_ending','Your trial ends soon. Choose Basic, Plus or Pro to keep recording business activity. No automatic charge follows your trial.')
-        elif now >= account.trial_ends_at and effective_access(user,now=now).kind == 'restricted':
-            notice(user.id,f'trial-expired:{user.id}','trial_expired','Your free trial has ended. Your business records remain available to view. Choose a plan to record new activity.')
-    for sub in RecurringSubscription.query.filter(RecurringSubscription.current_period_end<=now).yield_per(100):
-        user=db.session.get(User,sub.user_id)
-        if not user or user.staff_only or user.role != 'user' or user.admin_enabled:
+        access = effective_access(user, now=now)
+        if access.kind == 'trial' and now >= account.trial_ends_at - timedelta(days=2):
+            notice(user.id, f'trial-ending:{user.id}', 'trial_ending',
+                   'Your 7-day StockBridge trial ends in 2 days. Choose a plan to keep recording business activity. No automatic charge follows your trial.')
+        elif now >= account.trial_ends_at and access.kind == 'restricted':
+            notice(user.id, f'trial-expired:{user.id}', 'trial_expired',
+                   'Your free trial has ended. Your records remain safe and available to view. Choose a plan to record new activity.')
+
+    renewal_window = now + timedelta(days=3)
+    due_subscriptions = RecurringSubscription.query.filter(
+        RecurringSubscription.current_period_end > now,
+        RecurringSubscription.current_period_end <= renewal_window,
+        RecurringSubscription.cancel_at_period_end.is_(False),
+        RecurringSubscription.status == 'active',
+    ).yield_per(100)
+    for sub in due_subscriptions:
+        user = db.session.get(User, sub.user_id)
+        if not _eligible_customer(user):
             continue
         lock_account(user.id)
-        if effective_access(user,now=now).subscription:
+        access = effective_access(user, now=now)
+        if not access.subscription or access.subscription.id != sub.id:
             continue
-        fallback='Your existing account access continues.' if effective_access(user,now=now).legacy else 'Your records remain available to view.'
-        notice(user.id,f'period-ended:{sub.id}:{sub.current_period_end.isoformat()}','subscription_expired','This paid subscription period has ended. '+fallback,sub.id)
+        period_end = sub.current_period_end.isoformat()
+        notice(user.id, f'renewal-reminder:{sub.id}:{period_end}', 'renewal_reminder',
+               f'Your {sub.plan_code.title()} {sub.billing_interval} plan is due to renew on {_wat(sub.current_period_end)}. Amount: ₦{sub.amount_kobo / 100:,.2f}.',
+               sub.id)
+
+    for sub in RecurringSubscription.query.filter(
+            RecurringSubscription.current_period_end <= now).yield_per(100):
+        user = db.session.get(User, sub.user_id)
+        if not _eligible_customer(user):
+            continue
+        lock_account(user.id)
+        access = effective_access(user, now=now)
+        if access.subscription and access.subscription.id == sub.id:
+            continue
+        fallback = ('Your existing account access continues.' if access.legacy
+                    else 'Your records remain safe and available to view.')
+        notice(user.id, f'period-ended:{sub.id}:{sub.current_period_end.isoformat()}',
+               'subscription_expired', 'This paid subscription period has ended. ' + fallback, sub.id)
     db.session.commit()
 
 
+def _billing_email(event, user, subscription):
+    """Render event-specific billing content while retaining a plain-text body."""
+    host = current_app.config['CUSTOMER_HOST']
+    link = 'https://' + host + current_app.url_map.bind(host).build('subscriptions.index')
+    kind = event.kind
+    details = {}
+    if subscription:
+        details.update(
+            plan=subscription.plan_code.title(),
+            interval=subscription.billing_interval,
+            amount=f"₦{subscription.amount_kobo / 100:,.2f}",
+        )
+    if kind == 'trial_ending':
+        title, label = 'Your trial ends in 2 days', 'Choose a plan'
+        status = 'TRIAL ENDING'
+        plan_prices = {
+            plan: {interval: f"₦{PLANS[(plan, interval)]['amount'] / 100:,.0f}"
+                   for interval in ('monthly', 'yearly')}
+            for plan in ('basic', 'plus', 'pro')
+        }
+        details['plan_prices'] = plan_prices
+    elif kind == 'trial_expired':
+        title, label, status = 'Your free trial has ended', 'Choose a plan', 'TRIAL ENDED'
+    elif kind == 'renewal_failed':
+        title, label, status = 'We could not renew your plan', 'Update payment method', 'PAYMENT ISSUE'
+    elif kind == 'renewal_reminder':
+        title, label, status = 'Your plan renews in 3 days', 'View billing', 'RENEWAL REMINDER'
+        if subscription:
+            details['renewal_date'] = _wat(subscription.current_period_end)
+    elif kind == 'subscription_paid':
+        title, label, status = 'Thank you. Payment received.', 'View billing', 'PAYMENT RECEIVED'
+        details['paid_until'] = _wat(subscription.current_period_end) if subscription and subscription.current_period_end else ''
+    elif kind == 'subscription_expired':
+        title, label, status = 'Your paid plan has ended', 'Choose a plan', 'PLAN ENDED'
+    elif kind == 'cancellation_scheduled':
+        title, label, status = 'Your renewal has been stopped', 'View billing', 'RENEWAL STOPPED'
+    elif kind == 'plan_change_scheduled':
+        title, label, status = 'Your plan change is scheduled', 'View billing', 'PLAN UPDATE'
+    else:
+        title, label, status = 'Your StockBridge account', 'View billing', 'ACCOUNT UPDATE'
+    return _transactional(
+        'billing_notice', title, user.email, user.full_name, event.message,
+        preheader=event.message[:120], event_kind=kind, status=status,
+        headline=title, message=event.message, link=link, action_label=label,
+        **details,
+    )
+
+
 def deliver(limit=100):
-    ids=[row[0] for row in db.session.query(BillingEvent.id).filter(BillingEvent.kind!='provider_event',BillingEvent.email_claimed_at.is_(None)).order_by(BillingEvent.id).limit(limit)]
-    sent=0
+    ids = [row[0] for row in db.session.query(BillingEvent.id)
+           .filter(BillingEvent.kind != 'provider_event',
+                   BillingEvent.email_claimed_at.is_(None))
+           .order_by(BillingEvent.id).limit(limit)]
+    sent = 0
     for event_id in ids:
-        now=datetime.utcnow()
-        claimed=db.session.execute(update(BillingEvent).where(BillingEvent.id==event_id,BillingEvent.email_claimed_at.is_(None)).values(email_claimed_at=now))
+        now = datetime.utcnow()
+        claimed = db.session.execute(update(BillingEvent).where(
+            BillingEvent.id == event_id,
+            BillingEvent.email_claimed_at.is_(None)
+        ).values(email_claimed_at=now))
         db.session.commit()
-        if not claimed.rowcount:continue
-        event=db.session.get(BillingEvent,event_id);user=db.session.get(User,event.user_id)
-        if not user or user.role!='user' or user.admin_enabled or user.staff_only:continue
-        # Durable claim precedes SMTP. Unknown delivery failures require operator review; no blind duplicate send.
+        if not claimed.rowcount:
+            continue
+        event = db.session.get(BillingEvent, event_id)
+        user = db.session.get(User, event.user_id) if event else None
+        if not _eligible_customer(user):
+            continue
+        subscription = (db.session.get(RecurringSubscription, event.subscription_id)
+                        if event.subscription_id else None)
         try:
-            delivered=_transactional('billing','StockBridge billing update',user.email,user.full_name,event.message,
-                link='https://'+current_app.config['CUSTOMER_HOST']+current_app.url_map.bind(current_app.config['CUSTOMER_HOST']).build('subscriptions.index'),message=event.message)
+            delivered = _billing_email(event, user, subscription)
         except Exception:
-            current_app.logger.warning("Billing email delivery needs review for event %s.", event.id)
-            delivered=False
+            current_app.logger.warning(
+                "Billing email delivery needs review for event %s.", event.id)
+            delivered = False
         if delivered:
-            event.email_sent_at=datetime.utcnow();db.session.commit();sent+=1
+            event.email_sent_at = datetime.utcnow()
+            db.session.commit()
+            sent += 1
     return sent
 
 
@@ -59,8 +157,9 @@ def register_commands(app):
     @app.cli.command('billing-preflight')
     def preflight_command():
         from app.subscriptions.legacy import preflight
-        _,report=preflight(db.session.connection())
-        for key,value in report.items():click.echo(f'{key}: {value}')
+        _, report = preflight(db.session.connection())
+        for key, value in report.items():
+            click.echo(f'{key}: {value}')
         db.session.rollback()
         if report['multiple_lifetime_businesses'] or report['active_lifetime_without_payment_evidence']:
             raise click.ClickException('STOP: lifetime evidence needs review; no changes made.')
