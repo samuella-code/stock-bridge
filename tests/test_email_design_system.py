@@ -1,0 +1,96 @@
+"""Regression tests for the shared customer email shell and sender identity."""
+from email.message import EmailMessage
+
+import pytest
+
+from app import create_app
+from app.email_service import _send_email
+
+
+@pytest.fixture
+def app():
+    return create_app({
+        "TESTING": True,
+        "SECRET_KEY": "email-design-test",
+        "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+        "SMTP_HOST": "smtp.example.test",
+        "SMTP_PORT": 587,
+        "SMTP_FROM_EMAIL": "sender@example.test",
+        "SMTP_USE_TLS": False,
+    })
+
+
+def test_shared_email_shell_uses_white_stockbridge_header_and_optional_footer(app):
+    from flask import render_template_string
+
+    with app.app_context():
+        html = render_template_string(
+            "{% extends 'email/base.html' %}{% block content %}<h1>Test</h1>{% endblock %}",
+            preheader="A useful preview line for this test email.",
+            email_reason="You received this because you requested a test.",
+        )
+
+    assert "max-width:600px" in html
+    assert "background-color:#ffffff" in html
+    assert ">SB</td>" in html
+    assert "StockBridge</td>" in html
+    assert "Know your stock. Understand your profit." in html
+    assert "Business made clearer" not in html
+    assert "#102437" not in html
+    assert "A useful preview line for this test email." in html
+    assert "[YOUR WHATSAPP NUMBER]" not in html
+    assert "[COMPANY ADDRESS]" not in html
+
+
+def test_sender_name_is_stockbridge_and_staging_is_marked_in_subject(app, monkeypatch):
+    sent = []
+
+    class SMTP:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def send_message(self, message):
+            sent.append(message)
+
+    monkeypatch.setattr("app.email_service.smtplib.SMTP", SMTP)
+    monkeypatch.setenv("VERCEL_ENV", "preview")
+    monkeypatch.setenv("VERCEL_GIT_COMMIT_REF", "release/staging-phase6")
+
+    with app.app_context():
+        assert _send_email("Low stock", "customer@example.test", "Plain text body")
+
+    assert sent[0]["From"] == "StockBridge <sender@example.test>"
+    assert sent[0]["Subject"] == "[STAGING] Low stock"
+
+
+def test_production_sender_subject_is_not_staging_marked(app, monkeypatch):
+    sent = []
+
+    class SMTP:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def send_message(self, message):
+            sent.append(message)
+
+    monkeypatch.setattr("app.email_service.smtplib.SMTP", SMTP)
+    monkeypatch.setenv("VERCEL_ENV", "production")
+    monkeypatch.delenv("VERCEL_GIT_COMMIT_REF", raising=False)
+
+    with app.app_context():
+        assert _send_email("Payment received", "customer@example.test", "Plain text body")
+
+    assert sent[0]["From"] == "StockBridge <sender@example.test>"
+    assert sent[0]["Subject"] == "Payment received"
