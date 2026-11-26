@@ -75,11 +75,15 @@ def receipt(payment_id):
 
     paid_at = (payment.paid_at + timedelta(hours=1)).strftime('%d/%m/%Y %H:%M WAT')
     amount = f"₦{payment.amount_kobo / 100:,.2f} {payment.currency}"
-    product = (
-        f"{payment.plan_code.title()} {payment.billing_interval.title()} subscription"
-        if payment.product == 'subscription' and payment.plan_code and payment.billing_interval
-        else 'Lifetime Access'
-    )
+    if payment.product == 'subscription':
+        product = (
+            f"{payment.plan_code.title()} {payment.billing_interval.title()} subscription"
+            if payment.plan_code and payment.billing_interval else 'Subscription payment'
+        )
+    elif payment.product == 'lifetime':
+        product = 'Lifetime Access'
+    else:
+        product = 'StockBridge payment'
     paid_until = 'Lifetime' if payment.product == 'lifetime' else 'Not available'
     if subscription:
         period_key = 'payment-period:' + sha256(payment.reference.encode()).hexdigest()
