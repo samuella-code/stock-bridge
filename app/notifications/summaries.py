@@ -120,7 +120,8 @@ def queue_due_summaries(now=None):
         if preference is None:
             continue
         owner = db.session.get(User, business.user_id)
-        if not owner or not owner.email or '@' not in owner.email:
+        from app.notifications.email_outbox import valid_recipient
+        if not owner or not valid_recipient(owner.email):
             continue
         if selected_policy.mode == 'staging' and not selected_policy.allows(owner.email):
             continue
@@ -186,7 +187,7 @@ def register_commands(app):
         sent = 0
         # The existing outbox lease, recipient guard and retry policy own delivery.
         for _ in range(100):
-            result = dispatch_one()
+            result = dispatch_one(event_types=('daily_summary', 'weekly_summary'))
             if result in ('idle', 'disabled', 'configuration_required'):
                 break
             if result == 'sent':
