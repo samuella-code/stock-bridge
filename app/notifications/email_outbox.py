@@ -205,19 +205,17 @@ def dispatch_one(user_id=None, business_id=None, now=None):
                 for item in payload['items']
             ]
             body = (
-                f"Hello,\n\n{subject}\n"
-                f"Business: {payload['business_name']}\n\n"
-                "Products restocked:\n"
-                + "\n".join(item_lines)
-                + f"\n\n{action}: {link}\n"
-                f"Select {payload['business_name']} if another business is active.\n\n"
-                "StockBridge — Manage your business with confidence."
+                f"Hi {owner.full_name.split()[0]},\n\nYour stock has been replenished in {payload['business_name']}.\n\n"
+                "Products restocked:\n" + "\n".join(item_lines)
+                + f"\n\nView Restocking: {link}\n\n"
+                "StockBridge — Know your stock. Understand your profit."
             )
             html = render_template(
                 'email/restock_alert.html',
                 alert=payload,
                 action=action,
                 link=link,
+                first_name=owner.full_name.split()[0] if owner.full_name else "there",
             )
         else:
             link = origin + (
@@ -227,14 +225,12 @@ def dispatch_one(user_id=None, business_id=None, now=None):
             )
             action = 'View Inventory' if kind == 'low_stock' else 'Restock Product'
             body = (
-                f"Hello,\n\n{subject}\n"
-                f"Business: {payload['business_name']}\n"
-                f"Product: {payload['product_name']}\n"
-                f"Current stock: {payload['quantity']} {payload['unit']}\n"
-                f"Low-stock threshold: {payload['threshold']} {payload['unit']}\n\n"
-                f"{action}: {link}\n"
-                f"Select {payload['business_name']} if another business is active.\n\n"
-                "StockBridge — Manage your business with confidence."
+                f"Hi {owner.full_name.split()[0]},\n\n{payload['product_name']} "
+                f"{'is running low' if kind == 'low_stock' else 'is out of stock'} in {payload['business_name']}.\n"
+                f"Left in stock: {payload['quantity']} {payload['unit']}\n"
+                f"Alert level: {payload['threshold']} {payload['unit']}\n\n"
+                f"{action}: {link}\n\n"
+                "StockBridge — Know your stock. Understand your profit."
             )
             html = render_template(
                 'email/inventory_alert.html',
@@ -242,6 +238,8 @@ def dispatch_one(user_id=None, business_id=None, now=None):
                 kind=kind,
                 action=action,
                 link=link,
+                first_name=owner.full_name.split()[0] if owner.full_name else "there",
+                inventory_link=origin + "/products/?view=inventory",
             )
 
         db.session.commit()  # No database locks or open transaction during SMTP.
