@@ -575,51 +575,73 @@ def test_old_lifetime_webhook_remains_honored_with_recurring_provider_disabled(c
 
 def test_trial_and_renewal_reminders_are_queued_once(app,fake):
     from app.subscriptions import notifications
-    u,b=seed()
-    now=datetime(2026, 11, 26, 10, 0, 0)
-    start_trial(u)
-    account=db.session.get(AccountBilling,u.id)
+    now=datetime.utcnow()
+    trial_user,trial_business=seed()
+    start_trial(trial_user)
+    account=db.session.get(AccountBilling,trial_user.id)
     account.trial_started_at=now-timedelta(days=5)
     account.trial_ends_at=now+timedelta(days=2)
-    sub=purchase(u,'plus','monthly')
+
+    paid_user,paid_business=seed('paid@example.com',eligible=False)
+    sub=purchase(paid_user,'plus','monthly')
     sub.current_period_end=now+timedelta(days=3)
     sub.next_renewal_at=sub.current_period_end
     db.session.commit()
 
     notifications.queue_due(now=now)
     notifications.queue_due(now=now+timedelta(minutes=5))
-    assert BillingEvent.query.filter_by(user_id=u.id,kind='trial_ending').count()==1
-    assert BillingEvent.query.filter_by(user_id=u.id,kind='renewal_reminder').count()==1
-    reminder=BillingEvent.query.filter_by(user_id=u.id,kind='renewal_reminder').one()
+    assert BillingEvent.query.filter_by(user_id=trial_user.id,kind='trial_ending').count()==1
+    assert BillingEvent.query.filter_by(user_id=paid_user.id,kind='renewal_reminder').count()==1
+    reminder=BillingEvent.query.filter_by(user_id=paid_user.id,kind='renewal_reminder').one()
     assert reminder.subscription_id==sub.id
     assert 'Plus monthly' in reminder.message
     assert '₦5,000.00' in reminder.message
+
+
+def test_trial_ending_uses_trial_email_and_stale_notices_are_suppressed(app,monkeypatch):
+    from app.subscriptions import notifications
+    u,b=seed()
+    start_trial(u)
+    event=BillingEvent(event_key='mail-trial',user_id=u.id,kind='trial_ending',
+                       message='Your trial ends in 2 days.')
+    db.session.add(event);db.session.commit()
+    calls=[]
+    monkeypatch.setattr(notifications,'_transactional',
+        lambda *args,**kwargs: calls.append((args,kwargs)) or True)
+    assert notifications.deliver(limit=10)==1
+    assert calls[0][0][0]=='billing_notice'
+    assert calls[0][1]['event_kind']=='trial_ending'
+    assert calls[0][1]['action_label']=='Choose a plan'
+
+    stale=BillingEvent(event_key='stale-trial',user_id=u.id,kind='trial_ending',
+                       message='Old trial reminder.')
+    db.session.add(stale);db.session.commit()
+    sub=purchase(u,'basic','monthly')
+    assert notifications.deliver(limit=10)==0
+    assert stale.email_sent_at is None
 
 
 def test_billing_events_use_specific_email_templates_and_keep_claims(app,fake,monkeypatch):
     from app.subscriptions import notifications
     u,b=seed(eligible=False)
     sub=purchase(u,'pro','yearly')
-    now=datetime.utcnow()
+    sub.status='past_due'
     events=[
-        BillingEvent(event_key='mail-trial',user_id=u.id,kind='trial_ending',
-                     message='Your trial ends in 2 days.'),
         BillingEvent(event_key='mail-failed',user_id=u.id,kind='renewal_failed',
                      message="We couldn't renew your plan.",subscription_id=sub.id),
         BillingEvent(event_key='mail-paid',user_id=u.id,kind='subscription_paid',
-                     message='Payment received. Paid until 26/11/2027.',subscription_id=sub.id),
+                     message='Payment received. Paid access until: 26/11/2027.',subscription_id=sub.id),
     ]
     db.session.add_all(events);db.session.commit()
     calls=[]
     monkeypatch.setattr(notifications,'_transactional',
         lambda *args,**kwargs: calls.append((args,kwargs)) or True)
 
-    assert notifications.deliver(limit=10)==3
-    assert [args[0] for args,kwargs in calls]==['billing_notice']*3
+    assert notifications.deliver(limit=10)==2
     by_kind={kwargs['event_kind']:kwargs for args,kwargs in calls}
-    assert by_kind['trial_ending']['action_label']=='Choose a plan'
     assert by_kind['renewal_failed']['action_label']=='Update payment method'
     assert by_kind['subscription_paid']['headline']=='Thank you. Payment received.'
     assert by_kind['subscription_paid']['plan']=='Pro'
+    assert by_kind['subscription_paid']['paid_until']=='26/11/2027'
     assert all(event.email_sent_at is not None for event in events)
     assert notifications.deliver(limit=10)==0
