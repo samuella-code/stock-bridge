@@ -2,6 +2,7 @@ from app.subscriptions.entitlements import selected_business
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 from datetime import datetime, timedelta
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from io import BytesIO
 from xml.sax.saxutils import escape
 from reportlab.lib import colors
@@ -10,7 +11,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from app import db
-from app.models import Payment, Business, RecurringSubscription, BillingEvent
+from app.models import Payment, Business, RecurringSubscription, BillingEvent, User
 from app.payments.service import PaystackError
 from app.subscriptions.entitlements import effective_access, account_for, PLANS, plan_spec, immediate_upgrade
 from app.subscriptions import billing, provider
@@ -222,6 +223,31 @@ def change(subscription_id):
         return redirect(url_for('subscriptions.index'))
     except (ValueError, PaystackError) as error:
         return failed(error)
+
+
+@subscriptions_bp.route('/trial-reminders/stop/<token>', methods=['GET', 'POST'])
+def stop_trial_reminders(token):
+    """Confirm a signed trial-reminder opt-out without mutating state on GET."""
+    serializer = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
+    try:
+        payload = serializer.loads(token, salt='stop-trial-reminders', max_age=30 * 86400)
+    except (BadSignature, SignatureExpired):
+        abort(404)
+    if not isinstance(payload, dict) or not isinstance(payload.get('user_id'), int):
+        abort(404)
+    user = db.session.get(User, payload['user_id'])
+    if not user or user.email != payload.get('email'):
+        abort(404)
+    if request.method == 'POST':
+        if request.form.get('confirm') != 'yes':
+            flash('Confirm that you want to stop trial reminder emails.', 'warning')
+            return redirect(url_for('subscriptions.stop_trial_reminders', token=token))
+        user.trial_reminders_enabled = False
+        db.session.commit()
+        return render_template('subscriptions/stop_trial_reminders.html',
+            token=token, already_stopped=True, updated=True)
+    return render_template('subscriptions/stop_trial_reminders.html',
+        token=token, already_stopped=not user.trial_reminders_enabled, updated=False)
 
 
 @subscriptions_bp.route('/<int:subscription_id>/renewal/restore', methods=['GET', 'POST'])
