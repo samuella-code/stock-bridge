@@ -115,7 +115,7 @@ def test_verified_webhook_and_callback_send_only_one_receipt(app, messages, monk
     assert client.get("/payments/callback?reference=SB-receipt").status_code == 302
     assert len(messages) == 1
     plain = messages[0].get_body(preferencelist=("plain",)).get_content()
-    assert "₦3,000.00" in plain and "NGN" in plain and "SB-receipt" in plain
+    assert "₦3,000.00" in plain and "NGN" in plain and "SB-recei…" in plain
     assert "One-time payment. No subscription. No recurring charges." in plain
     with app.app_context():
         assert Business.query.one().has_write_access
