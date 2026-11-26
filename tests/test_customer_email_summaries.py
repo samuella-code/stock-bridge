@@ -154,6 +154,12 @@ def test_summary_scheduler_endpoint_requires_bearer_and_only_dispatches_summarie
     assert EmailOutbox.query.filter(EmailOutbox.event_type.in_(
         ['daily_summary', 'weekly_summary'])).count() == 2
 
+    app.config['CUSTOMER_SUMMARY_EMAILS_ENABLED'] = False
+    disabled = client.post('/internal/customer-email-summaries/run',
+        headers={'Authorization': 'Bearer ' + app.config['CUSTOMER_SUMMARY_EMAIL_DISPATCH_SECRET']})
+    assert disabled.status_code == 200
+    assert disabled.json == {'queued': 0, 'results': ['disabled']}
+
 
 
 def test_disabling_summary_preference_after_queue_suppresses_delivery(app, monkeypatch):
