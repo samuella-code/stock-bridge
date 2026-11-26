@@ -58,13 +58,12 @@ def index():
 @login_required
 def receipt(payment_id):
     """Download a verified payment receipt belonging to the signed-in customer."""
-    payment = Payment.query.filter_by(
-        id=payment_id, user_id=current_user.id, status='success'
-    ).first_or_404()
+    payment = Payment.query.filter_by(id=payment_id, status='success').first_or_404()
     if not payment.paid_at or payment.currency != 'NGN':
         abort(404)
     business = db.session.get(Business, payment.business_id) if payment.business_id else None
-    if not business or business.user_id != current_user.id:
+    if (not business or business.user_id != current_user.id
+            or payment.user_id not in (None, current_user.id)):
         abort(404)
     subscription = (db.session.get(RecurringSubscription, payment.subscription_id)
                     if payment.subscription_id else None)
