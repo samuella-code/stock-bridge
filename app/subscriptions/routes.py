@@ -1,7 +1,7 @@
 from app.subscriptions.entitlements import selected_business
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
-from datetime import timedelta
+from datetime import datetime, timedelta
 from io import BytesIO
 from xml.sax.saxutils import escape
 from reportlab.lib import colors
@@ -230,8 +230,9 @@ def restore_renewal(subscription_id):
     enabled()
     sub = owned(subscription_id)
     if request.method == 'GET':
-        if not sub.cancel_at_period_end:
-            flash('This subscription has no pending renewal cancellation.', 'warning')
+        if (not sub.cancel_at_period_end or not sub.current_period_end
+                or sub.current_period_end <= datetime.utcnow()):
+            flash('This subscription has no renewable paid period. Choose a plan to restart access.', 'warning')
             return redirect(url_for('subscriptions.index'))
         return render_template('subscriptions/restore_renewal.html', subscription=sub,
             paid_until=(sub.current_period_end + timedelta(hours=1)).strftime('%d/%m/%Y'),
