@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Turn renewal back on · StockBridge{% endblock %}
+{% block page_title %}Turn renewal back on{% endblock %}
+{% block content %}
+<section class="dashboard-wrap">
+  <div class="sb-card">
+    <h2>Keep your {{ subscription.plan_code|title }} plan</h2>
+    <p>Your paid access is scheduled to continue until {{ subscription.current_period_end.strftime('%d/%m/%Y') }}. Turning renewal back on allows Paystack to renew this plan at {{ '₦{:,.2f}'.format(subscription.amount_kobo / 100) }} per {{ 'year' if subscription.billing_interval == 'yearly' else 'month' }}.</p>
+    <p>No payment is taken just by confirming this change. The next charge follows your plan's renewal date.</p>
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="confirm" value="yes">
+      <button class="sb-button sb-button-primary" type="submit">Confirm and turn renewal on</button>
+      <a class="sb-button sb-button-secondary" href="{{ url_for('subscriptions.index') }}">Not now</a>
+    </form>
+  </div>
+</section>
+{% endblock %}
