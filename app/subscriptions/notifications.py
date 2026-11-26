@@ -177,7 +177,10 @@ def _billing_email(event, user, subscription):
             receipt_path = current_app.url_map.bind(host).build(
                 'subscriptions.receipt', {'payment_id': payment.id})
             receipt_url = 'https://' + host + receipt_path
-            message += f"\\n\\nDownload receipt PDF: {receipt_url}"
+            paid_on = event.message.partition('Paid on: ')[2].partition('. Paid access until:')[0].strip()
+            details['paid_on'] = paid_on
+            details['reference'] = payment.reference[:8] + '…'
+            message += f"\\nReference: {details['reference']}\\n\\nDownload receipt PDF: {receipt_url}"
     return _transactional(
         'billing_notice', title, user.email, user.full_name, message,
         preheader=event.message[:90], event_kind=kind, status=status,
