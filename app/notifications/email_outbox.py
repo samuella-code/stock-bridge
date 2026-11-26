@@ -195,17 +195,18 @@ def dispatch_one(user_id=None, business_id=None, now=None):
         return 'suppressed'
     payload, subject, recipient = dict(row.payload), row.subject, row.recipient_email
     created_at = row.created_at
+    first_name = owner.full_name.split()[0] if owner.full_name and owner.full_name.split() else 'there'
     attempts, maximum, kind = row.attempt_count, row.max_attempts, row.event_type
     try:
         if kind == 'restock_recorded':
             link = origin + '/restocking/'
             action = 'View Restocking'
             item_lines = [
-                f"- {item['name']}: +{item['quantity']} {item['unit']}"
+                f"- {item['name']}: +{item['quantity']} {item['unit']}{'' if item['quantity'] == 1 else 's'}"
                 for item in payload['items']
             ]
             body = (
-                f"Hi {owner.full_name.split()[0]},\n\nYour stock has been replenished.\n"
+                f"Hi {first_name},\n\nYour stock has been replenished.\n"
                 f"Business: {payload['business_name']}\n\n"
                 "Products restocked:\n" + "\n".join(item_lines)
                 + f"\n\nView Restocking: {link}\n\n"
@@ -216,7 +217,8 @@ def dispatch_one(user_id=None, business_id=None, now=None):
                 alert=payload,
                 action=action,
                 link=link,
-                first_name=owner.full_name.split()[0] if owner.full_name else "there",
+                first_name=first_name,
+                preheader=f"Your stock has been replenished in {payload['business_name']}.",
             )
         else:
             link = origin + (
@@ -226,10 +228,10 @@ def dispatch_one(user_id=None, business_id=None, now=None):
             )
             action = 'View Inventory' if kind == 'low_stock' else 'Restock Product'
             body = (
-                f"Hi {owner.full_name.split()[0]},\n\n{payload['product_name']} "
+                f"Hi {first_name},\n\n{payload['product_name']} "
                 f"{'is running low' if kind == 'low_stock' else 'is out of stock'} in {payload['business_name']}.\n"
-                f"Left in stock: {payload['quantity']} {payload['unit']}\n"
-                f"Alert level: {payload['threshold']} {payload['unit']}\n\n"
+                f"Left in stock: {payload['quantity']} {payload['unit']}{'' if payload['quantity'] == 1 else 's'}\n"
+                f"Alert level: {payload['threshold']} {payload['unit']}{'' if payload['threshold'] == 1 else 's'}\n\n"
                 f"{action}: {link}\n\n"
                 "StockBridge — Know your stock. Understand your profit."
             )
@@ -239,7 +241,8 @@ def dispatch_one(user_id=None, business_id=None, now=None):
                 kind=kind,
                 action=action,
                 link=link,
-                first_name=owner.full_name.split()[0] if owner.full_name else "there",
+                first_name=first_name,
+                preheader=(f"Only {payload['quantity']} {payload['unit']}{'' if payload['quantity'] == 1 else 's'} left in {payload['business_name']}." if kind == 'low_stock' else f"{payload['product_name']} is out of stock in {payload['business_name']}.")[:90],
                 inventory_link=origin + "/products/?view=inventory",
             )
 
