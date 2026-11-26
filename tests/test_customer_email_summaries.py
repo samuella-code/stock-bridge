@@ -1,10 +1,20 @@
 """Customer summary queueing and rendering tests; SMTP is always mocked."""
 from datetime import datetime
 
+import pytest
 from app import db
 from app.models import EmailOutbox, Expense, NotificationPreference, Product
 from app.notifications.summaries import queue_due_summaries, _wat_window
 from tests.test_notifications_business_profile import app, setup, product, sale
+
+
+@pytest.fixture(autouse=True)
+def allow_isolated_summary_tests(monkeypatch):
+    from app.notifications.staging_email_policy import Policy
+    selected = lambda now=None: Policy('production')
+    monkeypatch.setattr('app.notifications.staging_email_policy.policy', selected)
+    monkeypatch.setattr('app.notifications.summaries.policy', selected)
+    monkeypatch.setattr('app.notifications.email_outbox.policy', selected)
 
 
 def _summary_preferences(business):
@@ -109,3 +119,36 @@ def test_summary_window_uses_wat_midnight_and_previous_monday():
     assert (start, end, week.isoformat()) == (
         datetime(2026, 11, 15, 23), datetime(2026, 11, 22, 23), '2026-11-16'
     )
+
+
+
+def test_summary_scheduler_endpoint_requires_bearer_and_only_dispatches_summaries(app, monkeypatch):
+    client, _, businesses = setup(app)
+    business = businesses[0]
+    _summary_preferences(business)
+    item = product(client, 'Coffee')
+    sale(client, item, 3)
+    app.config.update(
+        CUSTOMER_SUMMARY_EMAILS_ENABLED=True,
+        CUSTOMER_SUMMARY_EMAIL_DISPATCH_SECRET='summary-worker-secret-' + 'x' * 32,
+        CUSTOMER_SUMMARY_EMAIL_BASE_URL='https://stock-bridge-staging.vercel.app',
+        INVENTORY_EMAILS_ENABLED=False,
+    )
+    sent = []
+    monkeypatch.setattr(
+        'app.email_service._send_email',
+        lambda *args, **kwargs: sent.append(args) or True,
+    )
+
+    denied = client.post('/internal/customer-email-summaries/run',
+        headers={'Authorization': 'Bearer wrong'})
+    assert denied.status_code == 404
+    response = client.post('/internal/customer-email-summaries/run',
+        headers={'Authorization': 'Bearer ' + app.config['CUSTOMER_SUMMARY_EMAIL_DISPATCH_SECRET']})
+
+    assert response.status_code == 200
+    assert response.json['queued'] == 2
+    assert response.json['results'][-1] == 'idle'
+    assert len(sent) == 2
+    assert EmailOutbox.query.filter(EmailOutbox.event_type.in_(
+        ['daily_summary', 'weekly_summary'])).count() == 2
