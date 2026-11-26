@@ -733,6 +733,7 @@ def test_cancellation_email_has_plan_end_date_restore_and_feedback_links(app,fak
     subscription=purchase(user,'plus','monthly')
     paid_event=BillingEvent.query.filter_by(user_id=user.id,kind='subscription_paid').one()
     paid_event.email_sent_at=datetime.utcnow()
+    paid_event.email_claimed_at=datetime.utcnow()
     billing.cancel(user,subscription)
     event=BillingEvent.query.filter_by(user_id=user.id,kind='cancellation_scheduled').one()
     calls=[]
