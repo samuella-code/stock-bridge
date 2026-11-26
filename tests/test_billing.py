@@ -611,6 +611,9 @@ def test_trial_ending_uses_trial_email_and_stale_notices_are_suppressed(app,monk
     assert calls[0][0][0]=='billing_notice'
     assert calls[0][1]['event_kind']=='trial_ending'
     assert calls[0][1]['action_label']=='Choose a plan'
+    from flask import render_template
+    trial_html=render_template('email/billing_notice.html',name=u.full_name,**calls[0][1])
+    assert 'Choose a plan' in trial_html and 'Basic' in trial_html and 'Plus' in trial_html
 
     stale=BillingEvent(event_key='stale-trial',user_id=u.id,kind='trial_ending',
                        message='Old trial reminder.')
@@ -643,5 +646,8 @@ def test_billing_events_use_specific_email_templates_and_keep_claims(app,fake,mo
     assert by_kind['subscription_paid']['headline']=='Thank you. Payment received.'
     assert by_kind['subscription_paid']['plan']=='Pro'
     assert by_kind['subscription_paid']['paid_until']==(sub.current_period_end+timedelta(hours=1)).strftime('%d/%m/%Y')
+    from flask import render_template
+    receipt_html=render_template('email/billing_notice.html',name=u.full_name,**by_kind['subscription_paid'])
+    assert 'PAYMENT RECEIVED' in receipt_html and 'View billing' in receipt_html
     assert all(event.email_sent_at is not None for event in events)
     assert notifications.deliver(limit=10)==0
