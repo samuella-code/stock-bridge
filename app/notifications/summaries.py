@@ -53,7 +53,7 @@ def _summary_payload(business, start, end, period_label, daily=False):
     ).scalar()
     best = (
         db.session.query(
-            Product.name, func.sum(SaleItem.quantity).label('units')
+            Product.name, Product.unit, func.sum(SaleItem.quantity).label('units')
         )
         .join(SaleItem, SaleItem.product_id == Product.id)
         .join(Sale, Sale.id == SaleItem.sale_id)
@@ -64,7 +64,7 @@ def _summary_payload(business, start, end, period_label, daily=False):
             Sale.sold_at >= start,
             Sale.sold_at < end,
         )
-        .group_by(Product.id, Product.name)
+        .group_by(Product.id, Product.name, Product.unit)
         .order_by(func.sum(SaleItem.quantity).desc(), Product.name.asc())
         .first()
     )
@@ -89,7 +89,7 @@ def _summary_payload(business, start, end, period_label, daily=False):
         'kept': format(revenue - cost_of_goods - expenses, ',.2f'),
         'has_activity': bool(revenue or expenses or units),
         'units_sold': int(units or 0),
-        'best_seller': {'name': best[0], 'quantity': int(best[1])} if best else None,
+        'best_seller': {'name': best[0], 'unit': best[1], 'quantity': int(best[2])} if best else None,
         'low_stock_count': low_count,
         'low_stock_products': [
             {'name': p.name, 'quantity': p.stock_quantity, 'unit': p.unit}
