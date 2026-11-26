@@ -224,6 +224,59 @@ def change(subscription_id):
         return failed(error)
 
 
+@subscriptions_bp.route('/<int:subscription_id>/renewal/restore', methods=['GET', 'POST'])
+@login_required
+def restore_renewal(subscription_id):
+    enabled()
+    sub = owned(subscription_id)
+    if request.method == 'GET':
+        if not sub.cancel_at_period_end:
+            flash('This subscription has no pending renewal cancellation.', 'warning')
+            return redirect(url_for('subscriptions.index'))
+        return render_template('subscriptions/restore_renewal.html', subscription=sub)
+    if request.form.get('confirm') != 'yes':
+        flash('Confirm that you want to turn renewal back on.', 'warning')
+        return redirect(url_for('subscriptions.index'))
+    try:
+        billing.enable(current_user, sub)
+        flash('Your subscription renewal is back on.', 'success')
+        return redirect(url_for('subscriptions.index'))
+    except (ValueError, PaystackError) as error:
+        return failed(error)
+
+
+@subscriptions_bp.route('/<int:subscription_id>/feedback', methods=['GET', 'POST'])
+@login_required
+def cancellation_feedback(subscription_id):
+    enabled()
+    sub = owned(subscription_id)
+    if not (sub.cancel_at_period_end or sub.status in ('cancelled', 'cancel_at_period_end', 'non_renewing')):
+        abort(404)
+    reasons = (
+        'Too expensive', 'Missing a feature I need', 'Not using StockBridge enough',
+        'Switching to another tool', 'Technical issues', 'Other',
+    )
+    if request.method == 'POST':
+        reason = request.form.get('reason', '')
+        if reason not in reasons:
+            abort(400)
+        details = request.form.get('details', '').strip()[:300]
+        message = f"Reason: {reason}" + (f"\\nDetails: {details}" if details else '')
+        key = f'cancellation-feedback:{sub.id}'
+        event = BillingEvent.query.filter_by(event_key=key, user_id=current_user.id).first()
+        if event is None:
+            event = BillingEvent(event_key=key, user_id=current_user.id,
+                subscription_id=sub.id, kind='cancellation_feedback', message=message)
+            db.session.add(event)
+        else:
+            event.message = message
+        db.session.commit()
+        flash('Thank you. Your feedback helps us improve StockBridge.', 'success')
+        return redirect(url_for('subscriptions.index'))
+    return render_template('subscriptions/cancellation_feedback.html',
+        subscription=sub, reasons=reasons)
+
+
 @subscriptions_bp.post('/<int:subscription_id>/card')
 @login_required
 def card(subscription_id):
