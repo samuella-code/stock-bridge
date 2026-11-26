@@ -10,6 +10,13 @@ from app.subscriptions.entitlements import effective_access, PLANS
 from app.email_service import _transactional
 
 
+EMAIL_EVENT_KINDS = {
+    'trial_ending', 'trial_expired', 'subscription_expired',
+    'renewal_failed', 'renewal_reminder', 'subscription_paid',
+    'cancellation_scheduled', 'plan_change_scheduled',
+}
+
+
 def _eligible_customer(user):
     return bool(user and user.role == 'user' and not user.admin_enabled
                 and not user.staff_only and user.email_verified_at and not user.suspended_at)
@@ -122,7 +129,7 @@ def _billing_email(event, user, subscription):
 
 def deliver(limit=100):
     ids = [row[0] for row in db.session.query(BillingEvent.id)
-           .filter(BillingEvent.kind != 'provider_event',
+           .filter(BillingEvent.kind.in_(EMAIL_EVENT_KINDS),
                    BillingEvent.email_claimed_at.is_(None))
            .order_by(BillingEvent.id).limit(limit)]
     sent = 0
