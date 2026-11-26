@@ -575,15 +575,14 @@ def test_old_lifetime_webhook_remains_honored_with_recurring_provider_disabled(c
 
 def test_trial_and_renewal_reminders_are_queued_once(app,fake):
     from app.subscriptions import notifications
-    now=datetime.utcnow()
     trial_user,trial_business=seed()
     start_trial(trial_user)
+    paid_user,paid_business=seed('paid@example.com',eligible=False)
+    sub=purchase(paid_user,'plus','monthly')
+    now=datetime.utcnow()+timedelta(seconds=2)
     account=db.session.get(AccountBilling,trial_user.id)
     account.trial_started_at=now-timedelta(days=5)
     account.trial_ends_at=now+timedelta(days=2)
-
-    paid_user,paid_business=seed('paid@example.com',eligible=False)
-    sub=purchase(paid_user,'plus','monthly')
     sub.current_period_end=now+timedelta(days=3)
     sub.next_renewal_at=sub.current_period_end
     db.session.commit()
@@ -617,8 +616,9 @@ def test_trial_ending_uses_trial_email_and_stale_notices_are_suppressed(app,monk
                        message='Old trial reminder.')
     db.session.add(stale);db.session.commit()
     sub=purchase(u,'basic','monthly')
-    assert notifications.deliver(limit=10)==0
+    assert notifications.deliver(limit=10)==1  # the paid checkout receipt is still due
     assert stale.email_sent_at is None
+    assert calls[-1][1]['event_kind']=='subscription_paid'
 
 
 def test_billing_events_use_specific_email_templates_and_keep_claims(app,fake,monkeypatch):
