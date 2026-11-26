@@ -10,5 +10,6 @@
 <tr><td style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#60756b;font-size:13px;">Reference</td><td align="right" style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#17352b;font-weight:600;">{{ payment.reference[:8] }}…</td></tr>
 <tr><td style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#60756b;font-size:13px;">Access</td><td align="right" style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#17352b;font-weight:600;">Lifetime Access · Active</td></tr>
 </table>
-<p style="margin:0 0 20px;"><a href="{{ link }}" style="display:inline-block;min-height:44px;box-sizing:border-box;padding:13px 20px;border-radius:6px;background:#16764d;color:#ffffff;text-decoration:none;font-weight:700;">View billing</a></p>
+<p style="margin:0 0 14px;"><a href="{{ link }}" style="display:inline-block;min-height:44px;box-sizing:border-box;padding:13px 20px;border-radius:6px;background:#16764d;color:#ffffff;text-decoration:none;font-weight:700;">View billing</a></p>
+{% if receipt_url %}<p style="margin:0 0 20px;"><a href="{{ receipt_url }}" style="color:#16764d;text-decoration:underline;">Download receipt PDF</a></p>{% endif %}
 {% endblock %}
