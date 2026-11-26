@@ -43,9 +43,17 @@ def _send_email(subject, recipient, body, html=None, *, timeout=15):
         current_app.logger.warning("SMTP sender is not configured; transactional email was not sent.")
         return False
     message = EmailMessage()
+    # Keep the customer-facing sender identity stable in every environment.
+    # Staging is identified in the subject, never by changing the sender name.
+    staging = (
+        os.getenv("VERCEL_ENV") == "preview"
+        and os.getenv("VERCEL_GIT_COMMIT_REF") == "release/staging-phase6"
+    )
+    if staging and not subject.startswith("[STAGING]"):
+        subject = "[STAGING] " + subject
     message["Subject"] = subject
     message["From"] = formataddr((
-        current_app.config["SMTP_FROM_NAME"],
+        "StockBridge",
         current_app.config["SMTP_FROM_EMAIL"],
     ))
     message["To"] = recipient
