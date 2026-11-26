@@ -41,7 +41,7 @@ def index():
         return render_template('subscriptions/index.html', business=business, plan_prices={plan: {interval: PLANS[(plan, interval)]['amount'] / 100 for interval in ('monthly', 'yearly')} for plan in ('basic', 'plus', 'pro')})
     access = effective_access(current_user, business=business) if current_user.is_authenticated else None
     history = RecurringSubscription.query.filter_by(user_id=current_user.id).order_by(RecurringSubscription.id.desc()).limit(20).all() if current_user.is_authenticated else []
-    events = BillingEvent.query.filter(BillingEvent.user_id==current_user.id, BillingEvent.kind.notin_(('provider_event','business_created','business_selected'))).order_by(BillingEvent.id.desc()).limit(10).all() if current_user.is_authenticated else []
+    events = BillingEvent.query.filter(BillingEvent.user_id==current_user.id, BillingEvent.kind.notin_(('provider_event','business_created','business_selected','cancellation_feedback'))).order_by(BillingEvent.id.desc()).limit(10).all() if current_user.is_authenticated else []
     # Presentation prices come from the same authoritative configuration as checkout.
     plan_prices = {
         plan: {interval: PLANS[(plan, interval)]["amount"] / 100
