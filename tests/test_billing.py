@@ -626,13 +626,13 @@ def test_billing_events_use_specific_email_templates_and_keep_claims(app,fake,mo
     u,b=seed(eligible=False)
     sub=purchase(u,'pro','yearly')
     sub.status='past_due'
+    paid_event=BillingEvent.query.filter_by(user_id=u.id,kind='subscription_paid').one()
     events=[
         BillingEvent(event_key='mail-failed',user_id=u.id,kind='renewal_failed',
                      message="We couldn't renew your plan.",subscription_id=sub.id),
-        BillingEvent(event_key='mail-paid',user_id=u.id,kind='subscription_paid',
-                     message='Payment received. Paid access until: 26/11/2027.',subscription_id=sub.id),
+        paid_event,
     ]
-    db.session.add_all(events);db.session.commit()
+    db.session.add(events[0]);db.session.commit()
     calls=[]
     monkeypatch.setattr(notifications,'_transactional',
         lambda *args,**kwargs: calls.append((args,kwargs)) or True)
