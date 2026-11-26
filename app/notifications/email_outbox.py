@@ -30,7 +30,11 @@ def valid_recipient(email):
 
 
 def daily_digest_replaces_low_stock(business_id, owner):
-    if (not current_app.config.get('CUSTOMER_SUMMARY_EMAILS_ENABLED')
+    business = db.session.get(Business, business_id)
+    if (not business or not owner or business.suspended_at or owner.suspended_at
+            or not owner.email_verified_at or owner.role != 'user' or owner.admin_enabled
+            or owner.staff_only or not valid_recipient(owner.email)
+            or not current_app.config.get('CUSTOMER_SUMMARY_EMAILS_ENABLED')
             or not enabled(business_id, 'daily_summary_email')):
         return False
     selected = policy()
