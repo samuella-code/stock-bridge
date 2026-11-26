@@ -6,10 +6,10 @@ This worker calls the authenticated StockBridge summary endpoint. It does not se
 
 Configure the Cloudflare Worker Cron Trigger as:
 
-- `0 7 * * *` — 07:00 UTC / 08:00 WAT every day.
+- `*/5 7-10 * * *` — every five minutes from 07:00–10:55 UTC (08:00–11:55 WAT).
 - The weekly summary is queued by the same run on Mondays for the previous Monday–Sunday WAT week.
 
-Deploy `scripts/cloudflare/customer_summary_scheduler.mjs` as a separate Worker. Do not reuse the admin-report Worker or its credentials.
+Deploy `scripts/cloudflare/customer_summary_scheduler.mjs` as a separate Worker. Do not reuse the admin-report Worker or its credentials. Each Worker invocation makes at most three one-email requests so SMTP does not run in one long serverless request.
 
 ## StockBridge environment configuration
 
@@ -37,5 +37,5 @@ Never put this secret in source control, a URL, or a plain-text Worker variable.
 - Both preferences are opt-in and scoped to each business. New preference columns default to false.
 - Event keys are unique per business and WAT reporting period, preventing duplicate summaries on repeated or overlapping runs.
 - Only verified, active business owners are eligible. Staff-only and admin accounts are excluded.
-- The endpoint requires a bearer secret and drains summary event types only.
+- The endpoint requires a bearer secret and drains at most one summary email per request; the Worker makes at most three requests per scheduled invocation.
 - The Worker and endpoint do not change production configuration or deploy themselves.
