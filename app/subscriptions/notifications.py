@@ -123,6 +123,7 @@ def _billing_email(event, user, subscription):
         title, label, status = 'Your renewal has been stopped', 'View billing', 'RENEWAL OFF'
         if subscription and subscription.current_period_end:
             paid_until = _wat(subscription.current_period_end)
+            title = f'Your plan ends on {paid_until}'
             details['paid_until'] = paid_until
             account = account_for(user)
             if account and account.legacy_granted_at:
