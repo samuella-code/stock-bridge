@@ -29,4 +29,5 @@
   <a href="{{ link }}" style="display:inline-block;min-height:44px;box-sizing:border-box;padding:13px 20px;border-radius:6px;background:#16764d;color:#ffffff;text-decoration:none;font-weight:700;">{{ action_label }}</a>
 </p>
 {% if receipt_url %}<p style="margin:0 0 20px;"><a href="{{ receipt_url }}" style="color:#16764d;text-decoration:underline;">Download receipt PDF</a></p>{% endif %}
+{% if feedback_url %}<p style="margin:0 0 20px;"><a href="{{ feedback_url }}" style="color:#16764d;text-decoration:underline;">Tell us why you stopped (10 seconds)</a></p>{% endif %}
 {% endblock %}
