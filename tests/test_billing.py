@@ -342,7 +342,8 @@ def test_notifications_branded_once_and_not_at_startup(app,monkeypatch):
     from app.subscriptions.notifications import queue_due,deliver
     u,b=seed();start_trial(u);db.session.commit();a=db.session.get(AccountBilling,u.id)
     sent=[];monkeypatch.setattr('app.email_service._send_email',lambda *args,**kwargs:sent.append((args,kwargs)) or True)
-    queue_due(now=a.trial_ends_at-timedelta(days=1));assert deliver()==2 and deliver()==0
+    assert deliver()==0  # Trial-start events are internal, not customer email.
+    queue_due(now=a.trial_ends_at-timedelta(days=1));assert deliver()==1 and deliver()==0
     assert 'Stock' in sent[0][1]['html'] and '7-day' in sent[0][1]['html']
     queue_due(now=a.trial_ends_at+timedelta(seconds=1));assert deliver()==1
     queue_due(now=a.trial_ends_at+timedelta(seconds=1));assert deliver()==0
@@ -597,7 +598,7 @@ def test_trial_and_renewal_reminders_are_queued_once(app,fake):
     assert '₦5,000.00' in reminder.message
 
 
-def test_trial_ending_uses_trial_email_and_stale_notices_are_suppressed(app,monkeypatch):
+def test_trial_ending_uses_trial_email_and_stale_notices_are_suppressed(app,fake,monkeypatch):
     from app.subscriptions import notifications
     u,b=seed()
     start_trial(u)
