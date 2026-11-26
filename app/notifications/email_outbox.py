@@ -171,7 +171,7 @@ def finish(row_id, token, status, now, **values):
     return result.rowcount == 1
 
 
-def dispatch_one(user_id=None, business_id=None, now=None):
+def dispatch_one(user_id=None, business_id=None, now=None, event_types=None):
     if not (current_app.config['INVENTORY_EMAILS_ENABLED'] or current_app.config.get('CUSTOMER_SUMMARY_EMAILS_ENABLED')):
         return 'disabled'
     if policy(now).mode == 'blocked':
@@ -184,7 +184,7 @@ def dispatch_one(user_id=None, business_id=None, now=None):
     now = now or datetime.utcnow()
     summary_only = not current_app.config['INVENTORY_EMAILS_ENABLED']
     lease = claim(now, user_id, business_id,
-        event_types=('daily_summary', 'weekly_summary') if summary_only else None)
+        event_types=event_types or (('daily_summary', 'weekly_summary') if summary_only else None))
     if lease is None:
         return 'idle'
     row_id, token = lease
@@ -209,6 +209,9 @@ def dispatch_one(user_id=None, business_id=None, now=None):
     created_at = row.created_at
     first_name = owner.full_name.split()[0] if owner.full_name and owner.full_name.split() else 'there'
     attempts, maximum, kind = row.attempt_count, row.max_attempts, row.event_type
+    if kind in ('daily_summary', 'weekly_summary') and not current_app.config.get('CUSTOMER_SUMMARY_EMAILS_ENABLED'):
+        finish(row_id, token, 'suppressed', now, last_error=None)
+        return 'suppressed'
     try:
         if kind in ('daily_summary', 'weekly_summary'):
             link = origin + ('/restocking/' if kind == 'daily_summary' else '/')
