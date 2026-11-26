@@ -6,12 +6,14 @@
 <h1 style="margin:0 0 14px;color:#17352b;font-size:25px;line-height:1.25;">{{ headline }}</h1>
 <p style="margin:0 0 18px;">Hi {{ name.split()[0] if name else 'there' }}, {{ message }}</p>
 
-{% if plan or amount or paid_until or renewal_date %}
+{% if plan or amount or paid_on or paid_until or renewal_date or reference %}
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 20px;border:1px solid #e2ebe5;background:#f8faf8;border-collapse:collapse;">
   {% if plan %}<tr><td style="padding:11px 13px;color:#60756b;font-size:13px;">Plan</td><td align="right" style="padding:11px 13px;color:#17352b;font-weight:600;">{{ plan }}{% if interval %} · {{ interval }}{% endif %}</td></tr>{% endif %}
   {% if amount %}<tr><td style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#60756b;font-size:13px;">Amount</td><td align="right" style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#17352b;font-weight:600;">{{ amount }}</td></tr>{% endif %}
   {% if renewal_date %}<tr><td style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#60756b;font-size:13px;">Renewal date</td><td align="right" style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#17352b;font-weight:600;">{{ renewal_date }}</td></tr>{% endif %}
+  {% if paid_on %}<tr><td style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#60756b;font-size:13px;">Paid on</td><td align="right" style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#17352b;font-weight:600;">{{ paid_on }}</td></tr>{% endif %}
   {% if paid_until %}<tr><td style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#60756b;font-size:13px;">Paid until</td><td align="right" style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#17352b;font-weight:600;">{{ paid_until }}</td></tr>{% endif %}
+  {% if reference %}<tr><td style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#60756b;font-size:13px;">Reference</td><td align="right" style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#17352b;font-weight:600;">{{ reference }}</td></tr>{% endif %}
 </table>
 {% endif %}
 
