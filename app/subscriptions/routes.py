@@ -1,6 +1,7 @@
 from app.subscriptions.entitlements import selected_business
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
+from datetime import timedelta
 from io import BytesIO
 from xml.sax.saxutils import escape
 from reportlab.lib import colors
@@ -70,7 +71,7 @@ def receipt(payment_id):
     if subscription and subscription.user_id != current_user.id:
         abort(404)
 
-    paid_at = (payment.paid_at + __import__('datetime').timedelta(hours=1)).strftime('%d/%m/%Y %H:%M WAT')
+    paid_at = (payment.paid_at + timedelta(hours=1)).strftime('%d/%m/%Y %H:%M WAT')
     amount = f"₦{payment.amount_kobo / 100:,.2f} {payment.currency}"
     product = (
         f"{subscription.plan_code.title()} {subscription.billing_interval.title()} subscription"
