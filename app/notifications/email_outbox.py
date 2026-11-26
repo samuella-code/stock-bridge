@@ -342,7 +342,7 @@ def run_customer_summaries():
             or not compare_digest(supplied.encode('utf-8'), ('Bearer ' + secret).encode('utf-8'))):
         abort(404)
     if not current_app.config.get('CUSTOMER_SUMMARY_EMAILS_ENABLED'):
-        response = jsonify(queued=0, results=['disabled'])
+        response = jsonify(queued=0, result='disabled')
         response.headers['Cache-Control'] = 'no-store'
         return response, 200
     from app.notifications.summaries import queue_due_summaries
