@@ -143,3 +143,37 @@ def test_paused_flag_is_not_a_restore_option_for_removed_staff(app):
     service.revoke(owner,'membership',member.id,now=NOW);db.session.commit()
     status=presentation.member_status(owner,member,person,shops,NOW)
     assert status['label']=='Access removed' and not status['paused_due_pro'] and not status['can_restore']
+
+
+
+def test_owner_my_access_redirects_to_dashboard_even_with_admin_capability(app):
+    owner, shops = seed('pro')
+    owner.admin_enabled = True
+    db.session.commit()
+    client = app.test_client()
+    login(client, owner)
+
+    response = client.get('/staff/')
+    assert response.status_code == 302
+    assert response.headers['Location'].endswith('/dashboard')
+    assert client.get('/dashboard').status_code == 200
+
+
+def test_employee_with_staff_admin_sees_team_management_and_my_access(app):
+    owner, shops = seed('pro')
+    manager_role = roles.save(
+        owner, None, 'Scoped team manager', ['sales_view'],
+        now=NOW, authority_permissions=['staff_admin']
+    )
+    db.session.commit()
+    _, raw = issue(owner, shops, email='team-manager@example.invalid', role=manager_role.key)
+    manager, _ = accept_new(raw)
+    client = app.test_client()
+    login(client, manager)
+
+    response = client.get('/staff/')
+    assert response.status_code == 200
+    header = response.get_data(as_text=True).split('</header>', 1)[0]
+    assert 'My access' in header
+    assert '>Team management<' in header
+    assert 'Owner dashboard' not in header
