@@ -1,5 +1,6 @@
 """Explicit billing-notification worker; never scheduled by application startup or deployment."""
 from datetime import datetime, timedelta
+from hashlib import sha256
 import click
 from flask import current_app
 from itsdangerous import URLSafeTimedSerializer
@@ -30,7 +31,7 @@ def _eligible_customer(user):
 def trial_reminder_stop_token(user):
     """Signed opt-out token; the confirmation POST, not the email-link GET, changes state."""
     return URLSafeTimedSerializer(current_app.config['SECRET_KEY']).dumps(
-        {'user_id': user.id, 'email': user.email}, salt='stop-trial-reminders')
+        {'user_id': user.id, 'email_digest': sha256(user.email.lower().encode()).hexdigest()}, salt='stop-trial-reminders')
 
 
 def _wat(value):
