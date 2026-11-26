@@ -6,7 +6,7 @@ from sqlalchemy import update
 from app import db
 from app.models import AccountBilling, BillingEvent, Payment, RecurringSubscription, StaffMembership, User
 from app.subscriptions.billing import lock_account, notice
-from app.subscriptions.entitlements import effective_access, PLANS
+from app.subscriptions.entitlements import effective_access, account_for, PLANS
 from app.email_service import _transactional
 
 
@@ -118,13 +118,38 @@ def _billing_email(event, user, subscription):
     elif kind == 'subscription_expired':
         title, label, status = 'Your paid plan has ended', 'Choose a plan', 'PLAN ENDED'
     elif kind == 'cancellation_scheduled':
-        title, label, status = 'Your renewal has been stopped', 'View billing', 'RENEWAL STOPPED'
+        title, label, status = 'Your renewal has been stopped', 'View billing', 'RENEWAL OFF'
+        if subscription and subscription.current_period_end:
+            paid_until = _wat(subscription.current_period_end)
+            details['paid_until'] = paid_until
+            account = account_for(user)
+            if account and account.legacy_granted_at:
+                message = (f"Renewal is off. Your paid subscription ends on {paid_until}. "
+                           "Your existing account access continues, and your records remain safe.")
+            else:
+                message = (f"Renewal is off. You can keep recording business activity until {paid_until}. "
+                           "After that, you will not be able to add new records on this plan. "
+                           "Your records remain safe and available to view.")
+            if subscription.cancel_at_period_end:
+                restore_path = current_app.url_map.bind(host).build(
+                    'subscriptions.restore_renewal', {'subscription_id': subscription.id})
+                link = 'https://' + host + restore_path
+                label = 'Turn renewal back on'
+            feedback_path = current_app.url_map.bind(host).build(
+                'subscriptions.cancellation_feedback', {'subscription_id': subscription.id})
+            feedback_url = 'https://' + host + feedback_path
+        else:
+            title, label, status = 'Your scheduled plan was cancelled', 'View billing', 'PLAN CANCELLED'
+            message = ('Your scheduled subscription was cancelled before it began. '
+                       'No renewal will be charged. Your current account access and records remain unchanged.')
+            feedback_url = None
     elif kind == 'plan_change_scheduled':
         title, label, status = 'Your plan change is scheduled', 'View billing', 'PLAN UPDATE'
     else:
         title, label, status = 'Your StockBridge account', 'View billing', 'ACCOUNT UPDATE'
     receipt_url = None
-    message = event.message
+    feedback_url = locals().get('feedback_url')
+    message = locals().get('message', event.message)
     if kind == 'subscription_paid':
         reference = event.event_key.partition('payment:')[2]
         payment = Payment.query.filter_by(
@@ -140,7 +165,7 @@ def _billing_email(event, user, subscription):
         'billing_notice', title, user.email, user.full_name, message,
         preheader=event.message[:90], event_kind=kind, status=status,
         headline=title, message=message, link=link, action_label=label,
-        receipt_url=receipt_url, **details,
+        receipt_url=receipt_url, feedback_url=feedback_url, **details,
     )
 
 
@@ -177,6 +202,8 @@ def deliver(limit=100, now=None):
                 or event.event_key != f'renewal-reminder:{subscription.id}:{subscription.current_period_end.isoformat()}'):
             continue
         if event.kind == 'renewal_failed' and (not subscription or subscription.status != 'past_due'):
+            continue
+        if event.kind == 'cancellation_scheduled' and subscription and not subscription.cancel_at_period_end:
             continue
         try:
             delivered = _billing_email(event, user, subscription)
