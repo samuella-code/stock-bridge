@@ -1,8 +1,15 @@
 from app.subscriptions.entitlements import selected_business
-from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
+from io import BytesIO
+from xml.sax.saxutils import escape
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
 from app import db
-from app.models import RecurringSubscription, BillingEvent
+from app.models import Payment, Business, RecurringSubscription, BillingEvent
 from app.payments.service import PaystackError
 from app.subscriptions.entitlements import effective_access, account_for, PLANS, plan_spec, immediate_upgrade
 from app.subscriptions import billing, provider
@@ -44,6 +51,73 @@ def index():
         history=history, events=events,
         account=account_for(current_user) if current_user.is_authenticated else None,
         provider_ready=provider.configured(), plan_prices=plan_prices)
+
+
+@subscriptions_bp.get('/receipt/<int:payment_id>.pdf')
+@login_required
+def receipt(payment_id):
+    """Download a verified payment receipt belonging to the signed-in customer."""
+    payment = Payment.query.filter_by(
+        id=payment_id, user_id=current_user.id, status='success'
+    ).first_or_404()
+    if not payment.paid_at or payment.currency != 'NGN':
+        abort(404)
+    business = db.session.get(Business, payment.business_id) if payment.business_id else None
+    if not business or business.user_id != current_user.id:
+        abort(404)
+    subscription = (db.session.get(RecurringSubscription, payment.subscription_id)
+                    if payment.subscription_id else None)
+    if subscription and subscription.user_id != current_user.id:
+        abort(404)
+
+    paid_at = (payment.paid_at + __import__('datetime').timedelta(hours=1)).strftime('%d/%m/%Y %H:%M WAT')
+    amount = f"₦{payment.amount_kobo / 100:,.2f} {payment.currency}"
+    product = (
+        f"{subscription.plan_code.title()} {subscription.billing_interval.title()} subscription"
+        if subscription else 'Lifetime Access'
+    )
+    paid_until = (
+        (subscription.current_period_end + __import__('datetime').timedelta(hours=1)).strftime('%d/%m/%Y')
+        if subscription and subscription.current_period_end else
+        ('Lifetime' if not subscription else 'Not available')
+    )
+    styles = getSampleStyleSheet()
+    story = [
+        Paragraph("StockBridge", styles['Title']),
+        Paragraph("Payment receipt", styles['Heading2']),
+        Spacer(1, 14),
+        Paragraph(f"Customer: {escape(current_user.full_name or 'StockBridge customer')}", styles['BodyText']),
+        Paragraph(f"Business: {escape(business.name)}", styles['BodyText']),
+        Spacer(1, 12),
+    ]
+    rows = [
+        ['Description', product],
+        ['Amount paid', amount],
+        ['Paid on', paid_at],
+        ['Paid through', paid_until],
+        ['Payment reference', payment.reference],
+        ['Payment status', 'Paid'],
+    ]
+    table = Table(rows, colWidths=[125, 340], hAlign='LEFT')
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F8FAF8')),
+        ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#60756B')),
+        ('TEXTCOLOR', (1, 0), (1, -1), colors.HexColor('#17352B')),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2EBE5')),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('PADDING', (0, 0), (-1, -1), 9),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    story.extend([table, Spacer(1, 18),
+        Paragraph("Thank you for using StockBridge. Know your stock. Understand your profit.",
+                  styles['BodyText'])])
+    output = BytesIO()
+    SimpleDocTemplate(output, pagesize=letter, title="StockBridge payment receipt").build(story)
+    output.seek(0)
+    safe_reference = ''.join(ch for ch in payment.reference if ch.isalnum() or ch in '-_')[:60]
+    return send_file(output, mimetype='application/pdf', as_attachment=True,
+                     download_name=f"stockbridge-receipt-{safe_reference}.pdf")
 
 
 @subscriptions_bp.get('/<int:subscription_id>/change')
