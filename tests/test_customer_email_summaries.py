@@ -148,8 +148,13 @@ def test_summary_scheduler_endpoint_requires_bearer_and_only_dispatches_summarie
         headers={'Authorization': 'Bearer ' + app.config['CUSTOMER_SUMMARY_EMAIL_DISPATCH_SECRET']})
 
     assert response.status_code == 200
-    assert response.json['queued'] == 2
-    assert response.json['results'][-1] == 'idle'
+    assert response.json == {'queued': 2, 'result': 'sent'}
+    second = client.post('/internal/customer-email-summaries/run',
+        headers={'Authorization': 'Bearer ' + app.config['CUSTOMER_SUMMARY_EMAIL_DISPATCH_SECRET']})
+    third = client.post('/internal/customer-email-summaries/run',
+        headers={'Authorization': 'Bearer ' + app.config['CUSTOMER_SUMMARY_EMAIL_DISPATCH_SECRET']})
+    assert second.json == {'queued': 0, 'result': 'sent'}
+    assert third.json == {'queued': 0, 'result': 'idle'}
     assert len(sent) == 2
     assert EmailOutbox.query.filter(EmailOutbox.event_type.in_(
         ['daily_summary', 'weekly_summary'])).count() == 2
