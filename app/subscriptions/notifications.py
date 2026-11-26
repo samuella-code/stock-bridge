@@ -88,6 +88,8 @@ def _billing_email(event, user, subscription):
     link = 'https://' + host + current_app.url_map.bind(host).build('subscriptions.index')
     kind = event.kind
     details = {}
+    message = event.message
+    feedback_url = None
     if subscription:
         details.update(
             plan=subscription.plan_code.title(),
@@ -148,8 +150,6 @@ def _billing_email(event, user, subscription):
     else:
         title, label, status = 'Your StockBridge account', 'View billing', 'ACCOUNT UPDATE'
     receipt_url = None
-    feedback_url = locals().get('feedback_url')
-    message = locals().get('message', event.message)
     if kind == 'subscription_paid':
         reference = event.event_key.partition('payment:')[2]
         payment = Payment.query.filter_by(
