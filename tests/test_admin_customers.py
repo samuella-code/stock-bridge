@@ -231,12 +231,14 @@ def test_employee_billing_reminders_are_never_queued_or_sent(client, records, mo
     db.session.add(AccountBilling(user_id=user.id, trial_started_at=now-timedelta(days=9), trial_ends_at=now-timedelta(days=1)))
     db.session.add(BillingEvent(user_id=user.id,event_key='old-staff-reminder',kind='trial_expired',message='Historical'))
     db.session.commit()
-    send = Mock(side_effect=AssertionError('Employee reminder transport'))
+    send = Mock(return_value=True)
     monkeypatch.setattr('app.subscriptions.notifications._transactional',send)
     queue_due(now=now)
     assert BillingEvent.query.filter_by(user_id=user.id).count() == 1
     deliver()
-    assert not send.called
+    # Other eligible owners may have notices in this shared fixture. The
+    # employee's address must never be passed to the customer email transport.
+    assert all(call.args[2] != user.email for call in send.call_args_list)
 
 
 def test_mutation_requires_csrf_and_customer_session_has_no_admin_authority(client, records):
