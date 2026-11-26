@@ -1,5 +1,6 @@
 """Business-scoped daily restock and weekly performance email summaries."""
 from datetime import datetime, timedelta
+from decimal import Decimal
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
@@ -24,7 +25,7 @@ def _wat_window(now, days):
 
 
 def _money(value):
-    return float(value or 0)
+    return Decimal(str(value or 0))
 
 
 def _summary_payload(business, start, end, period_label, daily=False):
@@ -82,10 +83,11 @@ def _summary_payload(business, start, end, period_label, daily=False):
     return {
         'business_name': business.name,
         'period_label': period_label,
-        'sales': revenue,
-        'cost_of_goods': cost_of_goods,
-        'expenses': expenses,
-        'kept': revenue - cost_of_goods - expenses,
+        'sales': format(revenue, ',.2f'),
+        'cost_of_goods': format(cost_of_goods, ',.2f'),
+        'expenses': format(expenses, ',.2f'),
+        'kept': format(revenue - cost_of_goods - expenses, ',.2f'),
+        'has_activity': bool(revenue or expenses or units),
         'units_sold': int(units or 0),
         'best_seller': {'name': best[0], 'quantity': int(best[1])} if best else None,
         'low_stock_count': low_count,
@@ -139,9 +141,7 @@ def queue_due_summaries(now=None):
             )
             # Daily mail is an attention-only restock digest. Weekly mail is
             # sent only when the business had activity or stock needing attention.
-            has_activity = bool(
-                payload['sales'] or payload['expenses'] or payload['units_sold']
-            )
+            has_activity = payload['has_activity']
             if daily and not payload['low_stock_count']:
                 continue
             if not daily and not (has_activity or payload['low_stock_count']):
