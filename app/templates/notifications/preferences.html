@@ -3,6 +3,9 @@
   <h2 id="alert-settings-title">Alerts</h2>
   <p class="sb-notification-meta">For {{ business.name }}. Your choices apply to future activity for this business.</p>
   <p class="sb-notification-meta">Low-stock and out-of-stock alerts stay on in the app.</p>
+  {% if not config.CUSTOMER_SUMMARY_EMAILS_ENABLED %}
+    <p class="sb-notification-meta">Daily and weekly summary emails are not available yet. You can save your preferences now.</p>
+  {% endif %}
   {% if not (config.INVENTORY_EMAILS_ENABLED or config.CUSTOMER_SUMMARY_EMAILS_ENABLED) %}
     <p class="sb-notification-meta">Email delivery is not available yet. You can save your preferences now.</p>
   {% endif %}
