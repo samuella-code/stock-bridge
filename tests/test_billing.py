@@ -652,10 +652,13 @@ def test_billing_events_use_specific_email_templates_and_keep_claims(app,fake,mo
     assert by_kind['subscription_paid']['plan']=='Pro'
     assert by_kind['subscription_paid']['paid_until']==(sub.current_period_end+timedelta(hours=1)).strftime('%d/%m/%Y')
     assert by_kind['subscription_paid']['receipt_url'].endswith('.pdf')
+    assert by_kind['subscription_paid']['paid_on']
+    assert by_kind['subscription_paid']['reference'] == Payment.query.filter_by(subscription_id=sub.id).one().reference[:8] + '…'
     from flask import render_template
     receipt_html=render_template('email/billing_notice.html',name=u.full_name,**by_kind['subscription_paid'])
     assert 'PAYMENT RECEIVED' in receipt_html and 'View billing' in receipt_html
     assert 'Download receipt PDF' in receipt_html
+    assert 'Paid on' in receipt_html and by_kind['subscription_paid']['reference'] in receipt_html
     assert all(event.email_sent_at is not None for event in events)
     assert notifications.deliver(limit=10)==0
 
