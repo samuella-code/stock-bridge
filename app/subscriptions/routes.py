@@ -74,7 +74,7 @@ def receipt(payment_id):
         abort(404)
 
     paid_at = (payment.paid_at + timedelta(hours=1)).strftime('%d/%m/%Y %H:%M WAT')
-    amount = f"₦{payment.amount_kobo / 100:,.2f} {payment.currency}"
+    amount = f"{payment.currency} {payment.amount_kobo / 100:,.2f}"
     if payment.product == 'subscription':
         product = (
             f"{payment.plan_code.title()} {payment.billing_interval.title()} subscription"
