@@ -86,6 +86,17 @@ def _send_email(subject, recipient, body, html=None, *, timeout=15):
 
 
 def _transactional(template, subject, recipient, name, body, **context):
+    """Render every transactional customer email through the shared shell."""
+    preheaders = {
+        "verify": "Confirm your email to start your StockBridge trial. No card needed.",
+        "welcome": "Your StockBridge account is ready. Add products, record a sale and understand profit.",
+        "billing": "An update about your StockBridge account and plan.",
+        "password_reset": "Use the secure link to reset your StockBridge password.",
+        "password_changed": "Your StockBridge password was changed.",
+        "payment_success": "Your StockBridge payment was received and access is active.",
+        "account_status": "An important update about your StockBridge account.",
+    }
+    context.setdefault("preheader", preheaders.get(template, "An update from StockBridge."))
     html = render_template(f"email/{template}.html", name=name, **context)
     return _send_email(subject, recipient, body, html=html)
 
