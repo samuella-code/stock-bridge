@@ -192,7 +192,7 @@ def dispatch_one(user_id=None, business_id=None, now=None, event_types=None):
     row = db.session.get(EmailOutbox, row_id)
     business = db.session.get(Business, row.business_id)
     owner = db.session.get(User, row.recipient_user_id)
-    if (not business or not owner or business.user_id != owner.id or owner.role == 'admin'
+    if (not business or not owner or business.user_id != owner.id or owner.role == 'admin' or owner.staff_only
             or owner.suspended_at or business.suspended_at or not owner.email_verified_at
             or owner.email != row.recipient_email or not valid_recipient(row.recipient_email)
            or row.event_type not in ('low_stock', 'out_of_stock', 'restock_recorded', 'daily_summary', 'weekly_summary')):
