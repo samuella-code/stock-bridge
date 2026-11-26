@@ -211,7 +211,9 @@ def test_preferences_scoped_without_email(app):
     pref = db.session.get(NotificationPreference,shops[0].id)
     assert pref.low_stock_email and not pref.out_of_stock_email
     assert db.session.get(NotificationPreference,shops[1].id) is None
-    assert 'Notification preferences' in client.get('/notifications/').get_data(as_text=True)
+    html = client.get('/notifications/').get_data(as_text=True)
+    assert 'Notification preferences' in html
+    assert 'Password resets' in html and 'payment receipts' in html
 
 
 @pytest.mark.parametrize('fmt',['JPEG','PNG','WEBP'])
