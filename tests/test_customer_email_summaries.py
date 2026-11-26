@@ -48,10 +48,10 @@ def test_daily_and_weekly_summaries_queue_once_per_business_period(app):
     assert daily.recipient_user_id == weekly.recipient_user_id == owner.id
     assert daily.payload['low_stock_count'] == 1
     assert daily.payload['low_stock_products'][0]['name'] == 'Coffee'
-    assert weekly.payload['sales'] == 1050.0
-    assert weekly.payload['cost_of_goods'] == 750.0
-    assert weekly.payload['expenses'] == 1200.0
-    assert weekly.payload['kept'] == -900.0
+    assert weekly.payload['sales'] == '1,050.00'
+    assert weekly.payload['cost_of_goods'] == '750.00'
+    assert weekly.payload['expenses'] == '1,200.00'
+    assert weekly.payload['kept'] == '-900.00'
     assert weekly.payload['best_seller'] == {'name': 'Coffee', 'quantity': 3}
     assert queue_due_summaries() == 0
     assert EmailOutbox.query.count() == 2
