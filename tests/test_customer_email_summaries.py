@@ -1,5 +1,5 @@
 """Customer summary queueing and rendering tests; SMTP is always mocked."""
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 from app import db
@@ -31,7 +31,7 @@ def _summary_preferences(business):
 
 def _backdate_activity_to_previous_week(business_id):
     start, _, _ = _wat_window(datetime.utcnow(), 7)
-    period_time = start + __import__('datetime').timedelta(days=2)
+    period_time = start + timedelta(days=2)
     Sale.query.filter_by(business_id=business_id).update({Sale.sold_at: period_time})
     Expense.query.filter_by(business_id=business_id).update({Expense.spent_at: period_time})
     db.session.commit()
