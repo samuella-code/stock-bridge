@@ -153,3 +153,54 @@ def test_summary_scheduler_endpoint_requires_bearer_and_only_dispatches_summarie
     assert len(sent) == 2
     assert EmailOutbox.query.filter(EmailOutbox.event_type.in_(
         ['daily_summary', 'weekly_summary'])).count() == 2
+
+
+
+def test_disabling_summary_preference_after_queue_suppresses_delivery(app, monkeypatch):
+    from app.notifications.email_outbox import dispatch_one
+
+    client, _, businesses = setup(app)
+    business = businesses[0]
+    _summary_preferences(business)
+    item = product(client, 'Coffee')
+    sale(client, item, 3)
+    assert queue_due_summaries() == 2
+
+    preference = db.session.get(NotificationPreference, business.id)
+    preference.daily_summary_email = False
+    preference.weekly_summary_email = False
+    db.session.commit()
+    sent = []
+    monkeypatch.setattr(
+        'app.email_service._send_email',
+        lambda *args, **kwargs: sent.append(args) or True,
+    )
+
+    assert dispatch_one(event_types=('daily_summary', 'weekly_summary')) == 'suppressed'
+    assert sent == []
+
+
+def test_customer_summary_migration_adds_opt_in_columns_only():
+    import importlib.util
+    import io
+    from pathlib import Path
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    spec = importlib.util.spec_from_file_location(
+        'customer_summary_migration',
+        Path('migrations/versions/0023_customer_email_summaries.py'),
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    output = io.StringIO()
+    context = MigrationContext.configure(
+        url='postgresql://', opts={'as_sql': True, 'output_buffer': output}
+    )
+    with Operations.context(context):
+        module.upgrade()
+    sql = output.getvalue().lower()
+    assert 'daily_summary_email' in sql and 'weekly_summary_email' in sql
+    assert 'default false' in sql
+    assert 'create table' not in sql and 'drop table' not in sql
+    assert module.down_revision == '0022_admin_reminders'
