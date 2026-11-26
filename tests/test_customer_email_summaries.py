@@ -107,5 +107,5 @@ def test_summary_window_uses_wat_midnight_and_previous_monday():
     )
     start, end, week = _wat_window(datetime(2026, 11, 26, 10, 0), 7)
     assert (start, end, week.isoformat()) == (
-        datetime(2026, 11, 16, 23), datetime(2026, 11, 23, 23), '2026-11-16'
+        datetime(2026, 11, 15, 23), datetime(2026, 11, 22, 23), '2026-11-16'
     )
