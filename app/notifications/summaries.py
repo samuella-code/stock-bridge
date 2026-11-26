@@ -81,7 +81,7 @@ def _summary_payload(business, start, end, period_label, daily=False):
     cost_of_goods = _money(cost_total)
     expenses = _money(expense_total)
     return {
-        'business_name': business.name,
+        'business_name': str(business.name).replace('\\r', ' ').replace('\\n', ' '),
         'period_label': period_label,
         'sales': format(revenue, ',.2f'),
         'cost_of_goods': format(cost_of_goods, ',.2f'),
@@ -89,10 +89,13 @@ def _summary_payload(business, start, end, period_label, daily=False):
         'kept': format(revenue - cost_of_goods - expenses, ',.2f'),
         'has_activity': bool(revenue or expenses or units),
         'units_sold': int(units or 0),
-        'best_seller': {'name': best[0], 'unit': best[1], 'quantity': int(best[2])} if best else None,
+        'best_seller': {'name': str(best[0]).replace('\\r', ' ').replace('\\n', ' '),
+                        'unit': str(best[1]).replace('\\r', ' ').replace('\\n', ' '),
+                        'quantity': int(best[2])} if best else None,
         'low_stock_count': low_count,
         'low_stock_products': [
-            {'name': p.name, 'quantity': p.stock_quantity, 'unit': p.unit}
+            {'name': str(p.name).replace('\\r', ' ').replace('\\n', ' '),
+             'quantity': p.stock_quantity, 'unit': str(p.unit).replace('\\r', ' ').replace('\\n', ' ')}
             for p in low_products
         ],
         'daily': daily,
@@ -157,7 +160,7 @@ def queue_due_summaries(now=None):
                 subject=(
                     f"{payload['low_stock_count']} products need restocking today | StockBridge"
                     if daily else f"Your weekly StockBridge summary | {business.name}"
-                )[:240],
+                ).replace('\\r', ' ').replace('\\n', ' ')[:240],
                 template_name='customer_summary',
                 payload=payload,
                 max_attempts=5,
