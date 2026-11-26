@@ -1,7 +1,7 @@
 {% extends 'email/base.html' %}
 {% block content %}
 <div style="margin:0 0 14px;">
-  <span style="display:inline-block;padding:5px 10px;border-radius:20px;background:{% if event_kind == 'renewal_failed' or event_kind == 'trial_expired' or event_kind == 'subscription_expired' %}#fff0ed;color:#9b3025{% elif event_kind == 'trial_ending' or event_kind == 'renewal_reminder' %}#fff4df;color:#87530b{% elif event_kind == 'subscription_paid' %}#e8f5ed;color:#17633f{% else %}#e8f0ff;color:#244f91{% endif %};font-size:12px;font-weight:700;">{{ status }}</span>
+  <span style="display:inline-block;padding:5px 10px;border-radius:20px;background:{% if event_kind == 'renewal_failed' or event_kind == 'trial_expired' or event_kind == 'subscription_expired' %}#fff0ed;color:#9b3025{% elif event_kind == 'trial_ending' or event_kind == 'renewal_reminder' or event_kind == 'cancellation_scheduled' %}#fff4df;color:#87530b{% elif event_kind == 'subscription_paid' %}#e8f5ed;color:#17633f{% else %}#e8f0ff;color:#244f91{% endif %};font-size:12px;font-weight:700;">{{ status }}</span>
 </div>
 <h1 style="margin:0 0 14px;color:#17352b;font-size:25px;line-height:1.25;">{{ headline }}</h1>
 <p style="margin:0 0 18px;">Hi {{ name.split()[0] if name else 'there' }}, {{ message }}</p>
