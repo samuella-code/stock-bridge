@@ -259,6 +259,8 @@ class NotificationPreference(db.Model):
     product_added = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
     sales = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
     restocking = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
+    daily_summary_email = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    weekly_summary_email = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
 
 
 class EmailOutbox(db.Model):
