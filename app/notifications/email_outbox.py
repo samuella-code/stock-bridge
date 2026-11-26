@@ -20,6 +20,8 @@ PREFERENCE_FIELDS = ('low_stock_email', 'out_of_stock_email', 'product_added', '
 
 def enabled(business_id, field):
     preference = db.session.get(NotificationPreference, business_id)
+    if field in ('daily_summary_email', 'weekly_summary_email'):
+        return preference is not None and bool(getattr(preference, field, False))
     return preference is None or bool(getattr(preference, field))
 
 
@@ -122,7 +124,7 @@ def eligible(now):
         and_(EmailOutbox.status == 'processing', EmailOutbox.claim_expires_at <= now))
 
 
-def claim(now=None, user_id=None, business_id=None):
+def claim(now=None, user_id=None, business_id=None, event_types=None):
     """PG SKIP LOCKED plus a guarded UPDATE; SQLite uses the same CAS guard."""
     now = now or datetime.utcnow()
     selected_policy = policy(now)
@@ -133,12 +135,16 @@ def claim(now=None, user_id=None, business_id=None):
     exhausted = update(EmailOutbox).where(*safety_conditions, eligible(now), EmailOutbox.attempt_count >= EmailOutbox.max_attempts)
     if user_id is not None:
         exhausted = exhausted.where(EmailOutbox.recipient_user_id == user_id, EmailOutbox.business_id == business_id)
+    if event_types:
+        exhausted = exhausted.where(EmailOutbox.event_type.in_(event_types))
     db.session.execute(exhausted.values(
             status='failed', claim_token=None, claim_expires_at=None,
             last_error='AttemptsExhausted', updated_at=now))
     query = EmailOutbox.query.filter(*safety_conditions, eligible(now), EmailOutbox.attempt_count < EmailOutbox.max_attempts)
     if user_id is not None:
         query = query.filter_by(recipient_user_id=user_id, business_id=business_id)
+    if event_types:
+        query = query.filter(EmailOutbox.event_type.in_(event_types))
     row = query.order_by(EmailOutbox.next_attempt_at, EmailOutbox.id).with_for_update(skip_locked=True).first()
     if row is None:
         db.session.commit()
@@ -173,7 +179,9 @@ def dispatch_one(user_id=None, business_id=None, now=None):
     except (ValueError, TypeError):
         return 'configuration_required'
     now = now or datetime.utcnow()
-    lease = claim(now, user_id, business_id)
+    summary_only = not current_app.config['INVENTORY_EMAILS_ENABLED']
+    lease = claim(now, user_id, business_id,
+        event_types=('daily_summary', 'weekly_summary') if summary_only else None)
     if lease is None:
         return 'idle'
     row_id, token = lease
