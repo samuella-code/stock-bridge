@@ -652,3 +652,33 @@ def test_billing_events_use_specific_email_templates_and_keep_claims(app,fake,mo
     assert 'PAYMENT RECEIVED' in receipt_html and 'View billing' in receipt_html
     assert all(event.email_sent_at is not None for event in events)
     assert notifications.deliver(limit=10)==0
+
+
+def test_payment_receipt_pdf_is_paid_business_scoped_and_downloadable(client,fake):
+    owner,business=seed(eligible=False)
+    subscription=purchase(owner,'plus','monthly')
+    payment=Payment.query.filter_by(subscription_id=subscription.id,status='success').one()
+    login(client,owner)
+
+    response=client.get(f'/plans/receipt/{payment.id}.pdf')
+    assert response.status_code==200
+    assert response.mimetype=='application/pdf'
+    assert response.data.startswith(b'%PDF')
+    assert 'stockbridge-receipt-' in response.headers['Content-Disposition']
+
+    other,_=seed('other@example.com',eligible=False)
+    login(client,other)
+    assert client.get(f'/plans/receipt/{payment.id}.pdf').status_code==404
+
+
+def test_lifetime_receipt_pdf_uses_business_ownership_for_legacy_payment(client):
+    owner,business=seed(eligible=False)
+    payment=legacy(owner,business)  # Historic lifetime rows may not have payment.user_id.
+    login(client,owner)
+    response=client.get(f'/plans/receipt/{payment.id}.pdf')
+    assert response.status_code==200 and response.data.startswith(b'%PDF')
+
+    pending=Payment(user_id=owner.id,business_id=business.id,customer_email=owner.email,
+        reference='pending-receipt',amount_kobo=300000,status='pending')
+    db.session.add(pending);db.session.commit()
+    assert client.get(f'/plans/receipt/{pending.id}.pdf').status_code==404
