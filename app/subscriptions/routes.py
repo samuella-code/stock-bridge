@@ -2,6 +2,8 @@ from app.subscriptions.entitlements import selected_business
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 from datetime import datetime, timedelta
+from hashlib import sha256
+import json
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from io import BytesIO
 from xml.sax.saxutils import escape
@@ -74,14 +76,24 @@ def receipt(payment_id):
     paid_at = (payment.paid_at + timedelta(hours=1)).strftime('%d/%m/%Y %H:%M WAT')
     amount = f"₦{payment.amount_kobo / 100:,.2f} {payment.currency}"
     product = (
-        f"{subscription.plan_code.title()} {subscription.billing_interval.title()} subscription"
-        if subscription else 'Lifetime Access'
+        f"{payment.plan_code.title()} {payment.billing_interval.title()} subscription"
+        if payment.product == 'subscription' and payment.plan_code and payment.billing_interval
+        else 'Lifetime Access'
     )
-    paid_until = (
-        (subscription.current_period_end + __import__('datetime').timedelta(hours=1)).strftime('%d/%m/%Y')
-        if subscription and subscription.current_period_end else
-        ('Lifetime' if not subscription else 'Not available')
-    )
+    paid_until = 'Lifetime' if payment.product == 'lifetime' else 'Not available'
+    if subscription:
+        period_key = 'payment-period:' + sha256(payment.reference.encode()).hexdigest()
+        period_event = BillingEvent.query.filter_by(
+            event_key=period_key, user_id=current_user.id,
+            subscription_id=subscription.id, kind='provider_event',
+        ).first()
+        if period_event:
+            try:
+                paid_period = json.loads(period_event.message)
+                period_end = datetime.fromisoformat(paid_period[1])
+                paid_until = (period_end + timedelta(hours=1)).strftime('%d/%m/%Y')
+            except (ValueError, TypeError, IndexError):
+                paid_until = 'Not available'
     styles = getSampleStyleSheet()
     story = [
         Paragraph("StockBridge", styles['Title']),
