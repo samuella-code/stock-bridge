@@ -92,6 +92,7 @@ class Config:
  # Inventory email dispatch is deliberately off until environment-specific setup.
  INVENTORY_EMAILS_ENABLED=os.getenv('INVENTORY_EMAILS_ENABLED', 'false').lower()=='true'
  CUSTOMER_SUMMARY_EMAILS_ENABLED=os.getenv('CUSTOMER_SUMMARY_EMAILS_ENABLED', 'false').lower()=='true'
+ CUSTOMER_SUMMARY_EMAIL_BASE_URL=os.getenv('CUSTOMER_SUMMARY_EMAIL_BASE_URL', '')
  # Independent, opt-in admin reporting. Never inherits inventory/staff delivery flags.
  ADMIN_REPORT_EMAILS_ENABLED=os.getenv('ADMIN_REPORT_EMAILS_ENABLED', '')
  ADMIN_REPORT_EMAILS_APPROVED_SHA=os.getenv('ADMIN_REPORT_EMAILS_APPROVED_SHA', '')
