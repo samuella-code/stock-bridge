@@ -4,7 +4,7 @@ import click
 from flask import current_app
 from sqlalchemy import update
 from app import db
-from app.models import AccountBilling, BillingEvent, RecurringSubscription, User
+from app.models import AccountBilling, BillingEvent, RecurringSubscription, StaffMembership, User
 from app.subscriptions.billing import lock_account, notice
 from app.subscriptions.entitlements import effective_access, PLANS
 from app.email_service import _transactional
@@ -18,8 +18,12 @@ EMAIL_EVENT_KINDS = {
 
 
 def _eligible_customer(user):
-    return bool(user and user.role == 'user' and not user.admin_enabled
-                and not user.staff_only and user.email_verified_at and not user.suspended_at)
+    if not (user and user.role == 'user' and not user.admin_enabled
+            and not user.staff_only and user.email_verified_at and not user.suspended_at):
+        return False
+    # Staff accounts are not subscription customers, even when their account
+    # row is otherwise indistinguishable from a normal customer account.
+    return StaffMembership.query.filter_by(user_id=user.id, state='active').first() is None
 
 
 def _wat(value):
