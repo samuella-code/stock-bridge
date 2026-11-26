@@ -757,10 +757,16 @@ def test_cancellation_email_has_plan_end_date_restore_and_feedback_links(app,fak
     assert 'Turn renewal back on' in html
 
 
-def test_trial_reminder_optout_requires_confirmation_and_suppresses_future_notices(client,fake):
+def test_trial_reminder_optout_requires_confirmation_and_suppresses_future_notices(client,fake,monkeypatch):
     from app.subscriptions import notifications
     user,business=seed()
     start_trial(user)
+    queued=BillingEvent(event_key='prequeued-trial-reminder',user_id=user.id,
+        kind='trial_ending',message='Your trial is ending.')
+    db.session.add(queued);db.session.commit()
+    calls=[]
+    monkeypatch.setattr(notifications,'_transactional',
+        lambda *args,**kwargs: calls.append((args,kwargs)) or True)
     token=notifications.trial_reminder_stop_token(user)
     path=f'/plans/trial-reminders/stop/{token}'
 
@@ -773,10 +779,13 @@ def test_trial_reminder_optout_requires_confirmation_and_suppresses_future_notic
     assert response.status_code==200 and b'Trial reminders are off' in response.data
     db.session.refresh(user)
     assert not user.trial_reminders_enabled
+    assert notifications.deliver()==0 and calls==[]
+    db.session.refresh(queued)
+    assert queued.email_sent_at is None
 
     account=db.session.get(AccountBilling,user.id)
     account.trial_ends_at=datetime.utcnow()+timedelta(days=1)
     db.session.commit()
     notifications.queue_due(now=datetime.utcnow())
-    assert BillingEvent.query.filter_by(user_id=user.id,kind='trial_ending').count()==0
+    assert BillingEvent.query.filter_by(event_key=f'trial-ending:{user.id}').count()==0
     assert BillingEvent.query.filter_by(user_id=user.id,kind='trial_expired').count()==0
