@@ -23,7 +23,7 @@ def staff_navigation():
     if not current_user.is_authenticated:
         return dict(can_manage_teams=False, owner_dashboard_available=False,
                     is_staff_employee=False, staff_role_label='Staff')
-    is_owner = not current_user.staff_only and current_user.role == 'user' and not current_user.admin_enabled
+    is_owner = not current_user.staff_only and current_user.role == 'user'
     choices = presentation.team_choices(actor(), datetime.utcnow())
     can_manage = is_owner or bool(choices)
     role_label = 'Owner' if is_owner else 'Employee'
@@ -140,7 +140,7 @@ def home():
         return redirect(url_for('auth.verification_pending'))
     # My access is an employee page. Owners go straight to their own dashboard;
     # never render the employee empty state for an owner account.
-    if not current_user.staff_only and current_user.role == 'user' and not current_user.admin_enabled:
+    if not current_user.staff_only and current_user.role == 'user':
         return redirect(url_for('main.dashboard'))
     now=datetime.utcnow(); rows=[]
     memberships = StaffMembership.query.filter_by(user_id=current_user.id).order_by(StaffMembership.id).all()
