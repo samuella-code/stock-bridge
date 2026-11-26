@@ -131,14 +131,15 @@ def _billing_email(event, user, subscription):
     )
 
 
-def deliver(limit=100):
+def deliver(limit=100, now=None):
+    """Deliver eligible notices; optional clock keeps lifecycle checks deterministic."""
+    now = now or datetime.utcnow()
     ids = [row[0] for row in db.session.query(BillingEvent.id)
            .filter(BillingEvent.kind.in_(EMAIL_EVENT_KINDS),
                    BillingEvent.email_claimed_at.is_(None))
            .order_by(BillingEvent.id).limit(limit)]
     sent = 0
     for event_id in ids:
-        now = datetime.utcnow()
         claimed = db.session.execute(update(BillingEvent).where(
             BillingEvent.id == event_id,
             BillingEvent.email_claimed_at.is_(None)
@@ -153,9 +154,9 @@ def deliver(limit=100):
         subscription = (db.session.get(RecurringSubscription, event.subscription_id)
                         if event.subscription_id else None)
         # Do not send lifecycle messages that became stale after they were queued.
-        if event.kind == 'trial_ending' and effective_access(user).kind != 'trial':
+        if event.kind == 'trial_ending' and effective_access(user, now=now).kind != 'trial':
             continue
-        if event.kind == 'trial_expired' and effective_access(user).kind != 'restricted':
+        if event.kind == 'trial_expired' and effective_access(user, now=now).kind != 'restricted':
             continue
         if event.kind == 'renewal_reminder' and (
                 not subscription or subscription.status != 'active'
