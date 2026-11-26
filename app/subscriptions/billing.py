@@ -2,7 +2,7 @@
 import hashlib
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 from sqlalchemy import update
 from app import db
@@ -181,7 +181,7 @@ def confirm_payment(sub,payment,data,period=None,details=None):
     notice(user.id,receipt_key,'provider_event',
         json.dumps([start.isoformat(),end.isoformat()],separators=(',', ':')),sub.id)
     payment.status='success';payment.paid_at=paid_at
-    paid_at_wat = (paid_at + __import__('datetime').timedelta(hours=1)).strftime('%d/%m/%Y %H:%M WAT')
+    paid_at_wat = (paid_at + timedelta(hours=1)).strftime('%d/%m/%Y %H:%M WAT')
     paid_until_wat = (end + __import__('datetime').timedelta(hours=1)).strftime('%d/%m/%Y')
     amount_naira = f'₦{payment.amount_kobo / 100:,.2f}'
     notice(user.id,'payment:'+payment.reference,'subscription_paid',
