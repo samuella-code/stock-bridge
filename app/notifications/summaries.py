@@ -67,13 +67,15 @@ def _summary_payload(business, start, end, period_label, daily=False):
         .order_by(func.sum(SaleItem.quantity).desc(), Product.name.asc())
         .first()
     )
-    low_products = (
-        Product.query.filter(
-            Product.business_id == business.id,
-            Product.active.is_(True),
-            Product.stock_quantity <= Product.minimum_stock_level,
-        ).order_by(Product.stock_quantity.asc(), Product.name.asc()).limit(10).all()
+    low_query = Product.query.filter(
+        Product.business_id == business.id,
+        Product.active.is_(True),
+        Product.stock_quantity <= Product.minimum_stock_level,
     )
+    low_count = low_query.count()
+    low_products = low_query.order_by(
+        Product.stock_quantity.asc(), Product.name.asc()
+    ).limit(10).all()
     revenue = _money(sales_total)
     cost_of_goods = _money(cost_total)
     expenses = _money(expense_total)
@@ -86,7 +88,7 @@ def _summary_payload(business, start, end, period_label, daily=False):
         'kept': revenue - cost_of_goods - expenses,
         'units_sold': int(units or 0),
         'best_seller': {'name': best[0], 'quantity': int(best[1])} if best else None,
-        'low_stock_count': len(low_products),
+        'low_stock_count': low_count,
         'low_stock_products': [
             {'name': p.name, 'quantity': p.stock_quantity, 'unit': p.unit}
             for p in low_products
@@ -155,12 +157,14 @@ def queue_due_summaries(now=None):
                 max_attempts=5,
             )
             stamp_test_job(row)
-            db.session.add(row)
             try:
-                db.session.flush()
+                with db.session.begin_nested():
+                    db.session.add(row)
+                    db.session.flush()
                 queued += 1
             except IntegrityError:
-                db.session.rollback()
+                # A concurrent scheduler may have inserted this period key.
+                continue
     db.session.commit()
     return queued
 
