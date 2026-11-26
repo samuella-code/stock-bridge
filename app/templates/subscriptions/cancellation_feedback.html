@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Your feedback · StockBridge{% endblock %}
+{% block page_title %}Help us improve{% endblock %}
+{% block content %}
+<section class="dashboard-wrap">
+  <div class="sb-card">
+    <h2>Why did you stop your {{ subscription.plan_code|title }} plan?</h2>
+    <p>This takes about 10 seconds. Your answer helps us improve StockBridge.</p>
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% for reason in reasons %}
+      <label class="sb-choice" style="display:flex;gap:10px;align-items:center;padding:9px 0;">
+        <input type="radio" name="reason" value="{{ reason }}" required>
+        <span>{{ reason }}</span>
+      </label>
+      {% endfor %}
+      <label for="cancellation-feedback-details">Anything else? (optional)</label>
+      <textarea id="cancellation-feedback-details" name="details" maxlength="300" rows="3" style="width:100%;"></textarea>
+      <button class="sb-button sb-button-primary" type="submit">Send feedback</button>
+      <a class="sb-button sb-button-secondary" href="{{ url_for('subscriptions.index') }}">Skip</a>
+    </form>
+  </div>
+</section>
+{% endblock %}
