@@ -225,8 +225,8 @@ def dispatch_one(user_id=None, business_id=None, now=None, event_types=None):
             else:
                 best = summary.get('best_seller')
                 body = (f"Hi {first_name},\n\nWeekly summary for {summary['business_name']} ({summary['period_label']}).\n"
-                    f"Sales: ₦{summary['sales']:,.2f}\nCost of goods: ₦{summary['cost_of_goods']:,.2f}\n"
-                    f"Expenses: ₦{summary['expenses']:,.2f}\nKept: ₦{summary['kept']:,.2f}\nUnits sold: {summary['units_sold']}\n"
+                    f"Sales: ₦{summary['sales']}\nCost of goods: ₦{summary['cost_of_goods']}\n"
+                    f"Expenses: ₦{summary['expenses']}\nKept: ₦{summary['kept']}\nUnits sold: {summary['units_sold']}\n"
                     + (f"Best seller: {best['name']} ({best['quantity']} units).\n" if best else "")
                     + f"\nView business overview: {link}\n\nStockBridge — Know your stock. Understand your profit.")
                 preheader = f"Your weekly numbers for {summary['business_name']} are ready."[:90]
