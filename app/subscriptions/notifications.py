@@ -102,7 +102,8 @@ def _billing_email(event, user, subscription):
             details['renewal_date'] = _wat(subscription.current_period_end)
     elif kind == 'subscription_paid':
         title, label, status = 'Thank you. Payment received.', 'View billing', 'PAYMENT RECEIVED'
-        details['paid_until'] = _wat(subscription.current_period_end) if subscription and subscription.current_period_end else ''
+        paid_until = event.message.partition('Paid access until: ')[2].strip().rstrip('.')
+        details['paid_until'] = paid_until
     elif kind == 'subscription_expired':
         title, label, status = 'Your paid plan has ended', 'Choose a plan', 'PLAN ENDED'
     elif kind == 'cancellation_scheduled':
@@ -140,6 +141,18 @@ def deliver(limit=100):
             continue
         subscription = (db.session.get(RecurringSubscription, event.subscription_id)
                         if event.subscription_id else None)
+        # Do not send lifecycle messages that became stale after they were queued.
+        if event.kind == 'trial_ending' and effective_access(user).kind != 'trial':
+            continue
+        if event.kind == 'trial_expired' and effective_access(user).kind != 'restricted':
+            continue
+        if event.kind == 'renewal_reminder' and (
+                not subscription or subscription.status != 'active'
+                or subscription.cancel_at_period_end
+                or event.event_key != f'renewal-reminder:{subscription.id}:{subscription.current_period_end.isoformat()}'):
+            continue
+        if event.kind == 'renewal_failed' and (not subscription or subscription.status != 'past_due'):
+            continue
         try:
             delivered = _billing_email(event, user, subscription)
         except Exception:
