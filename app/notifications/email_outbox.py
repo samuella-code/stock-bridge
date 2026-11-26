@@ -347,13 +347,9 @@ def run_customer_summaries():
         return response, 200
     from app.notifications.summaries import queue_due_summaries
     queued = queue_due_summaries()
-    results = []
-    for _ in range(100):
-        result = dispatch_one(event_types=('daily_summary', 'weekly_summary'))
-        results.append(result)
-        if result in ('idle', 'disabled', 'configuration_required'):
-            break
-    response = jsonify(queued=queued, results=results)
+    # One SMTP delivery per HTTP invocation keeps serverless execution bounded.
+    result = dispatch_one(event_types=('daily_summary', 'weekly_summary'))
+    response = jsonify(queued=queued, result=result)
     response.headers['Cache-Control'] = 'no-store'
     return response
 
