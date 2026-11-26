@@ -3,7 +3,7 @@ from datetime import datetime
 
 import pytest
 from app import db
-from app.models import EmailOutbox, Expense, NotificationPreference, Product
+from app.models import EmailOutbox, Expense, NotificationPreference, Product, Sale
 from app.notifications.summaries import queue_due_summaries, _wat_window
 from tests.test_notifications_business_profile import app, setup, product, sale
 
@@ -29,6 +29,14 @@ def _summary_preferences(business):
     db.session.commit()
 
 
+def _backdate_activity_to_previous_week(business_id):
+    start, _, _ = _wat_window(datetime.utcnow(), 7)
+    period_time = start + __import__('datetime').timedelta(days=2)
+    Sale.query.filter_by(business_id=business_id).update({Sale.sold_at: period_time})
+    Expense.query.filter_by(business_id=business_id).update({Expense.spent_at: period_time})
+    db.session.commit()
+
+
 def test_daily_and_weekly_summaries_queue_once_per_business_period(app):
     client, owner, businesses = setup(app)
     business = businesses[0]
@@ -39,6 +47,7 @@ def test_daily_and_weekly_summaries_queue_once_per_business_period(app):
         business_id=business.id, description='Transport', amount=1200
     ))
     db.session.commit()
+    _backdate_activity_to_previous_week(business.id)
 
     assert queue_due_summaries() == 2
     rows = EmailOutbox.query.order_by(EmailOutbox.event_type).all()
@@ -85,6 +94,7 @@ def test_summary_dispatch_uses_shared_template_and_can_run_without_inventory_ale
     _summary_preferences(business)
     item = product(client, 'Coffee')
     sale(client, item, 3)
+    _backdate_activity_to_previous_week(business.id)
     assert queue_due_summaries() == 2
 
     app.config.update(
