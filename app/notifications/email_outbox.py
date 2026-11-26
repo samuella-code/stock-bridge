@@ -32,6 +32,9 @@ def valid_recipient(email):
 def queue_alert(product, quantity, kind, event_key):
     business = db.session.get(Business, product.business_id)
     owner = db.session.get(User, business.user_id)
+    # Opting into the daily digest replaces individual low-stock emails; an out-of-stock alert remains immediate.
+    if kind == 'low_stock' and enabled(business.id, 'daily_summary_email'):
+        return None
     if (not enabled(business.id, kind + '_email') or not owner.email_verified_at
             or owner.suspended_at or business.suspended_at or owner.role == 'admin'
             or not valid_recipient(owner.email)):
