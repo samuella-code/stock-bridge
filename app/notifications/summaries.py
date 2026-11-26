@@ -8,7 +8,7 @@ from app.models import (
     Business, EmailOutbox, Expense, NotificationPreference, Product,
     Sale, SaleItem, User,
 )
-from app.notifications.staging_email_policy import stamp_test_job
+from app.notifications.staging_email_policy import policy, stamp_test_job
 
 
 def _wat_window(now, days):
@@ -100,6 +100,9 @@ def _summary_payload(business, start, end, period_label, daily=False):
 def queue_due_summaries(now=None):
     """Queue opt-in summaries idempotently; no SMTP or external calls occur here."""
     now = now or datetime.utcnow()
+    selected_policy = policy(now)
+    if selected_policy.mode == 'blocked':
+        return 0
     queued = 0
     businesses = (
         Business.query.join(User, User.id == Business.user_id)
@@ -118,6 +121,8 @@ def queue_due_summaries(now=None):
             continue
         owner = db.session.get(User, business.user_id)
         if not owner or not owner.email or '@' not in owner.email:
+            continue
+        if selected_policy.mode == 'staging' and not selected_policy.allows(owner.email):
             continue
         for daily, field, days in (
             (True, 'daily_summary_email', 1),
