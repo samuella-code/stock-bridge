@@ -181,8 +181,11 @@ def confirm_payment(sub,payment,data,period=None,details=None):
     notice(user.id,receipt_key,'provider_event',
         json.dumps([start.isoformat(),end.isoformat()],separators=(',', ':')),sub.id)
     payment.status='success';payment.paid_at=paid_at
+    paid_at_wat = (paid_at + __import__('datetime').timedelta(hours=1)).strftime('%d/%m/%Y %H:%M WAT')
+    paid_until_wat = (end + __import__('datetime').timedelta(hours=1)).strftime('%d/%m/%Y')
+    amount_naira = f'₦{payment.amount_kobo / 100:,.2f}'
     notice(user.id,'payment:'+payment.reference,'subscription_paid',
-        f'Your StockBridge {sub.plan_code.title()} {sub.billing_interval} payment is verified. Paid access ends {end:%d %b %Y}.',sub.id)
+        f'Your StockBridge {sub.plan_code.title()} {sub.billing_interval} payment was received. Amount: {amount_naira}. Paid on: {paid_at_wat}. Paid access until: {paid_until_wat}.',sub.id)
     return True
 
 
