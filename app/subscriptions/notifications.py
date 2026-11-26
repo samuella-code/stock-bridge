@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta
 import click
 from flask import current_app
+from itsdangerous import URLSafeTimedSerializer
 from sqlalchemy import update
 from app import db
 from app.models import AccountBilling, BillingEvent, Payment, RecurringSubscription, StaffMembership, User
@@ -26,6 +27,12 @@ def _eligible_customer(user):
     return StaffMembership.query.filter_by(user_id=user.id, state='active').first() is None
 
 
+def trial_reminder_stop_token(user):
+    """Signed opt-out token; the confirmation POST, not the email-link GET, changes state."""
+    return URLSafeTimedSerializer(current_app.config['SECRET_KEY']).dumps(
+        {'user_id': user.id, 'email': user.email}, salt='stop-trial-reminders')
+
+
 def _wat(value):
     return (value + timedelta(hours=1)).strftime('%d/%m/%Y')
 
@@ -35,7 +42,7 @@ def queue_due(now=None):
     now = now or datetime.utcnow()
     for account in AccountBilling.query.filter(AccountBilling.trial_ends_at.isnot(None)).yield_per(100):
         user = db.session.get(User, account.user_id)
-        if not _eligible_customer(user):
+        if not _eligible_customer(user) or not user.trial_reminders_enabled:
             continue
         lock_account(user.id)
         access = effective_access(user, now=now)
@@ -90,12 +97,20 @@ def _billing_email(event, user, subscription):
     details = {}
     message = event.message
     feedback_url = None
+    stop_reminders_url = None
+    stop_reminders_label = None
     if subscription:
         details.update(
             plan=subscription.plan_code.title(),
             interval=subscription.billing_interval,
             amount=f"₦{subscription.amount_kobo / 100:,.2f}",
         )
+    if kind in ('trial_ending', 'trial_expired'):
+        token = trial_reminder_stop_token(user)
+        stop_path = current_app.url_map.bind(host).build(
+            'subscriptions.stop_trial_reminders', {'token': token})
+        stop_reminders_url = 'https://' + host + stop_path
+        stop_reminders_label = 'Stop trial reminders'
     if kind == 'trial_ending':
         title, label = 'Your trial ends in 2 days', 'Choose a plan'
         status = 'TRIAL ENDING'
@@ -166,7 +181,8 @@ def _billing_email(event, user, subscription):
         'billing_notice', title, user.email, user.full_name, message,
         preheader=event.message[:90], event_kind=kind, status=status,
         headline=title, message=message, link=link, action_label=label,
-        receipt_url=receipt_url, feedback_url=feedback_url, **details,
+        receipt_url=receipt_url, feedback_url=feedback_url,
+        stop_reminders_url=stop_reminders_url, stop_reminders_label=stop_reminders_label, **details,
     )
 
 
