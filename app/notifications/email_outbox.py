@@ -278,6 +278,8 @@ def dispatch_one(user_id=None, business_id=None, now=None, event_types=None):
                 link=link,
                 first_name=first_name,
                 preheader=f"Your stock has been replenished in {payload['business_name']}.",
+                email_reason=f"You get this email because restock reminders are on for {payload['business_name']}.",
+                change_alerts_url=origin + '/notifications/#notificationPreferences',
             )
         else:
             product_link = (
@@ -302,6 +304,9 @@ def dispatch_one(user_id=None, business_id=None, now=None, event_types=None):
                 first_name=first_name,
                 preheader=(f"Only {payload['quantity']} {payload['unit']}{'' if payload['quantity'] == 1 else 's'} left in {payload['business_name']}." if kind == 'low_stock' else f"{payload['product_name']} is out of stock in {payload['business_name']}.")[:90],
                 inventory_link=product_link,
+                email_reason=f"You get this email because {'low-stock' if kind == 'low_stock' else 'out-of-stock'} alerts are on for {payload['business_name']}.",
+                change_alerts_url=origin + '/notifications/#notificationPreferences',
+                summary_preference_url=(origin + '/notifications/#notificationPreferences' if kind == 'low_stock' else None),
             )
 
         db.session.commit()  # No database locks or open transaction during SMTP.
