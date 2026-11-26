@@ -618,6 +618,7 @@ def test_trial_ending_uses_trial_email_and_stale_notices_are_suppressed(app,fake
     from flask import render_template
     trial_html=render_template('email/billing_notice.html',name=u.full_name,**calls[0][1])
     assert 'Choose a plan' in trial_html and 'Basic' in trial_html and 'Plus' in trial_html
+    assert 'Stop trial reminders' in trial_html
 
     stale=BillingEvent(event_key='stale-trial',user_id=u.id,kind='trial_ending',
                        message='Old trial reminder.')
