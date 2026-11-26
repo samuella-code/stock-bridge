@@ -40,7 +40,7 @@ def context(state):
     invitation=NS(id=3,email='invitee@example.invalid',role='salesperson',state='pending',delivery_status='sent',expires_at=datetime(2026,11,1,12))
     data=dict(current_user=NS(is_authenticated=True,staff_only=False),roles=roles,role_count=len(roles),catalogue=constants['CATALOGUE'],seats=2,
         choices=shops,memberships=[member,old],invitations=[invitation],names={201:'Synthetic Manager',202:'Synthetic Former Employee'},assignments={1:{101,102},2:{101}},
-        role_names={(1,k):r['name'] for k,r in roles.items()},role_permissions={(1,k):r['permissions'] for k,r in roles.items()})
+        role_names={(1,k):r['name'] for k,r in roles.items()},role_permissions={(1,k):r['permissions'] for k,r in roles.items()},owner_contact=None)
     template='staff/manage.html'
     if state=='empty':data.update(memberships=[],invitations=[],seats=0,choices=[])
     elif state=='roles-full':data['roles']['b'*32]=dict(name='Weekend desk',permissions=['sales_view']);data['role_count']=5
@@ -174,3 +174,26 @@ def test_submission_contract_detects_security_relevant_changes(change):
     elif change=='required':changed[0][1][1][1].pop('required')
     else:changed[0][0]['action']='/different'
     assert submission_contract(forms)!=submission_contract(changed)
+
+
+
+def test_employee_home_uses_requested_empty_state_and_owner_contact():
+    template,data=context('home')
+    data.update(rows=[],owner_contact=NS(email='owner@example.invalid'))
+    html=environment().get_template(template).render(**data)
+    for phrase in ('No businesses assigned yet','Ask the business owner to check:',
+        'Your business assignments','That their Pro plan is active',
+        'That your access has been restored','Message the owner','Check again'):
+        assert phrase in html
+    assert 'mailto:owner%40example.invalid' in html
+
+
+def test_employee_business_cards_show_role_and_permission_chips():
+    template,data=context('home')
+    data.update(sales_enabled=True,staff_stock_enabled=True,staff_operations_enabled=True)
+    html=environment().get_template(template).render(**data)
+    for phrase in ('Role: Manager','Record sales','View stock','Restock','Expenses','Open'):
+        assert phrase in html
+    assert '<a class="sb-staff-access-chip" href="#preview-only">' in html
+    # The fixture renders two businesses; each has six enabled workflow links.
+    assert html.count('class="sb-staff-access-chip"') == 12

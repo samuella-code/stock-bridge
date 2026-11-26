@@ -20,9 +20,26 @@ def staff_workflow_flags():
 
 @staff_bp.context_processor
 def staff_navigation():
-    if not current_user.is_authenticated:return dict(can_manage_teams=False,owner_dashboard_available=False)
-    return dict(can_manage_teams=bool(presentation.team_choices(actor(),datetime.utcnow())),
-        owner_dashboard_available=not current_user.staff_only)
+    if not current_user.is_authenticated:
+        return dict(can_manage_teams=False, owner_dashboard_available=False,
+                    is_staff_employee=False, staff_role_label='Staff')
+    is_owner = not current_user.staff_only and current_user.role == 'user'
+    choices = presentation.team_choices(actor(), datetime.utcnow())
+    can_manage = is_owner or bool(choices)
+    role_label = 'Owner' if is_owner else 'Employee'
+    if current_user.staff_only:
+        membership = StaffMembership.query.filter_by(
+            user_id=current_user.id, state='active'
+        ).order_by(StaffMembership.id).first()
+        if membership:
+            try:
+                role_label = role_service.resolve(membership.owner_id, membership.role).name
+            except ValueError:
+                role_label = 'Employee'
+    return dict(can_manage_teams=can_manage,
+                owner_dashboard_available=is_owner,
+                is_staff_employee=bool(current_user.staff_only),
+                staff_role_label=role_label)
 
 
 def actor():
@@ -121,12 +138,25 @@ def invite_page():
 def home():
     if not current_user.email_verified_at:
         return redirect(url_for('auth.verification_pending'))
+    # My access is an employee page. Owners go straight to their own dashboard;
+    # never render the employee empty state for an owner account.
+    if not current_user.staff_only and current_user.role == 'user':
+        return redirect(url_for('main.dashboard'))
     now=datetime.utcnow(); rows=[]
-    for membership in StaffMembership.query.filter_by(user_id=current_user.id):
+    memberships = StaffMembership.query.filter_by(user_id=current_user.id).order_by(StaffMembership.id).all()
+    for membership in memberships:
         choices = service.member_businesses(membership, actor(), now=now)
         if choices: rows.append((membership, choices))
+    owner_contact = None
+    for membership in memberships:
+        owner_contact = db.session.get(User, membership.owner_id)
+        if owner_contact:
+            break
     from app.staff.sales_access import enabled
-    return render_template('staff/home.html', sales_enabled=enabled(), rows=rows, role_names={(m.owner_id,m.role):role_service.resolve(m.owner_id,m.role).name for m,_ in rows}, role_permissions={(m.owner_id,m.role):role_service.resolve(m.owner_id,m.role).permissions for m,_ in rows})
+    return render_template('staff/home.html', sales_enabled=enabled(), rows=rows,
+        role_names={(m.owner_id,m.role):role_service.resolve(m.owner_id,m.role).name for m,_ in rows},
+        role_permissions={(m.owner_id,m.role):role_service.resolve(m.owner_id,m.role).permissions for m,_ in rows},
+        owner_contact=owner_contact)
 
 
 @staff_bp.after_request
