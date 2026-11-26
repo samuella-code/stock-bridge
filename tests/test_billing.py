@@ -613,6 +613,8 @@ def test_trial_ending_uses_trial_email_and_stale_notices_are_suppressed(app,fake
     assert calls[0][0][0]=='billing_notice'
     assert calls[0][1]['event_kind']=='trial_ending'
     assert calls[0][1]['action_label']=='Choose a plan'
+    assert calls[0][1]['stop_reminders_label']=='Stop trial reminders'
+    assert '/plans/trial-reminders/stop/' in calls[0][1]['stop_reminders_url']
     from flask import render_template
     trial_html=render_template('email/billing_notice.html',name=u.full_name,**calls[0][1])
     assert 'Choose a plan' in trial_html and 'Basic' in trial_html and 'Plus' in trial_html
@@ -752,3 +754,28 @@ def test_cancellation_email_has_plan_end_date_restore_and_feedback_links(app,fak
     html=render_template('email/billing_notice.html',name=user.full_name,**kwargs)
     assert 'Tell us why you stopped (10 seconds)' in html
     assert 'Turn renewal back on' in html
+
+
+def test_trial_reminder_optout_requires_confirmation_and_suppresses_future_notices(client,fake):
+    from app.subscriptions import notifications
+    user,business=seed()
+    start_trial(user)
+    token=notifications.trial_reminder_stop_token(user)
+    path=f'/plans/trial-reminders/stop/{token}'
+
+    page=client.get(path)
+    assert page.status_code==200 and b'Stop trial reminders' in page.data
+    db.session.refresh(user)
+    assert user.trial_reminders_enabled  # Email scanners following GET cannot unsubscribe.
+
+    response=client.post(path,data={'confirm':'yes'})
+    assert response.status_code==200 and b'Trial reminders are off' in response.data
+    db.session.refresh(user)
+    assert not user.trial_reminders_enabled
+
+    account=db.session.get(AccountBilling,user.id)
+    account.trial_ends_at=datetime.utcnow()+timedelta(days=1)
+    db.session.commit()
+    notifications.queue_due(now=datetime.utcnow())
+    assert BillingEvent.query.filter_by(user_id=user.id,kind='trial_ending').count()==0
+    assert BillingEvent.query.filter_by(user_id=user.id,kind='trial_expired').count()==0
