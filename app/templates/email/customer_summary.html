@@ -12,7 +12,7 @@
     {% endfor %}
     <tr><td style="padding:11px 14px;">Units sold</td><td align="right" style="padding:11px 14px;font-weight:700;">{{ summary.units_sold }}</td></tr>
   </table>
-  {% if summary.best_seller %}<p style="margin:0 0 16px;">Best seller: <strong>{{ summary.best_seller.name }}</strong> ({{ summary.best_seller.quantity }} units).</p>{% endif %}
+  {% if summary.best_seller %}<p style="margin:0 0 16px;">Best seller: <strong>{{ summary.best_seller.name }}</strong> ({{ summary.best_seller.quantity }} {{ summary.best_seller.unit }}{{ '' if summary.best_seller.quantity == 1 else 's' }}).</p>{% endif %}
   {% if summary.low_stock_count %}<p style="margin:0 0 14px;">{{ summary.low_stock_count }} product{{ '' if summary.low_stock_count == 1 else 's' }} {{ 'needs' if summary.low_stock_count == 1 else 'need' }} restocking.</p>{% endif %}
 {% endif %}
 {% if summary.low_stock_products %}
