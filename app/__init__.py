@@ -219,6 +219,8 @@ def create_app(test_config=None):
 
     from app.subscriptions.notifications import register_commands
     register_commands(app)
+    from app.notifications.summaries import register_commands as register_summary_commands
+    register_summary_commands(app)
     if app.config.get("SUBSCRIPTIONS_ENABLED"):
         from app.subscriptions.entitlements import access_label
         app.jinja_env.globals["billing_access_label"] = access_label
