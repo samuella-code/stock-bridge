@@ -33,7 +33,8 @@ def queue_alert(product, quantity, kind, event_key):
     business = db.session.get(Business, product.business_id)
     owner = db.session.get(User, business.user_id)
     # Opting into the daily digest replaces individual low-stock emails; an out-of-stock alert remains immediate.
-    if kind == 'low_stock' and enabled(business.id, 'daily_summary_email'):
+    if (kind == 'low_stock' and current_app.config.get('CUSTOMER_SUMMARY_EMAILS_ENABLED')
+            and enabled(business.id, 'daily_summary_email')):
         return None
     if (not enabled(business.id, kind + '_email') or not owner.email_verified_at
             or owner.suspended_at or business.suspended_at or owner.role == 'admin'
@@ -229,8 +230,14 @@ def dispatch_one(user_id=None, business_id=None, now=None, event_types=None):
                     + (f"Best seller: {best['name']} ({best['quantity']} units).\n" if best else "")
                     + f"\nView business overview: {link}\n\nStockBridge — Know your stock. Understand your profit.")
                 preheader = f"Your weekly numbers for {summary['business_name']} are ready."[:90]
+            email_reason = (
+                f"You get this email because daily restock summaries are on for {summary['business_name']}."
+                if kind == 'daily_summary' else
+                f"You get this email because weekly business summaries are on for {summary['business_name']}."
+            )
             html = render_template('email/customer_summary.html', summary=summary, link=link,
-                first_name=first_name, preheader=preheader)
+                first_name=first_name, preheader=preheader, email_reason=email_reason,
+                change_alerts_url=origin + '/profile/')
         elif kind == 'restock_recorded':
             link = origin + '/restocking/'
             action = 'View Restocking'
