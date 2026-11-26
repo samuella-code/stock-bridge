@@ -206,6 +206,8 @@ def deliver(limit=100, now=None):
         user = db.session.get(User, event.user_id) if event else None
         if not _eligible_customer(user):
             continue
+        if event.kind in ('trial_ending', 'trial_expired') and not user.trial_reminders_enabled:
+            continue
         subscription = (db.session.get(RecurringSubscription, event.subscription_id)
                         if event.subscription_id else None)
         # Do not send lifecycle messages that became stale after they were queued.
