@@ -85,6 +85,7 @@ class FakeProvider:
         if path=='/transaction/initialize':return {'reference':payload['reference'],'authorization_url':'https://checkout.paystack.com/'+payload['reference']}
         if path.startswith('/transaction/verify/'):return self.verified(path.split('/')[-1])
         if path=='/subscription/disable':return {}
+        if path=='/subscription/enable':return {}
         if path=='/subscription':return {'subscription_code':'SUB_replacement'}
         if path.startswith('/subscription/'):return self.details(path.split('/')[-1])
         raise AssertionError(path)
@@ -684,3 +685,69 @@ def test_lifetime_receipt_pdf_uses_business_ownership_for_legacy_payment(client)
         reference='pending-receipt',amount_kobo=300000,status='pending')
     db.session.add(pending);db.session.commit()
     assert client.get(f'/plans/receipt/{pending.id}.pdf').status_code==404
+
+
+def test_cancelled_subscription_can_be_restored_only_after_confirmation(client,fake):
+    user,business=seed(eligible=False)
+    subscription=purchase(user,'plus','monthly')
+    billing.cancel(user,subscription)
+    assert subscription.cancel_at_period_end
+    login(client,user)
+
+    preview=client.get(f'/plans/{subscription.id}/renewal/restore')
+    assert preview.status_code==200 and b'Confirm and turn renewal on' in preview.data
+    response=client.post(f'/plans/{subscription.id}/renewal/restore',data={'confirm':'yes'})
+    assert response.status_code==302
+    db.session.refresh(subscription)
+    assert not subscription.cancel_at_period_end and subscription.status=='active'
+    enabled_call=next(call for call in fake.calls if call[0]=='/subscription/enable')
+    assert enabled_call[2]['code']==subscription.provider_subscription_code
+    assert enabled_call[2]['token']=='fixture-token'
+
+
+def test_cancellation_feedback_is_private_and_idempotently_updated(client,fake):
+    user,business=seed(eligible=False)
+    subscription=purchase(user,'plus','monthly')
+    billing.cancel(user,subscription)
+    login(client,user)
+
+    page=client.get(f'/plans/{subscription.id}/feedback')
+    assert page.status_code==200 and b'10 seconds' in page.data
+    first=client.post(f'/plans/{subscription.id}/feedback',
+        data={'reason':'Too expensive','details':'Need a lower-cost plan.'})
+    assert first.status_code==302
+    event=BillingEvent.query.filter_by(event_key=f'cancellation-feedback:{subscription.id}').one()
+    assert event.kind=='cancellation_feedback' and 'Too expensive' in event.message
+    client.post(f'/plans/{subscription.id}/feedback',data={'reason':'Missing a feature I need'})
+    assert BillingEvent.query.filter_by(event_key=f'cancellation-feedback:{subscription.id}').count()==1
+    assert 'Missing a feature I need' in event.message
+
+    other,_=seed('other@example.com',eligible=False)
+    login(client,other)
+    assert client.get(f'/plans/{subscription.id}/feedback').status_code==404
+
+
+def test_cancellation_email_has_plan_end_date_restore_and_feedback_links(app,fake,monkeypatch):
+    from app.subscriptions import notifications
+    user,business=seed(eligible=False)
+    subscription=purchase(user,'plus','monthly')
+    paid_event=BillingEvent.query.filter_by(user_id=user.id,kind='subscription_paid').one()
+    paid_event.email_sent_at=datetime.utcnow()
+    billing.cancel(user,subscription)
+    event=BillingEvent.query.filter_by(user_id=user.id,kind='cancellation_scheduled').one()
+    calls=[]
+    monkeypatch.setattr(notifications,'_transactional',
+        lambda *args,**kwargs: calls.append((args,kwargs)) or True)
+
+    assert notifications.deliver(limit=10)==1
+    args,kwargs=calls[0]
+    assert kwargs['headline'].startswith('Your plan ends on ')
+    assert kwargs['status']=='RENEWAL OFF'
+    assert kwargs['action_label']=='Turn renewal back on'
+    assert kwargs['link'].endswith(f'/plans/{subscription.id}/renewal/restore')
+    assert kwargs['feedback_url'].endswith(f'/plans/{subscription.id}/feedback')
+    assert 'not be able to add new records' in kwargs['message']
+    from flask import render_template
+    html=render_template('email/billing_notice.html',name=user.full_name,**kwargs)
+    assert 'Tell us why you stopped (10 seconds)' in html
+    assert 'Turn renewal back on' in html
