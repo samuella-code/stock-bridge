@@ -323,6 +323,30 @@ def dispatch():
     return response
 
 
+@worker_bp.post('/internal/customer-email-summaries/run')
+@csrf.exempt
+def run_customer_summaries():
+    """Bearer-authenticated scheduler entry point; drains summary jobs only."""
+    secret = current_app.config.get('CUSTOMER_SUMMARY_EMAIL_DISPATCH_SECRET', '')
+    supplied = request.headers.get('Authorization', '')
+    if (not isinstance(secret, str) or len(secret) < 32
+            or not compare_digest(supplied.encode('utf-8'), ('Bearer ' + secret).encode('utf-8'))):
+        abort(404)
+    if not current_app.config.get('CUSTOMER_SUMMARY_EMAILS_ENABLED'):
+        return jsonify(result='disabled'), 200
+    from app.notifications.summaries import queue_due_summaries
+    queued = queue_due_summaries()
+    results = []
+    for _ in range(100):
+        result = dispatch_one(event_types=('daily_summary', 'weekly_summary'))
+        results.append(result)
+        if result in ('idle', 'disabled', 'configuration_required'):
+            break
+    response = jsonify(queued=queued, results=results)
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
 @event.listens_for(Session, 'after_commit')
 def committed_alert(session):
     if session.info.pop('inventory_alert_created', False) and has_request_context():
