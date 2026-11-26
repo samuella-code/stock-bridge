@@ -38,8 +38,12 @@
             {% else %}
               <p style="margin:0 0 8px;">You received this email because you have a StockBridge account or requested this notification.</p>
             {% endif %}
-            {% if change_alerts_url|default('', true) %}
-              <p style="margin:0 0 8px;"><a href="{{ change_alerts_url }}" style="color:#16764d;text-decoration:underline;">Change alerts</a>{% if stop_reminders_url|default('', true) %} &nbsp;|&nbsp; <a href="{{ stop_reminders_url }}" style="color:#16764d;text-decoration:underline;">{{ stop_reminders_label|default("Stop these reminders", true) }}</a>{% endif %}{% if summary_preference_url|default('', true) %} &nbsp;|&nbsp; <a href="{{ summary_preference_url }}" style="color:#16764d;text-decoration:underline;">Send me one daily summary instead</a>{% endif %}</p>
+            {% if change_alerts_url|default('', true) or stop_reminders_url|default('', true) or summary_preference_url|default('', true) %}
+              <p style="margin:0 0 8px;">
+                {% if change_alerts_url|default('', true) %}<a href="{{ change_alerts_url }}" style="color:#16764d;text-decoration:underline;">Change alerts</a>{% endif %}
+                {% if stop_reminders_url|default('', true) %}{% if change_alerts_url|default('', true) %} &nbsp;|&nbsp; {% endif %}<a href="{{ stop_reminders_url }}" style="color:#16764d;text-decoration:underline;">{{ stop_reminders_label|default("Stop these reminders", true) }}</a>{% endif %}
+                {% if summary_preference_url|default('', true) %}{% if change_alerts_url|default('', true) or stop_reminders_url|default('', true) %} &nbsp;|&nbsp; {% endif %}<a href="{{ summary_preference_url }}" style="color:#16764d;text-decoration:underline;">Send me one daily summary instead</a>{% endif %}
+              </p>
             {% endif %}
             {% if config.get('EMAIL_COMPANY_ADDRESS') %}
               <p style="margin:0 0 8px;">{{ config.get('STOCKBRIDGE_COMPANY_NAME', 'StockBridge') }} · {{ config.get('EMAIL_COMPANY_ADDRESS') }}</p>
