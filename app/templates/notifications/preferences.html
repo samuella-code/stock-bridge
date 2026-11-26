@@ -14,7 +14,7 @@
       ('restocking', 'Restock reminders', 'Get an email when a restock is recorded.'),
       ('sales', 'Sales', 'Get an in-app alert when a sale is recorded.'),
       ('product_added', 'New products', 'Get an in-app alert when a product is added.'),
-      ('daily_summary_email', 'Daily restock summary', 'Once a day, get one email listing products at or below their stock alert level. Individual low-stock emails are unchanged.'),
+      ('daily_summary_email', 'Daily restock summary', 'Get one daily email listing products at or below their stock alert level instead of separate low-stock emails. Out-of-stock alerts remain immediate.'),
       ('weekly_summary_email', 'Weekly business summary', 'Once a week, get sales, cost of goods, expenses, what you kept, your best seller and stock needing attention.')
     ] %}
       {{toggle(field,label,(preferences is not none and preferences|attr(field)) if field in ('daily_summary_email', 'weekly_summary_email') else (preferences is none or preferences|attr(field)),description)}}
