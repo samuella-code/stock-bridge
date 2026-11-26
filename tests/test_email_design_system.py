@@ -125,3 +125,20 @@ def test_remaining_customer_email_templates_use_shared_visual_system(app):
             assert "Business made clearer" not in html, template
             assert "#102437" not in html, template
             assert "min-height:44px" in html, template
+
+
+def test_inventory_email_footer_can_link_to_alert_settings_and_daily_summary(app):
+    from flask import render_template_string
+
+    with app.app_context():
+        html = render_template_string(
+            "{% extends 'email/base.html' %}{% block content %}<h1>Low stock</h1>{% endblock %}",
+            preheader="Only a few units remain.",
+            email_reason="You get this email because low-stock alerts are on for Shop.",
+            change_alerts_url="https://example.test/notifications/#notificationPreferences",
+            summary_preference_url="https://example.test/notifications/#notificationPreferences",
+        )
+
+    assert "Change alerts" in html
+    assert "Send me one daily summary instead" in html
+    assert "low-stock alerts are on for Shop" in html
