@@ -307,7 +307,7 @@ def cancellation_feedback(subscription_id):
         if reason not in reasons:
             abort(400)
         details = request.form.get('details', '').strip()[:300]
-        message = f"Reason: {reason}" + (f"\\nDetails: {details}" if details else '')
+        message = f"Reason: {reason}" + (f"\nDetails: {details}" if details else '')
         key = f'cancellation-feedback:{sub.id}'
         event = BillingEvent.query.filter_by(event_key=key, user_id=current_user.id).first()
         if event is None:
