@@ -685,6 +685,10 @@ def test_billing_notice_delivery_retries_after_claim_lease_expires(app,fake,monk
     assert notifications.deliver(now=now+timedelta(minutes=5,seconds=1))==1
     db.session.refresh(event)
     assert event.email_sent_at is not None
+    # A sent notice must stay closed even after its original claim lease expires.
+    assert notifications.deliver(now=now+timedelta(minutes=10))==0
+    db.session.refresh(event)
+    assert event.email_sent_at is not None
 
 
 
