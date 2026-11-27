@@ -60,12 +60,39 @@ def test_sender_name_is_stockbridge_and_staging_is_marked_in_subject(app, monkey
 
     monkeypatch.setattr("app.email_service.smtplib.SMTP", SMTP)
     monkeypatch.setenv("VERCEL_ENV", "preview")
-    monkeypatch.setenv("VERCEL_GIT_COMMIT_REF", "release/staging-phase6")
+    monkeypatch.setenv("VERCEL_GIT_COMMIT_REF", "feat/unified-customer-email-system")
+    monkeypatch.delenv("VERCEL_PROJECT_ID", raising=False)
 
     with app.app_context():
         assert _send_email("Low stock", "customer@example.test", "Plain text body")
 
     assert sent[0]["From"] == "StockBridge <sender@example.test>"
+    assert sent[0]["Subject"] == "[STAGING] Low stock"
+
+
+def test_staging_project_production_deployment_is_marked(app, monkeypatch):
+    sent = []
+
+    class SMTP:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def send_message(self, message):
+            sent.append(message)
+
+    monkeypatch.setattr("app.email_service.smtplib.SMTP", SMTP)
+    monkeypatch.setenv("VERCEL_ENV", "production")
+    monkeypatch.setenv("VERCEL_PROJECT_ID", "prj_yeCWXPd44jShVUGHAgJu9khMjOMv")
+
+    with app.app_context():
+        assert _send_email("Low stock", "customer@example.test", "Plain text body")
+
     assert sent[0]["Subject"] == "[STAGING] Low stock"
 
 
@@ -87,6 +114,7 @@ def test_production_sender_subject_is_not_staging_marked(app, monkeypatch):
 
     monkeypatch.setattr("app.email_service.smtplib.SMTP", SMTP)
     monkeypatch.setenv("VERCEL_ENV", "production")
+    monkeypatch.setenv("VERCEL_PROJECT_ID", "prj_ahZe3mfUk4MvejILpj9Md9QPP4fd")
     monkeypatch.delenv("VERCEL_GIT_COMMIT_REF", raising=False)
 
     with app.app_context():
