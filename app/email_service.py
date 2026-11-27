@@ -45,9 +45,12 @@ def _send_email(subject, recipient, body, html=None, *, timeout=15):
     message = EmailMessage()
     # Keep the customer-facing sender identity stable in every environment.
     # Staging is identified in the subject, never by changing the sender name.
+    # Every Vercel preview is non-production, regardless of its feature-branch
+    # name. Also mark the staging project's production deployment explicitly.
+    # VERCEL_PROJECT_ID is a public project identifier, not a credential.
     staging = (
         os.getenv("VERCEL_ENV") == "preview"
-        and os.getenv("VERCEL_GIT_COMMIT_REF") == "release/staging-phase6"
+        or os.getenv("VERCEL_PROJECT_ID") == "prj_yeCWXPd44jShVUGHAgJu9khMjOMv"
     )
     if staging and not subject.startswith("[STAGING]"):
         subject = "[STAGING] " + subject
