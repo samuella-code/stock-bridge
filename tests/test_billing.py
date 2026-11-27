@@ -654,6 +654,8 @@ def test_billing_events_use_specific_email_templates_and_keep_claims(app,fake,mo
     assert by_kind['subscription_paid']['receipt_url'].endswith('.pdf')
     assert by_kind['subscription_paid']['paid_on']
     assert by_kind['subscription_paid']['reference'] == Payment.query.filter_by(subscription_id=sub.id).one().reference[:8] + '…'
+    receipt_call=next(args for args,kwargs in calls if kwargs['event_kind']=='subscription_paid')
+    assert '\nReference:' in receipt_call[4] and '\\nReference:' not in receipt_call[4]
     from flask import render_template
     receipt_html=render_template('email/billing_notice.html',name=u.full_name,**by_kind['subscription_paid'])
     assert 'PAYMENT RECEIVED' in receipt_html and 'View billing' in receipt_html
@@ -724,6 +726,8 @@ def test_cancellation_feedback_is_private_and_idempotently_updated(client,fake):
     assert first.status_code==302
     event=BillingEvent.query.filter_by(event_key=f'cancellation-feedback:{subscription.id}').one()
     assert event.kind=='cancellation_feedback' and 'Too expensive' in event.message
+    assert '\nDetails: Need a lower-cost plan.' in event.message
+    assert '\\nDetails:' not in event.message
     client.post(f'/plans/{subscription.id}/feedback',data={'reason':'Missing a feature I need'})
     assert BillingEvent.query.filter_by(event_key=f'cancellation-feedback:{subscription.id}').count()==1
     assert 'Missing a feature I need' in event.message
