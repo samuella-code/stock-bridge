@@ -665,6 +665,29 @@ def test_billing_events_use_specific_email_templates_and_keep_claims(app,fake,mo
     assert notifications.deliver(limit=10)==0
 
 
+
+def test_billing_notice_delivery_retries_after_claim_lease_expires(app,fake,monkeypatch):
+    from app.subscriptions import notifications
+    user,_=seed()
+    start_trial(user)
+    now=datetime.utcnow()
+    event=BillingEvent(event_key='retry-trial-email',user_id=user.id,
+        kind='trial_ending',message='Your trial ends in 2 days.')
+    db.session.add(event);db.session.commit()
+    outcomes=iter((False,True))
+    monkeypatch.setattr(notifications,'_transactional',
+        lambda *args,**kwargs: next(outcomes))
+
+    assert notifications.deliver(now=now)==0
+    db.session.refresh(event)
+    assert event.email_sent_at is None and event.email_claimed_at==now
+    assert notifications.deliver(now=now+timedelta(minutes=4,seconds=59))==0
+    assert notifications.deliver(now=now+timedelta(minutes=5,seconds=1))==1
+    db.session.refresh(event)
+    assert event.email_sent_at is not None
+
+
+
 def test_payment_receipt_pdf_is_paid_business_scoped_and_downloadable(client,fake):
     owner,business=seed(eligible=False)
     subscription=purchase(owner,'plus','monthly')
