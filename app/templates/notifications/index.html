@@ -62,7 +62,8 @@
       {% if notifications.has_next %}<a class="sb-button sb-button-secondary" href="{{ url_for('notifications.index', page=notifications.next_num) }}">Older</a>{% endif %}
     </nav>
   {% endif %}
-  <p class="sb-notification-meta">Password resets, password-change notices, payment receipts, payment failures and other essential security or billing emails are always sent. These cannot be turned off here.</p>\n  <a class="sb-notification-settings-link" href="{{ url_for('profile.index', _anchor='notificationPreferences') }}">Choose which alerts you get in Settings.</a>
+  <p class="sb-notification-meta">Password resets, password-change notices, payment receipts, payment failures and other essential security or billing emails are always sent. These cannot be turned off here.</p>
+  <a class="sb-notification-settings-link" href="{{ url_for('profile.index', _anchor='notificationPreferences') }}">Choose which alerts you get in Settings.</a>
 </section>
 {% endblock %}
 
