@@ -4,7 +4,7 @@ from hashlib import sha256
 import click
 from flask import current_app
 from itsdangerous import URLSafeTimedSerializer
-from sqlalchemy import update
+from sqlalchemy import or_, update
 from app import db
 from app.models import AccountBilling, BillingEvent, Payment, RecurringSubscription, StaffMembership, User
 from app.subscriptions.billing import lock_account, notice
@@ -193,15 +193,21 @@ def _billing_email(event, user, subscription):
 def deliver(limit=100, now=None):
     """Deliver eligible notices; optional clock keeps lifecycle checks deterministic."""
     now = now or datetime.utcnow()
+    # A claim is a five-minute lease. If the process dies or SMTP fails,
+    # another scheduled run can safely retry instead of losing the notice forever.
+    claim_before = now - timedelta(minutes=5)
+    claimable = or_(
+        BillingEvent.email_claimed_at.is_(None),
+        BillingEvent.email_claimed_at <= claim_before,
+    )
     ids = [row[0] for row in db.session.query(BillingEvent.id)
-           .filter(BillingEvent.kind.in_(EMAIL_EVENT_KINDS),
-                   BillingEvent.email_claimed_at.is_(None))
+           .filter(BillingEvent.kind.in_(EMAIL_EVENT_KINDS), claimable)
            .order_by(BillingEvent.id).limit(limit)]
     sent = 0
     for event_id in ids:
         claimed = db.session.execute(update(BillingEvent).where(
             BillingEvent.id == event_id,
-            BillingEvent.email_claimed_at.is_(None)
+            claimable,
         ).values(email_claimed_at=now))
         db.session.commit()
         if not claimed.rowcount:
