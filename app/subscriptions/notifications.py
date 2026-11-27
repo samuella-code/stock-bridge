@@ -201,12 +201,13 @@ def deliver(limit=100, now=None):
         BillingEvent.email_claimed_at <= claim_before,
     )
     ids = [row[0] for row in db.session.query(BillingEvent.id)
-           .filter(BillingEvent.kind.in_(EMAIL_EVENT_KINDS), claimable)
+           .filter(BillingEvent.email_sent_at.is_(None), BillingEvent.kind.in_(EMAIL_EVENT_KINDS), claimable)
            .order_by(BillingEvent.id).limit(limit)]
     sent = 0
     for event_id in ids:
         claimed = db.session.execute(update(BillingEvent).where(
             BillingEvent.id == event_id,
+            BillingEvent.email_sent_at.is_(None),
             claimable,
         ).values(email_claimed_at=now))
         db.session.commit()
