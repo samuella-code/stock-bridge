@@ -71,8 +71,7 @@ def subscription(user):
 
 def request_page(application, user, **args):
     client = application.test_client(); login(client, user)
-    with patch('app.main.routes.datetime', Clock), \\
-         patch('app.subscriptions.entitlements.datetime', Clock):
+    with patch('app.main.routes.datetime', Clock),  patch('app.subscriptions.entitlements.datetime', Clock):
         response = client.get('/insights', query_string=args or {
             'period':'custom', 'from':'2026-10-08', 'to':'2026-10-14'})
     return response
@@ -331,8 +330,7 @@ def test_billing_label_reuses_supplied_access_without_changing_default(app):
     access=effective_access(user,now=NOW)
     with patch('app.subscriptions.entitlements.datetime',Clock):
         original=access_label(user)
-    with patch('app.subscriptions.entitlements.datetime',Clock), \\
-         patch('app.subscriptions.entitlements.effective_access',side_effect=AssertionError('Repeated access evaluation')):
+    with patch('app.subscriptions.entitlements.datetime',Clock),  patch('app.subscriptions.entitlements.effective_access',side_effect=AssertionError('Repeated access evaluation')):
         assert access_label(user,access=access)==original=='StockBridge Plus · Monthly · renewal failed'
 
 
