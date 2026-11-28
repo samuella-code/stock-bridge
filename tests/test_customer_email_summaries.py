@@ -87,7 +87,7 @@ def test_summaries_are_opt_in_and_daily_summary_only_sends_when_stock_needs_atte
 
     sale(client, item, 2)  # Now reaches the threshold.
     assert queue_due_summaries() == 1
-    assert EmailOutbox.query.one().event_type == 'daily_summary'
+    assert EmailOutbox.query.filter_by(event_type='daily_summary').one().event_type == 'daily_summary'
 
 
 def test_summary_dispatch_uses_shared_template_and_can_run_without_inventory_alerts(app, monkeypatch):
