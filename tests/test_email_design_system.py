@@ -212,7 +212,7 @@ def test_inventory_alert_preserves_supplied_unit_label(app):
 
     assert "2 box" in html
     assert "2 boxs" not in html
-    assert "stock has fallen to 2 box" in html
+    assert "stock is now recorded as 2 box" in html
 
 
 def test_restock_alert_preserves_supplied_unit_label(app):
