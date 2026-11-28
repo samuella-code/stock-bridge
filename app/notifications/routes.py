@@ -82,6 +82,24 @@ def open_notification(notification_id):
     return redirect(target)
 
 
+@notifications_bp.get('/email/summary/<int:business_id>/<summary_type>')
+@login_required
+def email_summary_link(business_id, summary_type):
+    """Restore the business that owns an emailed summary before opening its page."""
+    if summary_type not in {'daily', 'weekly'}:
+        abort(404)
+    business = Business.query.filter_by(id=business_id, user_id=current_user.id).first()
+    if business is None:
+        abort(404)
+    if not accessible_business(current_user, business):
+        # Suspended or no-longer-entitled businesses must not become active
+        # merely because an old email still exists.
+        return redirect(url_for('businesses.index'))
+    session['active_business_id'] = business.id
+    target = 'restocking.index' if summary_type == 'daily' else 'main.dashboard'
+    return redirect(url_for(target))
+
+
 @notifications_bp.get('/email/product/<int:business_id>/<int:product_id>')
 @login_required
 def email_product_link(business_id, product_id):
