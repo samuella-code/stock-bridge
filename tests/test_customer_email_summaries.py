@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 import pytest
 from app import db
-from app.models import EmailOutbox, Expense, NotificationPreference, Product, Sale
+from app.models import Business, EmailOutbox, Expense, NotificationPreference, Product, Sale
 from app.notifications.summaries import queue_due_summaries, _wat_window
 from tests.test_notifications_business_profile import app, setup, product, sale
 
@@ -229,3 +229,44 @@ def test_customer_summary_migration_adds_opt_in_columns_only():
     assert 'default false' in sql
     assert 'create table' not in sql and 'drop table' not in sql
     assert module.down_revision == '0022_admin_reminders'
+
+
+def test_summary_email_links_restore_the_owning_business_and_validate_access(app, monkeypatch):
+    client, owner, businesses = setup(app)
+    original = businesses[0]
+    other = Business(user_id=owner.id, name='Second business')
+    db.session.add(other)
+    db.session.commit()
+
+    # This test isolates routing behavior from subscription-tier setup.
+    monkeypatch.setattr('app.notifications.routes.accessible_business', lambda user, business: True)
+    with client.session_transaction() as browser_session:
+        browser_session['active_business_id'] = original.id
+
+    daily = client.get(f'/notifications/email/summary/{other.id}/daily')
+    assert daily.status_code == 302
+    assert daily.headers['Location'].endswith('/restocking/')
+    with client.session_transaction() as browser_session:
+        assert browser_session['active_business_id'] == other.id
+
+    with client.session_transaction() as browser_session:
+        browser_session['active_business_id'] = original.id
+    weekly = client.get(f'/notifications/email/summary/{other.id}/weekly')
+    assert weekly.status_code == 302
+    assert weekly.headers['Location'].endswith('/dashboard')
+    with client.session_transaction() as browser_session:
+        assert browser_session['active_business_id'] == other.id
+
+    assert client.get(f'/notifications/email/summary/{other.id}/unknown').status_code == 404
+    assert client.get('/notifications/email/summary/999999/daily').status_code == 404
+
+    other.suspended_at = datetime.utcnow()
+    db.session.commit()
+    monkeypatch.setattr('app.notifications.routes.accessible_business', lambda user, business: False)
+    with client.session_transaction() as browser_session:
+        browser_session['active_business_id'] = original.id
+    suspended = client.get(f'/notifications/email/summary/{other.id}/daily')
+    assert suspended.status_code == 302
+    assert suspended.headers['Location'].endswith('/businesses/')
+    with client.session_transaction() as browser_session:
+        assert browser_session['active_business_id'] == original.id
