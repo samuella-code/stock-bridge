@@ -23,10 +23,18 @@ class Clock(datetime):
         return NOW
 
 
+@pytest.fixture(autouse=True)
+def freeze_route_and_entitlement_clocks(monkeypatch):
+    # Every request in these synthetic-date tests must evaluate access at NOW,
+    # including follow-up /reports and /insights requests outside page helpers.
+    monkeypatch.setattr('app.main.routes.datetime', Clock)
+    monkeypatch.setattr('app.subscriptions.entitlements.datetime', Clock)
+
+
 def page(application, user=None, *, client=None, **args):
     client = client or application.test_client()
     if user: login(client,user)
-    with patch('app.main.routes.datetime',Clock):
+    with patch('app.main.routes.datetime',Clock),  patch('app.subscriptions.entitlements.datetime',Clock):
         return client.get('/business-overview',query_string=args or {
             'period':'custom','from':'2026-10-08','to':'2026-10-14'})
 

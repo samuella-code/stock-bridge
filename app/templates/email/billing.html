@@ -1,2 +1,8 @@
 {% extends 'email/base.html' %}
-{% block content %}<h1 style="font-size:23px;">Your StockBridge account</h1><p>Hi {{ name.split()[0] }},</p><p style="white-space:pre-line;">{{ message }}</p><p><a href="{{ link }}" style="display:inline-block;background:#126a43;color:#fff;padding:12px 20px;text-decoration:none;border-radius:6px;">Open StockBridge</a></p>{% endblock %}
+{% block content %}
+<div style="margin:0 0 14px;"><span style="display:inline-block;padding:5px 10px;border-radius:20px;background:#e8f0ff;color:#244f91;font-size:12px;font-weight:700;">ACCOUNT UPDATE</span></div>
+<h1 style="margin:0 0 14px;color:#17352b;font-size:25px;line-height:1.25;">Your StockBridge account</h1>
+<p style="margin:0 0 18px;">Hi {{ name.split()[0] if name else 'there' }}, here is an update about your plan and account.</p>
+<div style="margin:0 0 20px;padding:15px;background:#f8faf8;border:1px solid #e2ebe5;color:#29463b;white-space:pre-line;">{{ message }}</div>
+<p style="margin:0 0 20px;"><a href="{{ link }}" style="display:inline-block;min-height:44px;box-sizing:border-box;padding:13px 20px;border-radius:6px;background:#16764d;color:#ffffff;text-decoration:none;font-weight:700;">View my account</a></p>
+{% endblock %}

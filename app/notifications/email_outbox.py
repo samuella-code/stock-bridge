@@ -15,11 +15,13 @@ from app import email_service
 from app.notifications.staging_email_policy import policy, stamp_test_job
 
 worker_bp = Blueprint('inventory_email_worker', __name__)
-PREFERENCE_FIELDS = ('low_stock_email', 'out_of_stock_email', 'product_added', 'sales', 'restocking')
+PREFERENCE_FIELDS = ('low_stock_email', 'out_of_stock_email', 'product_added', 'sales', 'restocking', 'daily_summary_email', 'weekly_summary_email')
 
 
 def enabled(business_id, field):
     preference = db.session.get(NotificationPreference, business_id)
+    if field in ('daily_summary_email', 'weekly_summary_email'):
+        return preference is not None and bool(getattr(preference, field, False))
     return preference is None or bool(getattr(preference, field))
 
 
@@ -27,9 +29,30 @@ def valid_recipient(email):
     return bool(email and len(email) <= 180 and re.fullmatch(r'[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+', email))
 
 
+def daily_digest_replaces_low_stock(business_id, owner):
+    business = db.session.get(Business, business_id)
+    if (not business or not owner or business.suspended_at or owner.suspended_at
+            or not owner.email_verified_at or owner.role != 'user' or owner.admin_enabled
+            or owner.staff_only or not valid_recipient(owner.email)
+            or not current_app.config.get('CUSTOMER_SUMMARY_EMAILS_ENABLED')
+            or not enabled(business_id, 'daily_summary_email')):
+        return False
+    selected = policy()
+    if selected.mode == 'blocked' or (selected.mode == 'staging' and not selected.allows(owner.email)):
+        return False
+    try:
+        customer_origin()
+    except (ValueError, TypeError):
+        return False
+    return True
+
+
 def queue_alert(product, quantity, kind, event_key):
     business = db.session.get(Business, product.business_id)
     owner = db.session.get(User, business.user_id)
+    # Opting into the daily digest replaces individual low-stock emails; an out-of-stock alert remains immediate.
+    if kind == 'low_stock' and daily_digest_replaces_low_stock(business.id, owner):
+        return None
     if (not enabled(business.id, kind + '_email') or not owner.email_verified_at
             or owner.suspended_at or business.suspended_at or owner.role == 'admin'
             or not valid_recipient(owner.email)):
@@ -40,7 +63,7 @@ def queue_alert(product, quantity, kind, event_key):
         recipient_email=owner.email, event_type=kind, event_key=event_key,
         subject=f'{label} — {name} | StockBridge'[:240],
         max_attempts=max(1, min(10, current_app.config['INVENTORY_EMAIL_MAX_ATTEMPTS'])),
-        payload={'business_name': business.name, 'product_name': product.name,
+        payload={'business_name': business.name, 'product_id': product.id, 'product_name': product.name,
             'quantity': quantity, 'threshold': product.minimum_stock_level, 'unit': product.unit})
     stamp_test_job(row)
     db.session.add(row)
@@ -109,7 +132,7 @@ def queue_restock_alert(business_id, items, event_key):
     return row
 def customer_origin():
     # Explicit origin: VERCEL_ENV=production also describes staging-project deploys.
-    raw = current_app.config['INVENTORY_EMAIL_BASE_URL']
+    raw = (current_app.config.get('CUSTOMER_SUMMARY_EMAIL_BASE_URL') or current_app.config['INVENTORY_EMAIL_BASE_URL'])
     url = urlsplit(raw)
     if (url.scheme != 'https' or not url.hostname or url.username or url.password
             or url.query or url.fragment or url.path not in ('', '/') or url.port not in (None, 443)):
@@ -122,7 +145,7 @@ def eligible(now):
         and_(EmailOutbox.status == 'processing', EmailOutbox.claim_expires_at <= now))
 
 
-def claim(now=None, user_id=None, business_id=None):
+def claim(now=None, user_id=None, business_id=None, event_types=None):
     """PG SKIP LOCKED plus a guarded UPDATE; SQLite uses the same CAS guard."""
     now = now or datetime.utcnow()
     selected_policy = policy(now)
@@ -133,12 +156,16 @@ def claim(now=None, user_id=None, business_id=None):
     exhausted = update(EmailOutbox).where(*safety_conditions, eligible(now), EmailOutbox.attempt_count >= EmailOutbox.max_attempts)
     if user_id is not None:
         exhausted = exhausted.where(EmailOutbox.recipient_user_id == user_id, EmailOutbox.business_id == business_id)
+    if event_types:
+        exhausted = exhausted.where(EmailOutbox.event_type.in_(event_types))
     db.session.execute(exhausted.values(
             status='failed', claim_token=None, claim_expires_at=None,
             last_error='AttemptsExhausted', updated_at=now))
     query = EmailOutbox.query.filter(*safety_conditions, eligible(now), EmailOutbox.attempt_count < EmailOutbox.max_attempts)
     if user_id is not None:
         query = query.filter_by(recipient_user_id=user_id, business_id=business_id)
+    if event_types:
+        query = query.filter(EmailOutbox.event_type.in_(event_types))
     row = query.order_by(EmailOutbox.next_attempt_at, EmailOutbox.id).with_for_update(skip_locked=True).first()
     if row is None:
         db.session.commit()
@@ -162,8 +189,8 @@ def finish(row_id, token, status, now, **values):
     return result.rowcount == 1
 
 
-def dispatch_one(user_id=None, business_id=None, now=None):
-    if not current_app.config['INVENTORY_EMAILS_ENABLED']:
+def dispatch_one(user_id=None, business_id=None, now=None, event_types=None):
+    if not (current_app.config['INVENTORY_EMAILS_ENABLED'] or current_app.config.get('CUSTOMER_SUMMARY_EMAILS_ENABLED')):
         return 'disabled'
     if policy(now).mode == 'blocked':
         return 'disabled'
@@ -173,68 +200,100 @@ def dispatch_one(user_id=None, business_id=None, now=None):
     except (ValueError, TypeError):
         return 'configuration_required'
     now = now or datetime.utcnow()
-    lease = claim(now, user_id, business_id)
+    summary_only = not current_app.config['INVENTORY_EMAILS_ENABLED']
+    lease = claim(now, user_id, business_id,
+        event_types=event_types or (('daily_summary', 'weekly_summary') if summary_only else None))
     if lease is None:
         return 'idle'
     row_id, token = lease
     row = db.session.get(EmailOutbox, row_id)
     business = db.session.get(Business, row.business_id)
     owner = db.session.get(User, row.recipient_user_id)
-    if (not business or not owner or business.user_id != owner.id or owner.role == 'admin'
+    if (not business or not owner or business.user_id != owner.id or owner.role == 'admin' or owner.staff_only
             or owner.suspended_at or business.suspended_at or not owner.email_verified_at
             or owner.email != row.recipient_email or not valid_recipient(row.recipient_email)
-           or row.event_type not in ('low_stock', 'out_of_stock', 'restock_recorded')):
+           or row.event_type not in ('low_stock', 'out_of_stock', 'restock_recorded', 'daily_summary', 'weekly_summary')):
         finish(row_id, token, 'failed', now, last_error='RecipientUnavailable')
         return 'failed'
-    preference_field = (
-        'restocking' if row.event_type == 'restock_recorded'
-        else row.event_type + '_email'
-    )
+    preference_field = ({
+        'restock_recorded': 'restocking',
+        'daily_summary': 'daily_summary_email',
+        'weekly_summary': 'weekly_summary_email',
+    }.get(row.event_type, row.event_type + '_email'))
     if not enabled(row.business_id, preference_field):
         finish(row_id, token, 'suppressed', now, last_error=None)
         return 'suppressed'
     payload, subject, recipient = dict(row.payload), row.subject, row.recipient_email
     created_at = row.created_at
+    first_name = owner.full_name.split()[0] if owner.full_name and owner.full_name.split() else 'there'
     attempts, maximum, kind = row.attempt_count, row.max_attempts, row.event_type
+    if kind in ('daily_summary', 'weekly_summary') and not current_app.config.get('CUSTOMER_SUMMARY_EMAILS_ENABLED'):
+        finish(row_id, token, 'suppressed', now, last_error=None)
+        return 'suppressed'
     try:
-        if kind == 'restock_recorded':
+        if kind in ('daily_summary', 'weekly_summary'):
+            link = origin + f'/notifications/email/summary/{business.id}/' + ('daily' if kind == 'daily_summary' else 'weekly')
+            summary = payload
+            if kind == 'daily_summary':
+                body_lines = [f"- {item['name']}: {item['quantity']} {item['unit']} left" for item in summary['low_stock_products']]
+                body = (f"Hi {first_name},\n\n{summary['low_stock_count']} products need restocking in {summary['business_name']}.\n"
+                    + "\n".join(body_lines) + f"\n\nRestock these {summary['low_stock_count']} products: {link}\n\nStockBridge — Know your stock. Understand your profit.")
+                preheader = f"{summary['low_stock_count']} products need restocking in {summary['business_name']}."[:90]
+            else:
+                best = summary.get('best_seller')
+                low_lines = [f"- {item['name']}: {item['quantity']} {item['unit']} left" for item in summary['low_stock_products']]
+                body = (f"Hi {first_name},\n\nWeekly summary for {summary['business_name']} ({summary['period_label']}).\n"
+                    f"Sales: ₦{summary['sales']}\nCost of goods: ₦{summary['cost_of_goods']}\n"
+                    f"Expenses: ₦{summary['expenses']}\nKept: ₦{summary['kept']}\nUnits sold: {summary['units_sold']}\n"
+                    + (f"Best seller: {best['name']} ({best['quantity']} {best['unit']}{'' if best['quantity'] == 1 else 's'}).\n" if best else "")
+                    + (f"\nProducts needing restock:\n" + "\n".join(low_lines) + "\n" if low_lines else "")
+                    + f"\nView business overview: {link}\n\nStockBridge — Know your stock. Understand your profit.")
+                preheader = f"Your weekly numbers for {summary['business_name']} are ready."[:90]
+            email_reason = (
+                f"You get this email because daily restock summaries are on for {summary['business_name']}."
+                if kind == 'daily_summary' else
+                f"You get this email because weekly business summaries are on for {summary['business_name']}."
+            )
+            html = render_template('email/customer_summary.html', summary=summary, link=link,
+                first_name=first_name, preheader=preheader, email_reason=email_reason,
+                change_alerts_url=origin + '/profile/')
+        elif kind == 'restock_recorded':
             link = origin + '/restocking/'
             action = 'View Restocking'
             item_lines = [
-                f"- {item['name']}: +{item['quantity']} {item['unit']}"
+                f"- {item['name']}: +{item['quantity']} {item['unit']}{'' if item['quantity'] == 1 else 's'}"
                 for item in payload['items']
             ]
             body = (
-                f"Hello,\n\n{subject}\n"
+                f"Hi {first_name},\n\nYour stock has been replenished.\n"
                 f"Business: {payload['business_name']}\n\n"
-                "Products restocked:\n"
-                + "\n".join(item_lines)
-                + f"\n\n{action}: {link}\n"
-                f"Select {payload['business_name']} if another business is active.\n\n"
-                "StockBridge — Manage your business with confidence."
+                "Products restocked:\n" + "\n".join(item_lines)
+                + f"\n\nView Restocking: {link}\n\n"
+                "StockBridge — Know your stock. Understand your profit."
             )
             html = render_template(
                 'email/restock_alert.html',
                 alert=payload,
                 action=action,
                 link=link,
+                first_name=first_name,
+                preheader=f"Your stock has been replenished in {payload['business_name']}.",
+                email_reason=f"You get this email because restock reminders are on for {payload['business_name']}.",
+                change_alerts_url=origin + '/notifications/#notificationPreferences',
             )
         else:
-            link = origin + (
-                '/products/?view=inventory'
-                if kind == 'low_stock'
-                else '/restocking/'
+            product_link = (
+                f"{origin}/notifications/email/product/{business.id}/{payload['product_id']}"
             )
-            action = 'View Inventory' if kind == 'low_stock' else 'Restock Product'
+            link = product_link + ('?action=restock' if kind == 'low_stock' else '?action=restock')
+            action = f"Restock {payload['product_name']}" if kind == 'low_stock' else 'Restock now'
             body = (
-                f"Hello,\n\n{subject}\n"
-                f"Business: {payload['business_name']}\n"
-                f"Product: {payload['product_name']}\n"
-                f"Current stock: {payload['quantity']} {payload['unit']}\n"
-                f"Low-stock threshold: {payload['threshold']} {payload['unit']}\n\n"
-                f"{action}: {link}\n"
-                f"Select {payload['business_name']} if another business is active.\n\n"
-                "StockBridge — Manage your business with confidence."
+                f"Hi {first_name},\n\n{payload['product_name']} "
+                f"{'is running low' if kind == 'low_stock' else 'is out of stock'} in {payload['business_name']}.\n"
+                f"Left in stock: {payload['quantity']} {payload['unit']}{'' if payload['quantity'] == 1 else 's'}\n"
+                f"Alert level: {payload['threshold']} {payload['unit']}{'' if payload['threshold'] == 1 else 's'}\n\n"
+                f"{action}: {link}\n\n"
+                "StockBridge — Know your stock. Understand your profit."
             )
             html = render_template(
                 'email/inventory_alert.html',
@@ -242,6 +301,12 @@ def dispatch_one(user_id=None, business_id=None, now=None):
                 kind=kind,
                 action=action,
                 link=link,
+                first_name=first_name,
+                preheader=(f"Only {payload['quantity']} {payload['unit']}{'' if payload['quantity'] == 1 else 's'} left in {payload['business_name']}." if kind == 'low_stock' else f"{payload['product_name']} is out of stock in {payload['business_name']}.")[:90],
+                inventory_link=product_link,
+                email_reason=f"You get this email because {'low-stock' if kind == 'low_stock' else 'out-of-stock'} alerts are on for {payload['business_name']}.",
+                change_alerts_url=origin + '/notifications/#notificationPreferences',
+                summary_preference_url=(origin + '/notifications/#notificationPreferences' if kind == 'low_stock' else None),
             )
 
         db.session.commit()  # No database locks or open transaction during SMTP.
@@ -285,6 +350,28 @@ def dispatch():
     if len(secret) < 32 or not compare_digest(supplied.encode('utf-8'), ('Bearer ' + secret).encode('utf-8')):
         abort(404)
     response = jsonify(result=dispatch_one())
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+@worker_bp.post('/internal/customer-email-summaries/run')
+@csrf.exempt
+def run_customer_summaries():
+    """Bearer-authenticated scheduler entry point; drains summary jobs only."""
+    secret = current_app.config.get('CUSTOMER_SUMMARY_EMAIL_DISPATCH_SECRET', '')
+    supplied = request.headers.get('Authorization', '')
+    if (not isinstance(secret, str) or len(secret) < 32
+            or not compare_digest(supplied.encode('utf-8'), ('Bearer ' + secret).encode('utf-8'))):
+        abort(404)
+    if not current_app.config.get('CUSTOMER_SUMMARY_EMAILS_ENABLED'):
+        response = jsonify(queued=0, result='disabled')
+        response.headers['Cache-Control'] = 'no-store'
+        return response, 200
+    from app.notifications.summaries import queue_due_summaries
+    queued = queue_due_summaries()
+    # One SMTP delivery per HTTP invocation keeps serverless execution bounded.
+    result = dispatch_one(event_types=('daily_summary', 'weekly_summary'))
+    response = jsonify(queued=queued, result=result)
     response.headers['Cache-Control'] = 'no-store'
     return response
 

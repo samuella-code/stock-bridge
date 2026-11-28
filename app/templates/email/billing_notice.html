@@ -1,0 +1,35 @@
+{% extends 'email/base.html' %}
+{% block content %}
+<div style="margin:0 0 14px;">
+  <span style="display:inline-block;padding:5px 10px;border-radius:20px;background:{% if event_kind == 'renewal_failed' or event_kind == 'trial_expired' or event_kind == 'subscription_expired' %}#fff0ed;color:#9b3025{% elif event_kind == 'trial_ending' or event_kind == 'renewal_reminder' or event_kind == 'cancellation_scheduled' %}#fff4df;color:#87530b{% elif event_kind == 'subscription_paid' %}#e8f5ed;color:#17633f{% else %}#e8f0ff;color:#244f91{% endif %};font-size:12px;font-weight:700;">{{ status }}</span>
+</div>
+<h1 style="margin:0 0 14px;color:#17352b;font-size:25px;line-height:1.25;">{{ headline }}</h1>
+<p style="margin:0 0 18px;">Hi {{ name.split()[0] if name else 'there' }}, {{ message }}</p>
+
+{% if plan or amount or paid_on or paid_until or renewal_date or reference %}
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 20px;border:1px solid #e2ebe5;background:#f8faf8;border-collapse:collapse;">
+  {% if plan %}<tr><td style="padding:11px 13px;color:#60756b;font-size:13px;">Plan</td><td align="right" style="padding:11px 13px;color:#17352b;font-weight:600;">{{ plan }}{% if interval %} · {{ interval }}{% endif %}</td></tr>{% endif %}
+  {% if amount %}<tr><td style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#60756b;font-size:13px;">Amount</td><td align="right" style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#17352b;font-weight:600;">{{ amount }}</td></tr>{% endif %}
+  {% if renewal_date %}<tr><td style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#60756b;font-size:13px;">Renewal date</td><td align="right" style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#17352b;font-weight:600;">{{ renewal_date }}</td></tr>{% endif %}
+  {% if paid_on %}<tr><td style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#60756b;font-size:13px;">Paid on</td><td align="right" style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#17352b;font-weight:600;">{{ paid_on }}</td></tr>{% endif %}
+  {% if paid_until %}<tr><td style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#60756b;font-size:13px;">Paid until</td><td align="right" style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#17352b;font-weight:600;">{{ paid_until }}</td></tr>{% endif %}
+  {% if reference %}<tr><td style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#60756b;font-size:13px;">Reference</td><td align="right" style="padding:11px 13px;border-top:1px solid #e2ebe5;color:#17352b;font-weight:600;">{{ reference }}</td></tr>{% endif %}
+</table>
+{% endif %}
+
+{% if plan_prices %}
+<div style="margin:0 0 20px;padding:15px;background:#f8faf8;border:1px solid #e2ebe5;">
+  <p style="margin:0 0 10px;color:#17352b;font-weight:700;">Choose the plan that works for your business</p>
+  {% for plan_name, prices in plan_prices.items() %}
+  <p style="margin:0 0 7px;color:#29463b;font-size:14px;"><strong>{{ plan_name|title }}</strong> — {{ prices.monthly }} monthly · {{ prices.yearly }} yearly</p>
+  {% endfor %}
+  <p style="margin:10px 0 0;color:#60756b;font-size:12px;">Your trial does not automatically charge you.</p>
+</div>
+{% endif %}
+
+<p style="margin:0 0 14px;">
+  <a href="{{ link }}" style="display:inline-block;min-height:44px;box-sizing:border-box;padding:13px 20px;border-radius:6px;background:#16764d;color:#ffffff;text-decoration:none;font-weight:700;">{{ action_label }}</a>
+</p>
+{% if receipt_url %}<p style="margin:0 0 20px;"><a href="{{ receipt_url }}" style="color:#16764d;text-decoration:underline;">Download receipt PDF</a></p>{% endif %}
+{% if feedback_url %}<p style="margin:0 0 20px;"><a href="{{ feedback_url }}" style="color:#16764d;text-decoration:underline;">Tell us why you stopped (10 seconds)</a></p>{% endif %}
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Trial email preferences · StockBridge{% endblock %}
+{% block page_title %}Trial email preferences{% endblock %}
+{% block content %}
+<section class="dashboard-wrap">
+  <div class="sb-card">
+    {% if updated or already_stopped %}
+      <h2>Trial reminders are off</h2>
+      <p>We will no longer send trial-ending or trial-expired reminder emails to this address. Essential account and billing emails are unaffected.</p>
+    {% else %}
+      <h2>Stop trial reminder emails?</h2>
+      <p>This stops trial-ending and trial-expired reminder emails for your StockBridge account. Essential account and billing emails will still be sent.</p>
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="confirm" value="yes">
+        <button class="sb-button sb-button-primary" type="submit">Stop trial reminders</button>
+      </form>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

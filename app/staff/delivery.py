@@ -101,6 +101,7 @@ def deliver(identifier, raw, *, actor_id=None):
     try:
         html = current_app.jinja_env.get_template('email/staff_invitation.html').render(
             invitation_url=link,
+            preheader='You have been invited to join a StockBridge team. Review your private invitation.',
         )
     except Exception:
         # Rendering failed before SMTP was attempted.

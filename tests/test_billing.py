@@ -85,6 +85,7 @@ class FakeProvider:
         if path=='/transaction/initialize':return {'reference':payload['reference'],'authorization_url':'https://checkout.paystack.com/'+payload['reference']}
         if path.startswith('/transaction/verify/'):return self.verified(path.split('/')[-1])
         if path=='/subscription/disable':return {}
+        if path=='/subscription/enable':return {}
         if path=='/subscription':return {'subscription_code':'SUB_replacement'}
         if path.startswith('/subscription/'):return self.details(path.split('/')[-1])
         raise AssertionError(path)
@@ -342,9 +343,10 @@ def test_notifications_branded_once_and_not_at_startup(app,monkeypatch):
     from app.subscriptions.notifications import queue_due,deliver
     u,b=seed();start_trial(u);db.session.commit();a=db.session.get(AccountBilling,u.id)
     sent=[];monkeypatch.setattr('app.email_service._send_email',lambda *args,**kwargs:sent.append((args,kwargs)) or True)
-    queue_due(now=a.trial_ends_at-timedelta(days=1));assert deliver()==2 and deliver()==0
+    assert deliver()==0  # Trial-start events are internal, not customer email.
+    queue_due(now=a.trial_ends_at-timedelta(days=1));assert deliver(now=a.trial_ends_at-timedelta(days=1))==1 and deliver()==0
     assert 'Stock' in sent[0][1]['html'] and '7-day' in sent[0][1]['html']
-    queue_due(now=a.trial_ends_at+timedelta(seconds=1));assert deliver()==1
+    queue_due(now=a.trial_ends_at+timedelta(seconds=1));assert deliver(now=a.trial_ends_at+timedelta(seconds=1))==1
     queue_due(now=a.trial_ends_at+timedelta(seconds=1));assert deliver()==0
 
 
@@ -571,3 +573,253 @@ def test_old_lifetime_webhook_remains_honored_with_recurring_provider_disabled(c
     event={'event':'charge.success','data':{'reference':p.reference,'domain':'test','status':'success','amount':300000,'currency':'NGN','metadata':{'product':'stockbridge_lifetime','customer_email':u.email}}}
     assert webhook(client,event).status_code==200
     assert effective_access(u).kind=='legacy_lifetime' and db.session.get(AccountBilling,u.id).legacy_payment_id==p.id
+
+
+def test_trial_and_renewal_reminders_are_queued_once(app,fake):
+    from app.subscriptions import notifications
+    trial_user,trial_business=seed()
+    start_trial(trial_user)
+    paid_user,paid_business=seed('paid@example.com',eligible=False)
+    sub=purchase(paid_user,'plus','monthly')
+    now=datetime.utcnow()+timedelta(seconds=2)
+    account=db.session.get(AccountBilling,trial_user.id)
+    account.trial_started_at=now-timedelta(days=5)
+    account.trial_ends_at=now+timedelta(days=2)
+    sub.current_period_end=now+timedelta(days=3)
+    sub.next_renewal_at=sub.current_period_end
+    db.session.commit()
+
+    notifications.queue_due(now=now)
+    notifications.queue_due(now=now+timedelta(minutes=5))
+    assert BillingEvent.query.filter_by(user_id=trial_user.id,kind='trial_ending').count()==1
+    assert BillingEvent.query.filter_by(user_id=paid_user.id,kind='renewal_reminder').count()==1
+    reminder=BillingEvent.query.filter_by(user_id=paid_user.id,kind='renewal_reminder').one()
+    assert reminder.subscription_id==sub.id
+    assert 'Plus monthly' in reminder.message
+    assert '₦5,000.00' in reminder.message
+
+
+def test_trial_ending_uses_trial_email_and_stale_notices_are_suppressed(app,fake,monkeypatch):
+    from app.subscriptions import notifications
+    u,b=seed()
+    start_trial(u)
+    event=BillingEvent(event_key='mail-trial',user_id=u.id,kind='trial_ending',
+                       message='Your trial ends in 2 days.')
+    db.session.add(event);db.session.commit()
+    calls=[]
+    monkeypatch.setattr(notifications,'_transactional',
+        lambda *args,**kwargs: calls.append((args,kwargs)) or True)
+    assert notifications.deliver(limit=10)==1
+    assert calls[0][0][0]=='billing_notice'
+    assert calls[0][1]['event_kind']=='trial_ending'
+    assert calls[0][1]['action_label']=='Choose a plan'
+    assert calls[0][1]['stop_reminders_label']=='Stop trial reminders'
+    assert '/plans/trial-reminders/stop/' in calls[0][1]['stop_reminders_url']
+    from flask import render_template
+    trial_html=render_template('email/billing_notice.html',name=u.full_name,**calls[0][1])
+    assert 'Choose a plan' in trial_html and 'Basic' in trial_html and 'Plus' in trial_html
+    assert 'Stop trial reminders' in trial_html
+
+    stale=BillingEvent(event_key='stale-trial',user_id=u.id,kind='trial_ending',
+                       message='Old trial reminder.')
+    db.session.add(stale);db.session.commit()
+    sub=purchase(u,'basic','monthly')
+    assert notifications.deliver(limit=10)==1  # the paid checkout receipt is still due
+    assert stale.email_sent_at is None
+    assert calls[-1][1]['event_kind']=='subscription_paid'
+
+
+def test_billing_events_use_specific_email_templates_and_keep_claims(app,fake,monkeypatch):
+    from app.subscriptions import notifications
+    u,b=seed(eligible=False)
+    sub=purchase(u,'pro','yearly')
+    sub.status='past_due'
+    paid_event=BillingEvent.query.filter_by(user_id=u.id,kind='subscription_paid').one()
+    events=[
+        BillingEvent(event_key='mail-failed',user_id=u.id,kind='renewal_failed',
+                     message="We couldn't renew your plan.",subscription_id=sub.id),
+        paid_event,
+    ]
+    db.session.add(events[0]);db.session.commit()
+    calls=[]
+    monkeypatch.setattr(notifications,'_transactional',
+        lambda *args,**kwargs: calls.append((args,kwargs)) or True)
+
+    assert notifications.deliver(limit=10)==2
+    by_kind={kwargs['event_kind']:kwargs for args,kwargs in calls}
+    assert by_kind['renewal_failed']['action_label']=='Update payment method'
+    assert by_kind['subscription_paid']['headline']=='Thank you. Payment received.'
+    assert by_kind['subscription_paid']['plan']=='Pro'
+    assert by_kind['subscription_paid']['paid_until']==(sub.current_period_end+timedelta(hours=1)).strftime('%d/%m/%Y')
+    assert by_kind['subscription_paid']['receipt_url'].endswith('.pdf')
+    assert by_kind['subscription_paid']['paid_on']
+    assert by_kind['subscription_paid']['reference'] == Payment.query.filter_by(subscription_id=sub.id).one().reference[:8] + '…'
+    receipt_call=next(args for args,kwargs in calls if kwargs['event_kind']=='subscription_paid')
+    assert '\nReference:' in receipt_call[4] and '\\nReference:' not in receipt_call[4]
+    from flask import render_template
+    receipt_html=render_template('email/billing_notice.html',name=u.full_name,**by_kind['subscription_paid'])
+    assert 'PAYMENT RECEIVED' in receipt_html and 'View billing' in receipt_html
+    assert 'Download receipt PDF' in receipt_html
+    assert 'Paid on' in receipt_html and by_kind['subscription_paid']['reference'] in receipt_html
+    assert all(event.email_sent_at is not None for event in events)
+    assert notifications.deliver(limit=10)==0
+
+
+
+def test_billing_notice_delivery_retries_after_claim_lease_expires(app,fake,monkeypatch):
+    from app.subscriptions import notifications
+    user,_=seed()
+    start_trial(user)
+    now=datetime.utcnow()
+    event=BillingEvent(event_key='retry-trial-email',user_id=user.id,
+        kind='trial_ending',message='Your trial ends in 2 days.')
+    db.session.add(event);db.session.commit()
+    outcomes=iter((False,True))
+    monkeypatch.setattr(notifications,'_transactional',
+        lambda *args,**kwargs: next(outcomes))
+
+    assert notifications.deliver(now=now)==0
+    db.session.refresh(event)
+    assert event.email_sent_at is None and event.email_claimed_at==now
+    assert notifications.deliver(now=now+timedelta(minutes=4,seconds=59))==0
+    assert notifications.deliver(now=now+timedelta(minutes=5,seconds=1))==1
+    db.session.refresh(event)
+    assert event.email_sent_at is not None
+    # A sent notice must stay closed even after its original claim lease expires.
+    assert notifications.deliver(now=now+timedelta(minutes=10))==0
+    db.session.refresh(event)
+    assert event.email_sent_at is not None
+
+
+
+def test_payment_receipt_pdf_is_paid_business_scoped_and_downloadable(client,fake):
+    owner,business=seed(eligible=False)
+    subscription=purchase(owner,'plus','monthly')
+    payment=Payment.query.filter_by(subscription_id=subscription.id,status='success').one()
+    login(client,owner)
+
+    response=client.get(f'/plans/receipt/{payment.id}.pdf')
+    assert response.status_code==200
+    assert response.mimetype=='application/pdf'
+    assert response.data.startswith(b'%PDF')
+    assert 'stockbridge-receipt-' in response.headers['Content-Disposition']
+
+    other,_=seed('other@example.com',eligible=False)
+    login(client,other)
+    assert client.get(f'/plans/receipt/{payment.id}.pdf').status_code==404
+
+
+def test_lifetime_receipt_pdf_uses_business_ownership_for_legacy_payment(client):
+    owner,business=seed(eligible=False)
+    payment=legacy(owner,business)  # Historic lifetime rows may not have payment.user_id.
+    login(client,owner)
+    response=client.get(f'/plans/receipt/{payment.id}.pdf')
+    assert response.status_code==200 and response.data.startswith(b'%PDF')
+
+    pending=Payment(user_id=owner.id,business_id=business.id,customer_email=owner.email,
+        reference='pending-receipt',amount_kobo=300000,status='pending')
+    db.session.add(pending);db.session.commit()
+    assert client.get(f'/plans/receipt/{pending.id}.pdf').status_code==404
+
+
+def test_cancelled_subscription_can_be_restored_only_after_confirmation(client,fake):
+    user,business=seed(eligible=False)
+    subscription=purchase(user,'plus','monthly')
+    billing.cancel(user,subscription)
+    assert subscription.cancel_at_period_end
+    login(client,user)
+
+    preview=client.get(f'/plans/{subscription.id}/renewal/restore')
+    assert preview.status_code==200 and b'Confirm and turn renewal on' in preview.data
+    response=client.post(f'/plans/{subscription.id}/renewal/restore',data={'confirm':'yes'})
+    assert response.status_code==302
+    db.session.refresh(subscription)
+    assert not subscription.cancel_at_period_end and subscription.status=='active'
+    enabled_call=next(call for call in fake.calls if call[0]=='/subscription/enable')
+    assert enabled_call[2]['code']==subscription.provider_subscription_code
+    assert enabled_call[2]['token']=='fixture-token'
+
+
+def test_cancellation_feedback_is_private_and_idempotently_updated(client,fake):
+    user,business=seed(eligible=False)
+    subscription=purchase(user,'plus','monthly')
+    billing.cancel(user,subscription)
+    login(client,user)
+
+    page=client.get(f'/plans/{subscription.id}/feedback')
+    assert page.status_code==200 and b'10 seconds' in page.data
+    first=client.post(f'/plans/{subscription.id}/feedback',
+        data={'reason':'Too expensive','details':'Need a lower-cost plan.'})
+    assert first.status_code==302
+    event=BillingEvent.query.filter_by(event_key=f'cancellation-feedback:{subscription.id}').one()
+    assert event.kind=='cancellation_feedback' and 'Too expensive' in event.message
+    assert '\nDetails: Need a lower-cost plan.' in event.message
+    assert '\\nDetails:' not in event.message
+    client.post(f'/plans/{subscription.id}/feedback',data={'reason':'Missing a feature I need'})
+    assert BillingEvent.query.filter_by(event_key=f'cancellation-feedback:{subscription.id}').count()==1
+    assert 'Missing a feature I need' in event.message
+
+    other,_=seed('other@example.com',eligible=False)
+    login(client,other)
+    assert client.get(f'/plans/{subscription.id}/feedback').status_code==404
+
+
+def test_cancellation_email_has_plan_end_date_restore_and_feedback_links(app,fake,monkeypatch):
+    from app.subscriptions import notifications
+    user,business=seed(eligible=False)
+    subscription=purchase(user,'plus','monthly')
+    paid_event=BillingEvent.query.filter_by(user_id=user.id,kind='subscription_paid').one()
+    paid_event.email_sent_at=datetime.utcnow()
+    paid_event.email_claimed_at=datetime.utcnow()
+    billing.cancel(user,subscription)
+    event=BillingEvent.query.filter_by(user_id=user.id,kind='cancellation_scheduled').one()
+    calls=[]
+    monkeypatch.setattr(notifications,'_transactional',
+        lambda *args,**kwargs: calls.append((args,kwargs)) or True)
+
+    assert notifications.deliver(limit=10)==1
+    args,kwargs=calls[0]
+    assert kwargs['headline'].startswith('Your plan ends on ')
+    assert kwargs['status']=='RENEWAL OFF'
+    assert kwargs['action_label']=='Turn renewal back on'
+    assert kwargs['link'].endswith(f'/plans/{subscription.id}/renewal/restore')
+    assert kwargs['feedback_url'].endswith(f'/plans/{subscription.id}/feedback')
+    assert 'not be able to add new records' in kwargs['message']
+    from flask import render_template
+    html=render_template('email/billing_notice.html',name=user.full_name,**kwargs)
+    assert 'Tell us why you stopped (10 seconds)' in html
+    assert 'Turn renewal back on' in html
+
+
+def test_trial_reminder_optout_requires_confirmation_and_suppresses_future_notices(client,fake,monkeypatch):
+    from app.subscriptions import notifications
+    user,business=seed()
+    start_trial(user)
+    queued=BillingEvent(event_key='prequeued-trial-reminder',user_id=user.id,
+        kind='trial_ending',message='Your trial is ending.')
+    db.session.add(queued);db.session.commit()
+    calls=[]
+    monkeypatch.setattr(notifications,'_transactional',
+        lambda *args,**kwargs: calls.append((args,kwargs)) or True)
+    token=notifications.trial_reminder_stop_token(user)
+    path=f'/plans/trial-reminders/stop/{token}'
+
+    page=client.get(path)
+    assert page.status_code==200 and b'Stop trial reminders' in page.data
+    db.session.refresh(user)
+    assert user.trial_reminders_enabled  # Email scanners following GET cannot unsubscribe.
+
+    response=client.post(path,data={'confirm':'yes'})
+    assert response.status_code==200 and b'Trial reminders are off' in response.data
+    db.session.refresh(user)
+    assert not user.trial_reminders_enabled
+    assert notifications.deliver()==0 and calls==[]
+    db.session.refresh(queued)
+    assert queued.email_sent_at is None
+
+    account=db.session.get(AccountBilling,user.id)
+    account.trial_ends_at=datetime.utcnow()+timedelta(days=1)
+    db.session.commit()
+    notifications.queue_due(now=datetime.utcnow())
+    assert BillingEvent.query.filter_by(event_key=f'trial-ending:{user.id}').count()==0
+    assert BillingEvent.query.filter_by(user_id=user.id,kind='trial_expired').count()==0

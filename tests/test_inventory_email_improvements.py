@@ -44,7 +44,7 @@ def queued(app):
 def test_threshold_snapshot_owner_and_atomic_sale(app):
     client, owner, business, p, row = queued(app)
     assert (row.recipient_user_id, row.recipient_email, row.business_id) == (owner.id, owner.email, business.id)
-    assert row.payload == dict(business_name=business.name, product_name='Coke', quantity=5, threshold=5, unit='bottles')
+    assert row.payload == dict(business_name=business.name, product_id=p.id, product_name='Coke', quantity=5, threshold=5, unit='bottles')
     assert row.event_type == 'low_stock' and 'Coke' in row.subject
     assert Sale.query.count() == 1 and db.session.get(Product, p.id).stock_quantity == 5
     assert row.event_key == Notification.query.filter_by(kind='low_stock').one().event_key
@@ -365,7 +365,8 @@ def test_staging_links_escaping_plain_text_and_no_ids(app,monkeypatch):
     sent=[];monkeypatch.setattr('app.email_service._send_email',lambda *a,**k:sent.append((a,k)) or True)
     assert dispatch_one()=='sent'
     args,kwargs=sent[0]
-    assert 'https://stock-bridge-staging.vercel.app/products/?view=inventory' in args[2]
+    assert f'https://stock-bridge-staging.vercel.app/notifications/email/product/{shops[0].id}/{p.id}?action=restock' in args[2]
+    assert f'href="https://stock-bridge-staging.vercel.app/notifications/email/product/{shops[0].id}/{p.id}"' in kwargs['html']
     assert '&lt;b&gt;Drink&lt;/b&gt;' in kwargs['html'] and '<script>Business' not in kwargs['html']
     assert '&lt;script&gt;Business&lt;/script&gt;' in kwargs['html']
     assert 'event_key' not in kwargs['html'] and 'business_id' not in kwargs['html']
@@ -619,3 +620,30 @@ def test_postgres_migration_and_locking_sql_compile_only(app):
     assert 'DROP TABLE' not in sql
     query=EmailOutbox.query.filter(eligible(datetime.utcnow())).with_for_update(skip_locked=True)
     assert 'FOR UPDATE SKIP LOCKED' in str(query.statement.compile(dialect=postgresql.dialect()))
+
+
+def test_email_product_link_restores_owned_business_and_prefills_restock(app):
+    client, owner, shops = setup(app, 2)
+    first_product = product(client, 'First shop item')
+    client.post(f'/businesses/{shops[1].id}/switch')
+    second_product = product(client, 'Second shop item')
+
+    response = client.get(
+        f'/notifications/email/product/{shops[0].id}/{first_product.id}?action=restock'
+    )
+
+    assert response.status_code == 302
+    assert response.location.endswith(f'/restocking/?product_id={first_product.id}')
+    with client.session_transaction() as state:
+        assert state.get('active_business_id') == shops[0].id
+
+
+def test_email_product_link_rejects_another_owners_business(app):
+    client, _, shops = setup(app)
+    p = product(client, 'Private item')
+    other, _ = seed('basic', email='another-owner@example.invalid')
+    login(client, other)
+
+    response = client.get(f'/notifications/email/product/{shops[0].id}/{p.id}')
+
+    assert response.status_code == 404

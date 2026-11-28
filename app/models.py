@@ -4,6 +4,7 @@ from werkzeug.security import check_password_hash,generate_password_hash
 from app import db,login_manager
 class User(UserMixin,db.Model):
  staff_only=db.Column(db.Boolean,nullable=False,default=False,server_default="false")
+ trial_reminders_enabled=db.Column(db.Boolean,nullable=False,default=True,server_default="true")
  id=db.Column(db.Integer,primary_key=True); full_name=db.Column(db.String(120),nullable=False); email=db.Column(db.String(180),unique=True,nullable=False,index=True); password_hash=db.Column(db.String(255),nullable=False); created_at=db.Column(db.DateTime,default=datetime.utcnow,nullable=False); email_verified_at=db.Column(db.DateTime); verification_sent_at=db.Column(db.DateTime); role=db.Column(db.String(20),nullable=False,default="user"); admin_enabled=db.Column(db.Boolean,nullable=False,default=False,server_default="false"); admin_auth_version=db.Column(db.Integer,nullable=False,default=0,server_default="0"); suspended_at=db.Column(db.DateTime); last_activity_at=db.Column(db.DateTime)
  businesses=db.relationship("Business",backref="owner",lazy=True,cascade="all, delete-orphan")
  def set_password(self,p): self.password_hash=generate_password_hash(p)
@@ -259,6 +260,8 @@ class NotificationPreference(db.Model):
     product_added = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
     sales = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
     restocking = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
+    daily_summary_email = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    weekly_summary_email = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
 
 
 class EmailOutbox(db.Model):

@@ -17,6 +17,9 @@ def sales_clock(monkeypatch):
         @classmethod
         def utcnow(cls): return NOW
     monkeypatch.setattr('app.staff.sales_access.datetime', Clock)
+    # Keep the app-wide paid-access gate on the same fixed instant as the
+    # owner-lock tests; the synthetic Pro subscription ends NOW + 30 days.
+    monkeypatch.setattr('app.subscriptions.entitlements.datetime', Clock)
     monkeypatch.setattr('app.staff.sales_routes.datetime', Clock)
     monkeypatch.setattr('app.sales.ledger.datetime', Clock)
 

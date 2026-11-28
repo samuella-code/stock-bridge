@@ -91,6 +91,9 @@ class Config:
 
  # Inventory email dispatch is deliberately off until environment-specific setup.
  INVENTORY_EMAILS_ENABLED=os.getenv('INVENTORY_EMAILS_ENABLED', 'false').lower()=='true'
+ CUSTOMER_SUMMARY_EMAILS_ENABLED=os.getenv('CUSTOMER_SUMMARY_EMAILS_ENABLED', 'false').lower()=='true'
+ CUSTOMER_SUMMARY_EMAIL_BASE_URL=os.getenv('CUSTOMER_SUMMARY_EMAIL_BASE_URL', '')
+ CUSTOMER_SUMMARY_EMAIL_DISPATCH_SECRET=os.getenv('CUSTOMER_SUMMARY_EMAIL_DISPATCH_SECRET', '')
  # Independent, opt-in admin reporting. Never inherits inventory/staff delivery flags.
  ADMIN_REPORT_EMAILS_ENABLED=os.getenv('ADMIN_REPORT_EMAILS_ENABLED', '')
  ADMIN_REPORT_EMAILS_APPROVED_SHA=os.getenv('ADMIN_REPORT_EMAILS_APPROVED_SHA', '')
@@ -122,3 +125,12 @@ class Config:
  STAGING_INVENTORY_EMAIL_TEST_RUN_ID=os.getenv('STAGING_INVENTORY_EMAIL_TEST_RUN_ID', '')
  STAGING_INVENTORY_EMAIL_TEST_RECIPIENTS=os.getenv('STAGING_INVENTORY_EMAIL_TEST_RECIPIENTS', '')
  STAGING_INVENTORY_EMAIL_TEST_STARTED_AT=os.getenv('STAGING_INVENTORY_EMAIL_TEST_STARTED_AT', '')
+
+ # Optional customer-email footer destinations. Blank values are omitted from emails.
+ EMAIL_HELP_CENTRE_URL=os.getenv("EMAIL_HELP_CENTRE_URL", "")
+ EMAIL_WHATSAPP_URL=os.getenv("EMAIL_WHATSAPP_URL", "")
+ EMAIL_WHATSAPP_LABEL=os.getenv("EMAIL_WHATSAPP_LABEL", "")
+ EMAIL_COMPANY_ADDRESS=os.getenv("EMAIL_COMPANY_ADDRESS", "")
+ EMAIL_PRIVACY_URL=os.getenv("EMAIL_PRIVACY_URL", "")
+ EMAIL_TERMS_URL=os.getenv("EMAIL_TERMS_URL", "")
+ STOCKBRIDGE_COMPANY_NAME=os.getenv("STOCKBRIDGE_COMPANY_NAME", "StockBridge")

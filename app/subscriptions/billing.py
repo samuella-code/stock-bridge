@@ -2,7 +2,7 @@
 import hashlib
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 from sqlalchemy import update
 from app import db
@@ -181,8 +181,11 @@ def confirm_payment(sub,payment,data,period=None,details=None):
     notice(user.id,receipt_key,'provider_event',
         json.dumps([start.isoformat(),end.isoformat()],separators=(',', ':')),sub.id)
     payment.status='success';payment.paid_at=paid_at
+    paid_at_wat = (paid_at + timedelta(hours=1)).strftime('%d/%m/%Y %H:%M WAT')
+    paid_until_wat = (end + __import__('datetime').timedelta(hours=1)).strftime('%d/%m/%Y')
+    amount_naira = f'₦{payment.amount_kobo / 100:,.2f}'
     notice(user.id,'payment:'+payment.reference,'subscription_paid',
-        f'Your StockBridge {sub.plan_code.title()} {sub.billing_interval} payment is verified. Paid access ends {end:%d %b %Y}.',sub.id)
+        f'Your StockBridge {sub.plan_code.title()} {sub.billing_interval} payment was received. Amount: {amount_naira}. Paid on: {paid_at_wat}. Paid access until: {paid_until_wat}.',sub.id)
     return True
 
 
@@ -219,6 +222,34 @@ def cancel(user,sub):
     fallback=' Your existing account access will remain available.' if account and account.legacy_granted_at else ' Your data will remain available in read-only mode.'
     notice(user.id,'cancel:'+sub.provider_subscription_code,'cancellation_scheduled',
         ('Your scheduled subscription was cancelled before its start.' if scheduled else f'Renewal is stopped. Paid access continues until {sub.current_period_end:%d %b %Y}.')+fallback,sub.id)
+    db.session.commit()
+
+
+def enable(user, sub):
+    """Restore an owner's cancelled renewal after an explicit in-app confirmation."""
+    lock_account(user.id)
+    db.session.refresh(sub)
+    if sub.user_id != user.id:
+        raise ValueError('This subscription does not belong to your account.')
+    if not sub.provider_subscription_code or not sub.cancel_at_period_end:
+        raise ValueError('This subscription does not have a pending renewal cancellation.')
+    if not sub.current_period_end or sub.current_period_end <= datetime.utcnow():
+        raise ValueError('This paid period has ended. Choose a new plan to restart access.')
+    details = subscription_details(sub)
+    token = details.get('email_token')
+    if not token:
+        raise ValueError('The subscription cannot be re-enabled safely. Contact support.')
+    provider.call('/subscription/enable', 'POST', {
+        'code': sub.provider_subscription_code,
+        'token': token,
+    })
+    sub.cancel_at_period_end = False
+    sub.cancelled_at = None
+    sub.status = 'active'
+    notice(user.id, f'renewal-restored:{sub.id}:{sub.current_period_end.isoformat()}',
+        'renewal_restored',
+        f'Renewal is back on for your {sub.plan_code.title()} {sub.billing_interval} plan.',
+        sub.id)
     db.session.commit()
 
 
