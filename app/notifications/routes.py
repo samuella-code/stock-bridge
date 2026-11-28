@@ -1,9 +1,10 @@
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, abort
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, abort, session
 from flask_login import current_user, login_required
 from app import db
-from app.models import Notification, NotificationPreference
+from app.models import Business, Product, Notification, NotificationPreference
 from app.subscriptions.entitlements import selected_business
+from app.businesses.service import accessible_business
 from app.notifications.service import destination
 from app.notifications.email_outbox import PREFERENCE_FIELDS, dispatch_one
 
@@ -79,6 +80,21 @@ def open_notification(notification_id):
     if request.accept_mimetypes.best == 'application/json':
         return jsonify(destination=target, unread_count=scoped().filter(Notification.read_at.is_(None)).count())
     return redirect(target)
+
+
+@notifications_bp.get('/email/product/<int:business_id>/<int:product_id>')
+@login_required
+def email_product_link(business_id, product_id):
+    """Restore the owning business before opening the product's restocking form."""
+    business = Business.query.filter_by(id=business_id, user_id=current_user.id).first()
+    product = Product.query.filter_by(
+        id=product_id, business_id=business_id, active=True
+    ).first()
+    if business is None or product is None or not accessible_business(current_user, business):
+        abort(404)
+
+    session['active_business_id'] = business.id
+    return redirect(url_for('restocking.index', product_id=product.id))
 
 
 @notifications_bp.post('/email-dispatch')

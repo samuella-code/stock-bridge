@@ -44,7 +44,7 @@ def queued(app):
 def test_threshold_snapshot_owner_and_atomic_sale(app):
     client, owner, business, p, row = queued(app)
     assert (row.recipient_user_id, row.recipient_email, row.business_id) == (owner.id, owner.email, business.id)
-    assert row.payload == dict(business_name=business.name, product_name='Coke', quantity=5, threshold=5, unit='bottles')
+    assert row.payload == dict(business_name=business.name, product_id=p.id, product_name='Coke', quantity=5, threshold=5, unit='bottles')
     assert row.event_type == 'low_stock' and 'Coke' in row.subject
     assert Sale.query.count() == 1 and db.session.get(Product, p.id).stock_quantity == 5
     assert row.event_key == Notification.query.filter_by(kind='low_stock').one().event_key
@@ -365,7 +365,12 @@ def test_staging_links_escaping_plain_text_and_no_ids(app,monkeypatch):
     sent=[];monkeypatch.setattr('app.email_service._send_email',lambda *a,**k:sent.append((a,k)) or True)
     assert dispatch_one()=='sent'
     args,kwargs=sent[0]
-    assert 'https://stock-bridge-staging.vercel.app/products/?view=inventory' in args[2]
+    expected_link = (
+        f'https://stock-bridge-staging.vercel.app/notifications/email/product/'
+        f'{shops[0].id}/{p.id}?action=restock'
+    )
+    assert expected_link in args[2]
+    assert expected_link.replace('&', '&amp;') in kwargs['html']
     assert '&lt;b&gt;Drink&lt;/b&gt;' in kwargs['html'] and '<script>Business' not in kwargs['html']
     assert '&lt;script&gt;Business&lt;/script&gt;' in kwargs['html']
     assert 'event_key' not in kwargs['html'] and 'business_id' not in kwargs['html']
