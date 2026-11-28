@@ -347,8 +347,25 @@ def run_customer_summaries():
         return response, 200
     from app.notifications.summaries import queue_due_summaries
     queued = queue_due_summaries()
-    result = dispatch_one(event_types=('daily_summary', 'weekly_summary'))
-    response = jsonify(queued=queued, result=result)
+    # Bound each invocation so a scheduler cannot monopolize a worker.
+    # Every claim remains a summary-only outbox claim with the normal lease,
+    # retry, recipient and preference checks.
+    dispatched = 0
+    result = 'idle'
+    for attempt in range(25):
+        result = dispatch_one(event_types=('daily_summary', 'weekly_summary'))
+        if result == 'sent':
+            dispatched += 1
+            continue
+        if result == 'suppressed':
+            continue
+        if result in ('idle', 'disabled', 'configuration_required'):
+            break
+        # A failed/retrying item does not block later due summaries, but
+        # still consumes one slot in this bounded batch.
+    else:
+        result = 'batch_limit'
+    response = jsonify(queued=queued, dispatched=dispatched, result=result)
     response.headers['Cache-Control'] = 'no-store'
     return response
 
