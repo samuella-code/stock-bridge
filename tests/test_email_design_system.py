@@ -170,3 +170,26 @@ def test_inventory_email_footer_can_link_to_alert_settings_and_daily_summary(app
     assert "Change alerts" in html
     assert "Send me one daily summary instead" in html
     assert "low-stock alerts are on for Shop" in html
+
+
+def test_payment_success_email_displays_complete_payment_reference(app):
+    from types import SimpleNamespace
+    from flask import render_template
+
+    reference = "SBS-1234567890-FULL-REFERENCE"
+    payment = SimpleNamespace(currency="NGN", reference=reference)
+    business = SimpleNamespace(name="Sample Business")
+
+    with app.app_context():
+        html = render_template(
+            "email/payment_success.html",
+            name="Amina Yusuf",
+            business=business,
+            payment=payment,
+            amount="₦3,000.00",
+            paid_at="26/11/2026 12:00 UTC",
+            link="https://example.test/billing",
+        )
+
+    assert reference in html
+    assert "SBS-123456…" not in html
