@@ -84,3 +84,35 @@ def test_email_product_link_rejects_product_from_different_business(app):
         f'/notifications/email/product/{businesses[0].id}/{item.id}?action=restock'
     )
     assert response.status_code == 404
+
+
+def test_legacy_inventory_email_without_product_id_still_sends(app, monkeypatch):
+    app.config.update(
+        INVENTORY_EMAILS_ENABLED=True,
+        INVENTORY_EMAIL_BASE_URL='https://stock-bridge-staging.vercel.app',
+        INVENTORY_EMAIL_MAX_ATTEMPTS=3,
+    )
+    from app.notifications.staging_email_policy import Policy
+    monkeypatch.setattr('app.notifications.staging_email_policy.policy', lambda now=None: Policy('production'))
+    monkeypatch.setattr('app.notifications.email_outbox.policy', lambda now=None: Policy('production'))
+    client, _, _ = setup(app)
+    item = product(client, 'Legacy coffee')
+    sale(client, item, 3)
+
+    queued = EmailOutbox.query.filter_by(event_type='low_stock').one()
+    legacy_payload = dict(queued.payload)
+    legacy_payload.pop('product_id', None)
+    queued.payload = legacy_payload
+    db.session.commit()
+
+    sent = []
+    monkeypatch.setattr(
+        'app.email_service._send_email',
+        lambda *args, **kwargs: sent.append((args, kwargs)) or True,
+    )
+
+    from app.notifications.email_outbox import dispatch_one
+    assert dispatch_one() == 'sent'
+    assert len(sent) == 1
+    assert 'https://stock-bridge-staging.vercel.app/products/?view=inventory' in sent[0][0][2]
+    assert 'View Inventory' in sent[0][0][1]
