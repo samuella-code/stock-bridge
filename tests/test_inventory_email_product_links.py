@@ -78,6 +78,7 @@ def test_email_product_link_rejects_inactive_product(app):
 
 def test_email_product_link_rejects_product_from_different_business(app):
     client, _, businesses = setup(app, 2)
+    client.post(f'/businesses/{businesses[1].id}/switch')
     item = product(client, 'Second shop item')
     response = client.get(
         f'/notifications/email/product/{businesses[0].id}/{item.id}?action=restock'
