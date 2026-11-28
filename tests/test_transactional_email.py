@@ -58,7 +58,10 @@ def test_verification_resend_and_welcome_only_on_first_verification(app, message
     with app.test_request_context("/"):
         user = db.session.get(User, user_id)
         assert send_verification_email(user)
-        token = verification_token(user.email)
+        plain = messages[0].get_body(preferencelist=("plain",)).get_content()
+        verify_url = next(line.strip() for line in plain.splitlines()
+                          if "/auth/verify/" in line)
+        token = verify_url.rsplit("/", 1)[-1]
     assert messages[0]["From"] == "StockBridge <sender@example.test>"
     assert messages[0].get_body(preferencelist=("html",)) is not None
     assert "expires in 24 hours" in messages[0].get_body(preferencelist=("plain",)).get_content()
@@ -115,8 +118,10 @@ def test_verified_webhook_and_callback_send_only_one_receipt(app, messages, monk
     assert client.get("/payments/callback?reference=SB-receipt").status_code == 302
     assert len(messages) == 1
     plain = messages[0].get_body(preferencelist=("plain",)).get_content()
-    assert "₦3,000.00" in plain and "NGN" in plain and "SB-receipt" in plain
+    assert "₦3,000.00" in plain and "NGN" in plain and "SB-recei…" in plain
     assert "One-time payment. No subscription. No recurring charges." in plain
+    assert "Download receipt PDF:" in plain and "/plans/receipt/" in plain
+    assert "Download receipt PDF" in messages[0].get_body(preferencelist=("html",)).get_content()
     with app.app_context():
         assert Business.query.one().has_write_access
         assert Payment.query.one().receipt_email_sent_at

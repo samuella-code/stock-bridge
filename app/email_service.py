@@ -43,9 +43,20 @@ def _send_email(subject, recipient, body, html=None, *, timeout=15):
         current_app.logger.warning("SMTP sender is not configured; transactional email was not sent.")
         return False
     message = EmailMessage()
+    # Keep the customer-facing sender identity stable in every environment.
+    # Staging is identified in the subject, never by changing the sender name.
+    # Every Vercel preview is non-production, regardless of its feature-branch
+    # name. Also mark the staging project's production deployment explicitly.
+    # VERCEL_PROJECT_ID is a public project identifier, not a credential.
+    staging = (
+        os.getenv("VERCEL_ENV") == "preview"
+        or os.getenv("VERCEL_PROJECT_ID") == "prj_yeCWXPd44jShVUGHAgJu9khMjOMv"
+    )
+    if staging and not subject.startswith("[STAGING]"):
+        subject = "[STAGING] " + subject
     message["Subject"] = subject
     message["From"] = formataddr((
-        current_app.config["SMTP_FROM_NAME"],
+        "StockBridge",
         current_app.config["SMTP_FROM_EMAIL"],
     ))
     message["To"] = recipient
@@ -78,6 +89,18 @@ def _send_email(subject, recipient, body, html=None, *, timeout=15):
 
 
 def _transactional(template, subject, recipient, name, body, **context):
+    """Render every transactional customer email through the shared shell."""
+    preheaders = {
+        "verify": "Confirm your email to start your StockBridge trial. No card needed.",
+        "welcome": "Your StockBridge account is ready. Add products, record a sale and understand profit.",
+        "billing": "An update about your StockBridge account and plan.",
+        "password_reset": "Use the secure link to reset your StockBridge password.",
+        "password_changed": "Your StockBridge password was changed.",
+        "payment_success": "Your StockBridge payment was received and access is active.",
+        "account_status": "An important update about your StockBridge account.",
+        "staff_invitation": "You have been invited to join a StockBridge team.",
+    }
+    context.setdefault("preheader", preheaders.get(template, "An update from StockBridge."))
     html = render_template(f"email/{template}.html", name=name, **context)
     return _send_email(subject, recipient, body, html=html)
 
@@ -109,15 +132,17 @@ def send_welcome_email(user):
 
 def send_payment_success_email(user, business, payment):
     link = customer_url("main.dashboard")
-    paid_at = payment.paid_at.strftime("%d %b %Y %H:%M UTC")
+    receipt_url = customer_url("subscriptions.receipt", payment_id=payment.id)
+    paid_at = (payment.paid_at + timedelta(hours=1)).strftime("%d/%m/%Y %H:%M WAT")
     amount = f"₦{payment.amount_kobo / 100:,.2f}"
     body = (f"Hi {user.full_name.split()[0]},\n\nPayment successful. Your StockBridge Lifetime Access is active.\n"
-            f"Business: {business.name}\nAmount: {amount} ({payment.currency})\nReference: {payment.reference}\n"
+            f"Business: {business.name}\nAmount: {amount} ({payment.currency})\nReference: {payment.reference[:8]}…\n"
             f"Paid: {paid_at}\nAccess: Lifetime Access\nStatus: Active\n\n"
-            f"Open StockBridge: {link}\n\nOne-time payment. No subscription. No recurring charges.")
+            f"Open StockBridge: {link}\nDownload receipt PDF: {receipt_url}\n\n"
+            "One-time payment. No subscription. No recurring charges.")
     return _transactional("payment_success", "Your StockBridge Lifetime Access is active", user.email,
-                          user.full_name, body, link=link, business=business, payment=payment,
-                          amount=amount, paid_at=paid_at)
+                          user.full_name, body, link=link, receipt_url=receipt_url,
+                          business=business, payment=payment, amount=amount, paid_at=paid_at)
 
 
 def send_account_status_email(user, *, active, business=None):
