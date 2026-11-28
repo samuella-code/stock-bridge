@@ -144,6 +144,7 @@ def test_summary_scheduler_endpoint_requires_bearer_and_only_dispatches_summarie
     _summary_preferences(business)
     item = product(client, 'Coffee')
     sale(client, item, 3)
+    _backdate_activity_to_previous_week(business.id)
     app.config.update(
         CUSTOMER_SUMMARY_EMAILS_ENABLED=True,
         CUSTOMER_SUMMARY_EMAIL_DISPATCH_SECRET='summary-worker-secret-' + 'x' * 32,
@@ -190,6 +191,7 @@ def test_disabling_summary_preference_after_queue_suppresses_delivery(app, monke
     _summary_preferences(business)
     item = product(client, 'Coffee')
     sale(client, item, 3)
+    _backdate_activity_to_previous_week(business.id)
     assert queue_due_summaries() == 2
 
     preference = db.session.get(NotificationPreference, business.id)
