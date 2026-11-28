@@ -217,18 +217,18 @@ def dispatch_one(user_id=None, business_id=None, now=None, event_types=None):
             first_name = owner.full_name.split()[0] if owner.full_name and owner.full_name.split() else 'there'
             if kind == 'daily_summary':
                 body_lines = [f"- {item['name']}: {item['quantity']} {item['unit']} left" for item in summary['low_stock_products']]
-                body = (f"Hi {first_name},\\n\\n{summary['low_stock_count']} products need restocking in {summary['business_name']}.\\n"
-                    + "\\n".join(body_lines) + f"\\n\\nRestock these products: {link}\\n\\nStockBridge — Know your stock. Understand your profit.")
+                body = (f"Hi {first_name},\n\n{summary['low_stock_count']} products need restocking in {summary['business_name']}.\n"
+                    + "\n".join(body_lines) + f"\n\nRestock these products: {link}\n\nStockBridge — Know your stock. Understand your profit.")
                 preheader = f"{summary['low_stock_count']} products need restocking in {summary['business_name']}."[:90]
             else:
                 best = summary.get('best_seller')
                 low_lines = [f"- {item['name']}: {item['quantity']} {item['unit']} left" for item in summary['low_stock_products']]
-                body = (f"Hi {first_name},\\n\\nWeekly summary for {summary['business_name']} ({summary['period_label']}).\\n"
-                    f"Sales: ₦{summary['sales']}\\nCost of goods: ₦{summary['cost_of_goods']}\\n"
-                    f"Expenses: ₦{summary['expenses']}\\nKept: ₦{summary['kept']}\\nUnits sold: {summary['units_sold']}\\n"
-                    + (f"Best seller: {best['name']} ({best['quantity']} {best['unit']}).\\n" if best else "")
-                    + ("\\nProducts needing restock:\\n" + "\\n".join(low_lines) + "\\n" if low_lines else "")
-                    + f"\\nView business overview: {link}\\n\\nStockBridge — Know your stock. Understand your profit.")
+                body = (f"Hi {first_name},\n\nWeekly summary for {summary['business_name']} ({summary['period_label']}).\n"
+                    f"Sales: ₦{summary['sales']}\nCost of goods: ₦{summary['cost_of_goods']}\n"
+                    f"Expenses: ₦{summary['expenses']}\nKept: ₦{summary['kept']}\nUnits sold: {summary['units_sold']}\n"
+                    + (f"Best seller: {best['name']} ({best['quantity']} {best['unit']}).\n" if best else "")
+                    + ("\nProducts needing restock:\n" + "\n".join(low_lines) + "\n" if low_lines else "")
+                    + f"\nView business overview: {link}\n\nStockBridge — Know your stock. Understand your profit.")
                 preheader = f"Your weekly numbers for {summary['business_name']} are ready."[:90]
             email_reason = (f"You get this email because daily restock summaries are on for {summary['business_name']}."
                 if kind == 'daily_summary' else f"You get this email because weekly business summaries are on for {summary['business_name']}.")
