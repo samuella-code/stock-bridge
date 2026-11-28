@@ -58,6 +58,9 @@ class Config:
  SMTP_FROM_NAME=os.getenv("SMTP_FROM_NAME","StockBridge")
  SMTP_USE_TLS=os.getenv("SMTP_USE_TLS","true").lower()=="true"
 
+ # Non-production recurring billing email delivery is restricted to this explicit allowlist.
+ STAGING_BILLING_EMAIL_ALLOWED_RECIPIENTS=os.getenv('STAGING_BILLING_EMAIL_ALLOWED_RECIPIENTS', '')
+
  # Off until billing migration/configuration has been reviewed and approved.
  SUBSCRIPTIONS_ENABLED=os.getenv("SUBSCRIPTIONS_ENABLED","false").lower()=="true"
  BILLING_PROVIDER_ENABLED=os.getenv("BILLING_PROVIDER_ENABLED","false").lower()=="true"
