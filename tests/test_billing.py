@@ -221,6 +221,34 @@ def test_renewal_duplicates_out_of_order_and_failure(client,fake):
     assert s.current_period_end==end and BillingEvent.query.filter_by(kind='renewal_failed').count()==1
 
 
+def test_recurring_renewal_success_creates_distinct_notice(client,fake):
+    u,b=seed(eligible=False);s=purchase(u);start=s.current_period_end;end=start+timedelta(days=28)
+    tx=fake.verified(s.checkout_reference);tx.update(reference='renewal-success',paid_at=iso(start),metadata={})
+    fake.transactions['renewal-success']=tx
+    event=renewal_event(s,'renewal-success',start,end)
+    assert webhook(client,event).status_code==200
+    assert BillingEvent.query.filter_by(kind='subscription_paid').count()==1
+    renewal=BillingEvent.query.filter_by(kind='renewal_succeeded').one()
+    assert 'recurring renewal payment' in renewal.message and '₦' in renewal.message
+
+
+def test_upcoming_renewal_reminder_is_idempotent_and_event_specific(app,fake,monkeypatch):
+    from app.subscriptions.notifications import queue_due,deliver
+    u,b=seed(eligible=False);s=purchase(u)
+    initial=BillingEvent.query.filter_by(kind='subscription_paid').one()
+    initial.email_claimed_at=datetime.utcnow();db.session.commit()
+    now=s.current_period_end-timedelta(days=2)
+    queue_due(now=now);queue_due(now=now+timedelta(hours=1))
+    assert BillingEvent.query.filter_by(kind='renewal_reminder').count()==1
+    sent=[]
+    monkeypatch.setattr('app.subscriptions.notifications._transactional',
+        lambda *args,**kwargs: sent.append((args,kwargs)) or True)
+    assert deliver()==1
+    assert sent[0][0][1]=='Your subscription renews soon | StockBridge'
+    assert sent[0][1]['title']=='Your subscription renews soon'
+    assert 'renew on' in sent[0][1]['message']
+
+
 def test_charge_before_subscription_create_reconciles_safely(client,fake):
     u,b=seed(eligible=False);billing.begin_checkout(u,'basic','monthly');s=RecurringSubscription.query.one()
     assert webhook(client,{'event':'charge.success','data':{'domain':'test','reference':s.checkout_reference}}).status_code==200
