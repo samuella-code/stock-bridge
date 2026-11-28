@@ -1,9 +1,15 @@
 {% extends 'email/base.html' %}
 {% block content %}
-<h1 style="font-size:24px;line-height:1.3">{{ 'Low stock alert' if kind == 'low_stock' else 'Out of stock' }}</h1>
-<p>Hello,</p><p>Your inventory for <strong>{{ alert.product_name }}</strong> {{ 'is running low.' if kind == 'low_stock' else 'is currently out of stock.' }}</p>
-<p><strong>Business:</strong> {{ alert.business_name }}<br><strong>Product:</strong> {{ alert.product_name }}<br><strong>Current stock:</strong> {{ alert.quantity }} {{ alert.unit }}{% if kind == 'low_stock' %}<br><strong>Low-stock threshold:</strong> {{ alert.threshold }} {{ alert.unit }}{% endif %}</p>
-<p>{{ 'Review your inventory and restock before this product runs out.' if kind == 'low_stock' else 'Customers may be unable to purchase this product until it is restocked.' }}</p>
-<p><a href="{{ link }}" style="display:inline-block;background:#18744b;color:#fff;padding:14px 20px;border-radius:6px;text-decoration:none">{{ action }}</a></p>
-<p style="font-size:14px">Select {{ alert.business_name }} if another business is active.</p><p>Manage your business with confidence.</p>
+<div style="margin:0 0 14px;"><span style="display:inline-block;padding:5px 10px;border-radius:20px;background:{{ '#fff4df' if kind == 'low_stock' else '#fdebea' }};color:{{ '#8a5700' if kind == 'low_stock' else '#a32925' }};font-size:12px;font-weight:700;">{{ 'LOW STOCK' if kind == 'low_stock' else 'OUT OF STOCK' }}</span></div>
+<h1 style="margin:0 0 14px;color:#17352b;font-size:25px;line-height:1.25;">{{ alert.product_name }} {{ 'is running low.' if kind == 'low_stock' else 'is out of stock.' }}</h1>
+<p style="margin:0 0 18px;">Hi {{ first_name|default('there', true) }}, {% if kind == 'low_stock' %}stock is now recorded as {{ alert.quantity }} {{ alert.unit }} in {{ alert.business_name }}. You asked us to alert you when stock drops to {{ alert.threshold }}.{% else %}there is no stock left for this product in {{ alert.business_name }}. You may be unable to record sales until it is restocked.{% endif %}</p>
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 20px;border:1px solid #e2ebe5;background:#f8faf8;border-collapse:collapse;">
+<tr><td style="padding:12px 14px;color:#60756b;font-size:13px;">Product</td><td align="right" style="padding:12px 14px;color:#17352b;font-weight:600;">{{ alert.product_name }}</td></tr>
+<tr><td style="padding:12px 14px;border-top:1px solid #e2ebe5;color:#60756b;font-size:13px;">Left in stock</td><td align="right" style="padding:12px 14px;border-top:1px solid #e2ebe5;color:#17352b;font-weight:600;">{{ alert.quantity }} {{ alert.unit }}</td></tr>
+{% if kind == 'low_stock' %}<tr><td style="padding:12px 14px;border-top:1px solid #e2ebe5;color:#60756b;font-size:13px;">Alert level</td><td align="right" style="padding:12px 14px;border-top:1px solid #e2ebe5;color:#17352b;font-weight:600;">{{ alert.threshold }} {{ alert.unit }}</td></tr>{% endif %}
+<tr><td style="padding:12px 14px;border-top:1px solid #e2ebe5;color:#60756b;font-size:13px;">Business</td><td align="right" style="padding:12px 14px;border-top:1px solid #e2ebe5;color:#17352b;font-weight:600;">{{ alert.business_name }}</td></tr>
+</table>
+{% if kind == 'low_stock' %}<div style="height:8px;margin:0 0 22px;background:#e8eee9;border-radius:8px;"><div style="height:8px;width:{{ [100, (alert.quantity * 100 / (alert.threshold or 1))]|min }}%;background:#d89a2b;border-radius:8px;"></div></div>{% endif %}
+<p style="margin:0 0 20px;"><a href="{{ link }}" style="display:inline-block;min-height:44px;box-sizing:border-box;padding:13px 20px;border-radius:6px;background:#16764d;color:#ffffff;text-decoration:none;font-weight:700;">{{ action }}</a></p>
+<p style="margin:0;font-size:14px;"><a href="{{ inventory_link|default(link, true) }}" style="color:#16764d;">View inventory</a></p>
 {% endblock %}

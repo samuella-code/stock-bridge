@@ -43,9 +43,20 @@ def _send_email(subject, recipient, body, html=None, *, timeout=15):
         current_app.logger.warning("SMTP sender is not configured; transactional email was not sent.")
         return False
     message = EmailMessage()
+    # Keep the customer-facing sender identity stable in every environment.
+    # Staging is identified in the subject, never by changing the sender name.
+    # Every Vercel preview is non-production, regardless of its feature-branch
+    # name. Also mark the staging project's production deployment explicitly.
+    # VERCEL_PROJECT_ID is a public project identifier, not a credential.
+    staging = (
+        os.getenv("VERCEL_ENV") == "preview"
+        or os.getenv("VERCEL_PROJECT_ID") == "prj_yeCWXPd44jShVUGHAgJu9khMjOMv"
+    )
+    if staging and not subject.startswith("[STAGING]"):
+        subject = "[STAGING] " + subject
     message["Subject"] = subject
     message["From"] = formataddr((
-        current_app.config["SMTP_FROM_NAME"],
+        "StockBridge",
         current_app.config["SMTP_FROM_EMAIL"],
     ))
     message["To"] = recipient
@@ -78,6 +89,18 @@ def _send_email(subject, recipient, body, html=None, *, timeout=15):
 
 
 def _transactional(template, subject, recipient, name, body, **context):
+    """Render every transactional customer email through the shared shell."""
+    preheaders = {
+        "verify": "Confirm your email to start your StockBridge trial. No card needed.",
+        "welcome": "Your StockBridge account is ready. Add products, record a sale and understand profit.",
+        "billing": "An update about your StockBridge account and plan.",
+        "password_reset": "Use the secure link to reset your StockBridge password.",
+        "password_changed": "Your StockBridge password was changed.",
+        "payment_success": "Your StockBridge payment was received and access is active.",
+        "account_status": "An important update about your StockBridge account.",
+        "staff_invitation": "You have been invited to join a StockBridge team.",
+    }
+    context.setdefault("preheader", preheaders.get(template, "An update from StockBridge."))
     html = render_template(f"email/{template}.html", name=name, **context)
     return _send_email(subject, recipient, body, html=html)
 

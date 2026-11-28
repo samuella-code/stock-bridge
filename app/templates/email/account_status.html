@@ -1,10 +1,7 @@
-{% extends "email/base.html" %}{% block content %}
-<h1 style="font-size:24px;color:#102437;margin:0 0 16px;">Your StockBridge {{ kind }} has been {{ 'reactivated' if active else 'suspended' }}</h1>
-<p>Hi {{ name.split()[0] }},</p>
-{% if active %}
-<p>You can sign in and continue using StockBridge.</p>
-<p style="margin:28px 0;"><a href="{{ link }}" style="display:inline-block;background:#138450;color:#ffffff;text-decoration:none;padding:13px 22px;border-radius:6px;font-weight:bold;">Sign In to StockBridge</a></p>
-<p style="font-size:13px;">Or visit <a href="{{ link }}">{{ link }}</a>.</p>
-{% else %}
-<p>Access to your StockBridge {{ kind }} is temporarily restricted. Contact StockBridge support if you need help.</p>
-{% endif %}{% endblock %}
+{% extends 'email/base.html' %}
+{% block content %}
+<div style="margin:0 0 14px;"><span style="display:inline-block;padding:5px 10px;border-radius:20px;background:{{ '#e8f5ed' if active else '#fdebea' }};color:{{ '#17633f' if active else '#a32925' }};font-size:12px;font-weight:700;">{{ 'REACTIVATED' if active else 'ACCESS RESTRICTED' }}</span></div>
+<h1 style="margin:0 0 14px;color:#17352b;font-size:25px;line-height:1.25;">Your StockBridge {{ kind }} has been {{ 'reactivated' if active else 'suspended' }}.</h1>
+<p style="margin:0 0 20px;">Hi {{ name.split()[0] if name else 'there' }}, {% if active %}you can sign in and continue using StockBridge.{% else %}access is temporarily restricted. Contact StockBridge support if you need help.{% endif %}</p>
+{% if active and link %}<p style="margin:0 0 20px;"><a href="{{ link }}" style="display:inline-block;min-height:44px;box-sizing:border-box;padding:13px 20px;border-radius:6px;background:#16764d;color:#ffffff;text-decoration:none;font-weight:700;">Sign in to StockBridge</a></p>{% endif %}
+{% endblock %}

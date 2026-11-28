@@ -17,6 +17,7 @@ def sales_clock(monkeypatch):
         @classmethod
         def utcnow(cls): return NOW
     monkeypatch.setattr('app.staff.sales_access.datetime', Clock)
+    monkeypatch.setattr('app.subscriptions.entitlements.datetime', Clock)
     monkeypatch.setattr('app.staff.sales_routes.datetime', Clock)
     monkeypatch.setattr('app.sales.ledger.datetime', Clock)
 
