@@ -40,7 +40,7 @@ def queue_alert(product, quantity, kind, event_key):
         recipient_email=owner.email, event_type=kind, event_key=event_key,
         subject=f'{label} — {name} | StockBridge'[:240],
         max_attempts=max(1, min(10, current_app.config['INVENTORY_EMAIL_MAX_ATTEMPTS'])),
-        payload={'business_name': business.name, 'product_name': product.name,
+        payload={'business_name': business.name, 'product_id': product.id, 'product_name': product.name,
             'quantity': quantity, 'threshold': product.minimum_stock_level, 'unit': product.unit})
     stamp_test_job(row)
     db.session.add(row)
@@ -220,12 +220,10 @@ def dispatch_one(user_id=None, business_id=None, now=None):
                 link=link,
             )
         else:
-            link = origin + (
-                '/products/?view=inventory'
-                if kind == 'low_stock'
-                else '/restocking/'
+            link = (
+                f"{origin}/notifications/email/product/{business.id}/{payload['product_id']}?action=restock"
             )
-            action = 'View Inventory' if kind == 'low_stock' else 'Restock Product'
+            action = 'Restock Product'
             body = (
                 f"Hello,\n\n{subject}\n"
                 f"Business: {payload['business_name']}\n"
