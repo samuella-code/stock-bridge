@@ -329,8 +329,10 @@ def test_billing_label_reuses_supplied_access_without_changing_default(app):
     user,_=seed('plus')
     subscription(user).status='past_due';db.session.commit()
     access=effective_access(user,now=NOW)
-    original=access_label(user)
-    with patch('app.subscriptions.entitlements.effective_access',side_effect=AssertionError('Repeated access evaluation')):
+    with patch('app.subscriptions.entitlements.datetime',Clock):
+        original=access_label(user)
+    with patch('app.subscriptions.entitlements.datetime',Clock), \\
+         patch('app.subscriptions.entitlements.effective_access',side_effect=AssertionError('Repeated access evaluation')):
         assert access_label(user,access=access)==original=='StockBridge Plus · Monthly · renewal failed'
 
 
