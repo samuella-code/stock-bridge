@@ -245,7 +245,7 @@ def test_upcoming_renewal_reminder_is_idempotent_and_event_specific(app,fake,mon
         lambda *args,**kwargs: sent.append((args,kwargs)) or True)
     assert deliver()==1
     assert sent[0][0][1]=='Your subscription renews soon | StockBridge'
-    assert sent[0][1]['title']=='Your subscription renews soon'
+    assert sent[0][1]['email_title']=='Your subscription renews soon'
     assert 'renew on' in sent[0][1]['message']
 
 
