@@ -10,11 +10,15 @@ from app.subscriptions.entitlements import effective_access
 from app.email_service import _transactional
 
 
+def _active_staff(user):
+    return StaffMembership.query.filter_by(user_id=user.id, state='active').first()
+
+
 def queue_due(now=None):
     now = now or datetime.utcnow()
     for account in AccountBilling.query.filter(AccountBilling.trial_ends_at.isnot(None)).yield_per(100):
         user=db.session.get(User,account.user_id)
-        if not user or user.staff_only or user.role != 'user' or user.admin_enabled:
+        if not user or user.staff_only or user.role != 'user' or user.admin_enabled or _active_staff(user):
             continue
         lock_account(user.id)
         if effective_access(user,now=now).kind == 'trial' and now >= account.trial_ends_at-timedelta(days=2):
@@ -27,7 +31,7 @@ def queue_due(now=None):
                 or now < renewal_at-timedelta(days=3) or now >= renewal_at):
             continue
         user=db.session.get(User,sub.user_id)
-        if not user or user.staff_only or user.role != 'user' or user.admin_enabled or not user.email_verified_at:
+        if not user or user.staff_only or user.role != 'user' or user.admin_enabled or not user.email_verified_at or _active_staff(user):
             continue
         lock_account(user.id)
         amount=f"₦{sub.amount_kobo / 100:,.2f}"
@@ -36,7 +40,7 @@ def queue_due(now=None):
             sub.id)
     for sub in RecurringSubscription.query.filter(RecurringSubscription.current_period_end<=now).yield_per(100):
         user=db.session.get(User,sub.user_id)
-        if not user or user.staff_only or user.role != 'user' or user.admin_enabled:
+        if not user or user.staff_only or user.role != 'user' or user.admin_enabled or _active_staff(user):
             continue
         lock_account(user.id)
         if effective_access(user,now=now).subscription:
@@ -55,8 +59,7 @@ def deliver(limit=100):
         db.session.commit()
         if not claimed.rowcount:continue
         event=db.session.get(BillingEvent,event_id);user=db.session.get(User,event.user_id)
-        if (not user or user.role!='user' or user.admin_enabled or user.staff_only
-                or StaffMembership.query.filter_by(user_id=user.id,state='active').first()):
+        if (not user or user.role!='user' or user.admin_enabled or user.staff_only or _active_staff(user)):
             continue
         # Durable claim precedes SMTP. Unknown delivery failures require operator review; no blind duplicate send.
         titles = {
