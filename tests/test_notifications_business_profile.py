@@ -446,7 +446,8 @@ def test_new_migration_preserves_existing_business_and_round_trip(tmp_path):
         upgrade(revision='0016_inventory_email_outbox')
         assert db.session.execute(text('SELECT name,subscription_plan,logo_key FROM business')).one()==('Original shop','lifetime',None)
         assert db.session.execute(text('SELECT password_hash FROM user')).scalar()=='original-password'
-        assert Notification.query.count()==0 and NotificationPreference.query.count()==0
+        assert Notification.query.count()==0
+        assert db.session.execute(text('SELECT COUNT(*) FROM notification_preference')).scalar()==0
         assert {'notification','notification_preference'} <= set(inspect(db.engine).get_table_names())
         columns={c['name'] for c in inspect(db.engine).get_columns('notification')}
         assert {'user_id','business_id','kind','title','body','read_at','created_at','event_key'} <= columns

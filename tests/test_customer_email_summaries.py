@@ -1,0 +1,272 @@
+"""Customer summary queueing and rendering tests; SMTP is always mocked."""
+from datetime import datetime, timedelta
+
+import pytest
+from app import db
+from app.models import Business, EmailOutbox, Expense, NotificationPreference, Product, Sale
+from app.notifications.summaries import queue_due_summaries, _wat_window
+from tests.test_notifications_business_profile import app, setup, product, sale
+
+
+@pytest.fixture(autouse=True)
+def allow_isolated_summary_tests(monkeypatch, app):
+    from app.notifications.staging_email_policy import Policy
+    app.config.update(
+        CUSTOMER_SUMMARY_EMAILS_ENABLED=True,
+        CUSTOMER_SUMMARY_EMAIL_BASE_URL='https://stock-bridge-staging.vercel.app',
+        INVENTORY_EMAIL_BASE_URL='https://stock-bridge-staging.vercel.app',
+    )
+    selected = lambda now=None: Policy('production')
+    monkeypatch.setattr('app.notifications.staging_email_policy.policy', selected)
+    monkeypatch.setattr('app.notifications.summaries.policy', selected)
+    monkeypatch.setattr('app.notifications.email_outbox.policy', selected)
+
+
+def _summary_preferences(business):
+    db.session.add(NotificationPreference(
+        business_id=business.id,
+        low_stock_email=False,
+        out_of_stock_email=False,
+        daily_summary_email=True,
+        weekly_summary_email=True,
+    ))
+    db.session.commit()
+
+
+def _backdate_activity_to_previous_week(business_id):
+    start, _, _ = _wat_window(datetime.utcnow(), 7)
+    period_time = start + timedelta(days=2)
+    Sale.query.filter_by(business_id=business_id).update({Sale.sold_at: period_time})
+    Expense.query.filter_by(business_id=business_id).update({Expense.spent_at: period_time})
+    db.session.commit()
+
+
+def test_daily_and_weekly_summaries_queue_once_per_business_period(app):
+    client, owner, businesses = setup(app)
+    business = businesses[0]
+    _summary_preferences(business)
+    item = product(client, 'Coffee')
+    sale(client, item, 3)  # 8 -> 5: needs restocking.
+    db.session.add(Expense(
+        business_id=business.id, description='Transport', amount=1200
+    ))
+    db.session.commit()
+    _backdate_activity_to_previous_week(business.id)
+
+    assert queue_due_summaries() == 2
+    rows = EmailOutbox.query.order_by(EmailOutbox.event_type).all()
+    assert [row.event_type for row in rows] == ['daily_summary', 'weekly_summary']
+    daily = next(row for row in rows if row.event_type == 'daily_summary')
+    weekly = next(row for row in rows if row.event_type == 'weekly_summary')
+    assert daily.recipient_user_id == weekly.recipient_user_id == owner.id
+    assert daily.payload['low_stock_count'] == 1
+    assert daily.payload['low_stock_products'][0]['name'] == 'Coffee'
+    assert weekly.payload['sales'] == '1,050.00'
+    assert weekly.payload['cost_of_goods'] == '750.00'
+    assert weekly.payload['expenses'] == '1,200.00'
+    assert weekly.payload['kept'] == '-900.00'
+    assert weekly.payload['best_seller'] == {'name': 'Coffee', 'unit': 'bottles', 'quantity': 3}
+    assert queue_due_summaries() == 0
+    assert EmailOutbox.query.count() == 2
+
+
+def test_summaries_are_opt_in_and_daily_summary_only_sends_when_stock_needs_attention(app):
+    client, _, businesses = setup(app)
+    item = product(client, 'Tea')
+    sale(client, item, 1)  # No threshold crossing; still above alert level.
+    assert queue_due_summaries() == 0
+
+    preference = NotificationPreference(
+        business_id=businesses[0].id,
+        daily_summary_email=True,
+        weekly_summary_email=False,
+    )
+    db.session.add(preference)
+    db.session.commit()
+    assert queue_due_summaries() == 0
+
+    sale(client, item, 2)  # Now reaches the threshold.
+    assert queue_due_summaries() == 1
+    assert EmailOutbox.query.filter_by(event_type='daily_summary').one().event_type == 'daily_summary'
+
+
+def test_summary_dispatch_uses_shared_template_and_can_run_without_inventory_alerts(app, monkeypatch):
+    from app.notifications.staging_email_policy import Policy
+
+    client, _, businesses = setup(app)
+    business = businesses[0]
+    _summary_preferences(business)
+    item = product(client, 'Coffee')
+    sale(client, item, 3)
+    _backdate_activity_to_previous_week(business.id)
+    assert queue_due_summaries() == 2
+
+    app.config.update(
+        INVENTORY_EMAILS_ENABLED=False,
+        CUSTOMER_SUMMARY_EMAILS_ENABLED=True,
+        CUSTOMER_SUMMARY_EMAIL_BASE_URL='https://stock-bridge-staging.vercel.app',
+    )
+    monkeypatch.setattr('app.notifications.email_outbox.policy', lambda now=None: Policy('production'))
+    sent = []
+    monkeypatch.setattr(
+        'app.email_service._send_email',
+        lambda *args, **kwargs: sent.append((args, kwargs)) or True,
+    )
+
+    from app.notifications.email_outbox import dispatch_one
+    assert dispatch_one() == 'sent'
+    assert dispatch_one() == 'sent'
+    assert len(sent) == 2
+    assert all('email/base' not in kwargs['html'] for _, kwargs in sent)
+    assert all(f'/notifications/email/summary/{business.id}/' in kwargs['html'] for _, kwargs in sent)
+    assert any('RESTOCK SUMMARY' in kwargs['html'] for _, kwargs in sent)
+    weekly = next((args, kwargs) for args, kwargs in sent if 'weekly' in args[0].lower())
+    assert 'Sales: ₦1,050.00' in weekly[0][2]
+    assert 'Kept: ₦300.00' in weekly[0][2]
+    assert 'Coffee' in weekly[1]['html']
+
+
+def test_summary_window_uses_wat_midnight_and_previous_monday():
+    start, end, day = _wat_window(datetime(2026, 11, 26, 10, 0), 1)
+    assert (start, end, day.isoformat()) == (
+        datetime(2026, 11, 24, 23), datetime(2026, 11, 25, 23), '2026-11-25'
+    )
+    start, end, week = _wat_window(datetime(2026, 11, 26, 10, 0), 7)
+    assert (start, end, week.isoformat()) == (
+        datetime(2026, 11, 15, 23), datetime(2026, 11, 22, 23), '2026-11-16'
+    )
+
+
+
+def test_summary_scheduler_endpoint_requires_bearer_and_only_dispatches_summaries(app, monkeypatch):
+    client, _, businesses = setup(app)
+    business = businesses[0]
+    _summary_preferences(business)
+    item = product(client, 'Coffee')
+    sale(client, item, 3)
+    _backdate_activity_to_previous_week(business.id)
+    app.config.update(
+        CUSTOMER_SUMMARY_EMAILS_ENABLED=True,
+        CUSTOMER_SUMMARY_EMAIL_DISPATCH_SECRET='summary-worker-secret-' + 'x' * 32,
+        CUSTOMER_SUMMARY_EMAIL_BASE_URL='https://stock-bridge-staging.vercel.app',
+        INVENTORY_EMAILS_ENABLED=False,
+    )
+    sent = []
+    monkeypatch.setattr(
+        'app.email_service._send_email',
+        lambda *args, **kwargs: sent.append(args) or True,
+    )
+
+    denied = client.post('/internal/customer-email-summaries/run',
+        headers={'Authorization': 'Bearer wrong'})
+    assert denied.status_code == 404
+    response = client.post('/internal/customer-email-summaries/run',
+        headers={'Authorization': 'Bearer ' + app.config['CUSTOMER_SUMMARY_EMAIL_DISPATCH_SECRET']})
+
+    assert response.status_code == 200
+    assert response.json == {'queued': 2, 'dispatched': 2, 'result': 'idle'}
+    second = client.post('/internal/customer-email-summaries/run',
+        headers={'Authorization': 'Bearer ' + app.config['CUSTOMER_SUMMARY_EMAIL_DISPATCH_SECRET']})
+    assert second.json == {'queued': 0, 'dispatched': 0, 'result': 'idle'}
+    assert len(sent) == 2
+    assert EmailOutbox.query.filter(EmailOutbox.event_type.in_(
+        ['daily_summary', 'weekly_summary'])).count() == 2
+
+    app.config['CUSTOMER_SUMMARY_EMAILS_ENABLED'] = False
+    disabled = client.post('/internal/customer-email-summaries/run',
+        headers={'Authorization': 'Bearer ' + app.config['CUSTOMER_SUMMARY_EMAIL_DISPATCH_SECRET']})
+    assert disabled.status_code == 200
+    assert disabled.json == {'queued': 0, 'result': 'disabled'}
+
+
+
+def test_disabling_summary_preference_after_queue_suppresses_delivery(app, monkeypatch):
+    from app.notifications.email_outbox import dispatch_one
+
+    client, _, businesses = setup(app)
+    business = businesses[0]
+    _summary_preferences(business)
+    item = product(client, 'Coffee')
+    sale(client, item, 3)
+    _backdate_activity_to_previous_week(business.id)
+    assert queue_due_summaries() == 2
+
+    preference = db.session.get(NotificationPreference, business.id)
+    preference.daily_summary_email = False
+    preference.weekly_summary_email = False
+    db.session.commit()
+    sent = []
+    monkeypatch.setattr(
+        'app.email_service._send_email',
+        lambda *args, **kwargs: sent.append(args) or True,
+    )
+
+    assert dispatch_one(event_types=('daily_summary', 'weekly_summary')) == 'suppressed'
+    assert sent == []
+
+
+def test_customer_summary_migration_adds_opt_in_columns_only():
+    import importlib.util
+    import io
+    from pathlib import Path
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    spec = importlib.util.spec_from_file_location(
+        'customer_summary_migration',
+        Path('migrations/versions/0023_customer_email_summaries.py'),
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    output = io.StringIO()
+    context = MigrationContext.configure(
+        url='postgresql://', opts={'as_sql': True, 'output_buffer': output}
+    )
+    with Operations.context(context):
+        module.upgrade()
+    sql = output.getvalue().lower()
+    assert 'daily_summary_email' in sql and 'weekly_summary_email' in sql
+    assert 'default false' in sql
+    assert 'create table' not in sql and 'drop table' not in sql
+    assert module.down_revision == '0022_admin_reminders'
+
+
+def test_summary_email_links_restore_the_owning_business_and_validate_access(app, monkeypatch):
+    client, owner, businesses = setup(app)
+    original = businesses[0]
+    other = Business(user_id=owner.id, name='Second business')
+    db.session.add(other)
+    db.session.commit()
+
+    # This test isolates routing behavior from subscription-tier setup.
+    monkeypatch.setattr('app.notifications.routes.accessible_business', lambda user, business: True)
+    with client.session_transaction() as browser_session:
+        browser_session['active_business_id'] = original.id
+
+    daily = client.get(f'/notifications/email/summary/{other.id}/daily')
+    assert daily.status_code == 302
+    assert daily.headers['Location'].endswith('/restocking/')
+    with client.session_transaction() as browser_session:
+        assert browser_session['active_business_id'] == other.id
+
+    with client.session_transaction() as browser_session:
+        browser_session['active_business_id'] = original.id
+    weekly = client.get(f'/notifications/email/summary/{other.id}/weekly')
+    assert weekly.status_code == 302
+    assert weekly.headers['Location'].endswith('/dashboard')
+    with client.session_transaction() as browser_session:
+        assert browser_session['active_business_id'] == other.id
+
+    assert client.get(f'/notifications/email/summary/{other.id}/unknown').status_code == 404
+    assert client.get('/notifications/email/summary/999999/daily').status_code == 404
+
+    other.suspended_at = datetime.utcnow()
+    db.session.commit()
+    monkeypatch.setattr('app.notifications.routes.accessible_business', lambda user, business: False)
+    with client.session_transaction() as browser_session:
+        browser_session['active_business_id'] = original.id
+    suspended = client.get(f'/notifications/email/summary/{other.id}/daily')
+    assert suspended.status_code == 302
+    assert suspended.headers['Location'].endswith('/businesses/')
+    with client.session_transaction() as browser_session:
+        assert browser_session['active_business_id'] == original.id
