@@ -220,10 +220,16 @@ def dispatch_one(user_id=None, business_id=None, now=None):
                 link=link,
             )
         else:
-            link = (
-                f"{origin}/notifications/email/product/{business.id}/{payload['product_id']}?action=restock"
-            )
-            action = 'Restock Product'
+            product_id = payload.get('product_id')
+            if product_id is not None:
+                link = f"{origin}/notifications/email/product/{business.id}/{product_id}?action=restock"
+                action = 'Restock Product'
+            else:
+                # Preserve delivery for outbox rows queued before product-specific links existed.
+                link = origin + (
+                    '/products/?view=inventory' if kind == 'low_stock' else '/restocking/'
+                )
+                action = 'View Inventory' if kind == 'low_stock' else 'Restock Product'
             body = (
                 f"Hello,\n\n{subject}\n"
                 f"Business: {payload['business_name']}\n"
