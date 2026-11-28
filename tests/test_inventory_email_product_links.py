@@ -115,4 +115,4 @@ def test_legacy_inventory_email_without_product_id_still_sends(app, monkeypatch)
     assert dispatch_one() == 'sent'
     assert len(sent) == 1
     assert 'https://stock-bridge-staging.vercel.app/products/?view=inventory' in sent[0][0][2]
-    assert 'View Inventory' in sent[0][0][1]
+    assert 'View Inventory' in sent[0][0][2]
