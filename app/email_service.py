@@ -134,10 +134,10 @@ def send_payment_success_email(user, business, payment):
     link = customer_url("main.dashboard")
     paid_at = payment.paid_at.strftime("%d %b %Y %H:%M UTC")
     amount = f"₦{payment.amount_kobo / 100:,.2f}"
-    body = (f"Hi {user.full_name.split()[0]},\\n\\nPayment successful. Your StockBridge Lifetime Access is active.\\n"
-            f"Business: {business.name}\\nAmount: {amount} ({payment.currency})\\nReference: {payment.reference}\\n"
-            f"Paid: {paid_at}\\nAccess: Lifetime Access\\nStatus: Active\\n\\n"
-            f"Open StockBridge: {link}\\n\\nOne-time payment. No subscription. No recurring charges.")
+    body = (f"Hi {user.full_name.split()[0]},\n\nPayment successful. Your StockBridge Lifetime Access is active.\n"
+            f"Business: {business.name}\nAmount: {amount} ({payment.currency})\nReference: {payment.reference}\n"
+            f"Paid: {paid_at}\nAccess: Lifetime Access\nStatus: Active\n\n"
+            f"Open StockBridge: {link}\n\nOne-time payment. No subscription. No recurring charges.")
     return _transactional("payment_success", "Your StockBridge Lifetime Access is active", user.email,
                           user.full_name, body, link=link, business=business, payment=payment,
                           amount=amount, paid_at=paid_at)
