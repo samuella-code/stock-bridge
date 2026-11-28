@@ -172,6 +172,7 @@ def confirm_payment(sub,payment,data,period=None,details=None):
     if end<=start or end<=paid_at:
         raise ValueError('Provider paid period is invalid. Access was not extended.')
     lock_account(user.id)
+    is_renewal = bool(sub.current_period_end and payment.reference != sub.checkout_reference)
     if not sub.current_period_end or end>sub.current_period_end:
         sub.current_period_start=start;sub.current_period_end=end
         sub.next_renewal_at=end;sub.subscription_started_at=sub.subscription_started_at or start
@@ -181,8 +182,14 @@ def confirm_payment(sub,payment,data,period=None,details=None):
     notice(user.id,receipt_key,'provider_event',
         json.dumps([start.isoformat(),end.isoformat()],separators=(',', ':')),sub.id)
     payment.status='success';payment.paid_at=paid_at
-    notice(user.id,'payment:'+payment.reference,'subscription_paid',
-        f'Your StockBridge {sub.plan_code.title()} {sub.billing_interval} payment is verified. Paid access ends {end:%d %b %Y}.',sub.id)
+    if is_renewal:
+        amount=f"₦{sub.amount_kobo / 100:,.2f}"
+        notice(user.id,'payment:'+payment.reference,'renewal_succeeded',
+            f'Your {sub.plan_code.title()} {sub.billing_interval} recurring renewal payment of {amount} was successful. Your paid access now runs until {end:%d %b %Y}.',
+            sub.id)
+    else:
+        notice(user.id,'payment:'+payment.reference,'subscription_paid',
+            f'Your StockBridge {sub.plan_code.title()} {sub.billing_interval} payment is verified. Paid access ends {end:%d %b %Y}.',sub.id)
     return True
 
 
