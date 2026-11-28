@@ -17,6 +17,14 @@ from app.subscriptions.entitlements import EntitlementSnapshot, access_label, ef
 from tests.test_multi_business import app, seed as base_seed, login
 
 NOW = datetime(2026, 10, 28, 12)
+
+
+class Clock(datetime):
+    @classmethod
+    def utcnow(cls):
+        return NOW
+
+
 START, END = datetime(2026, 10, 8), datetime(2026, 10, 15)
 
 
@@ -63,12 +71,8 @@ def subscription(user):
 
 def request_page(application, user, **args):
     client = application.test_client(); login(client, user)
-    with patch('app.main.routes.datetime') as clock:
-        clock.utcnow.return_value = NOW
-        clock.min = datetime.min
-        clock.max = datetime.max
-        clock.strptime = datetime.strptime
-        clock.combine = datetime.combine
+    with patch('app.main.routes.datetime', Clock), \\
+         patch('app.subscriptions.entitlements.datetime', Clock):
         response = client.get('/insights', query_string=args or {
             'period':'custom', 'from':'2026-10-08', 'to':'2026-10-14'})
     return response
