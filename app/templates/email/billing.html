@@ -1,8 +1,15 @@
 {% extends 'email/base.html' %}
 {% block content %}
-<div style="margin:0 0 14px;"><span style="display:inline-block;padding:5px 10px;border-radius:20px;background:#e8f0ff;color:#244f91;font-size:12px;font-weight:700;">ACCOUNT UPDATE</span></div>
-<h1 style="margin:0 0 14px;color:#17352b;font-size:25px;line-height:1.25;">Your StockBridge account</h1>
-<p style="margin:0 0 18px;">Hi {{ name.split()[0] if name else 'there' }}, here is an update about your plan and account.</p>
-<div style="margin:0 0 20px;padding:15px;background:#f8faf8;border:1px solid #e2ebe5;color:#29463b;white-space:pre-line;">{{ message }}</div>
-<p style="margin:0 0 20px;"><a href="{{ link }}" style="display:inline-block;min-height:44px;box-sizing:border-box;padding:13px 20px;border-radius:6px;background:#16764d;color:#ffffff;text-decoration:none;font-weight:700;">View my account</a></p>
+<div style="margin:0 0 18px;">
+  <span style="display:inline-block;padding:6px 11px;border-radius:20px;background:#e8f3ed;color:#17613f;font-size:11px;line-height:1.2;font-weight:700;letter-spacing:.7px;">STOCKBRIDGE BILLING</span>
+</div>
+<h1 style="margin:0 0 12px;color:#17352b;font-size:26px;line-height:1.25;font-weight:700;">An update about your subscription</h1>
+<p style="margin:0 0 22px;color:#52665d;font-size:15px;line-height:1.65;">Hi {{ name.split()[0] if name else 'there' }},</p>
+<div style="margin:0 0 24px;padding:20px 21px;background:#f6f9f7;border:1px solid #e2ebe5;border-radius:10px;color:#29463b;font-size:15px;line-height:1.7;white-space:pre-line;">{{ message }}</div>
+{% if link %}
+<p style="margin:0 0 22px;">
+  <a href="{{ link }}" style="display:inline-block;box-sizing:border-box;min-height:46px;padding:14px 22px;border-radius:7px;background:#16764d;color:#ffffff;text-decoration:none;font-size:14px;line-height:18px;font-weight:700;">View my subscription</a>
+</p>
+{% endif %}
+<p style="margin:0;color:#718078;font-size:13px;line-height:1.6;">If you have questions about this update, please contact the StockBridge team.</p>
 {% endblock %}
