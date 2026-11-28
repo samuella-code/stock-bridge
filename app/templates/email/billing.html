@@ -3,7 +3,7 @@
 <div style="margin:0 0 18px;">
   <span style="display:inline-block;padding:6px 11px;border-radius:20px;background:#e8f3ed;color:#17613f;font-size:11px;line-height:1.2;font-weight:700;letter-spacing:.7px;">STOCKBRIDGE BILLING</span>
 </div>
-<h1 style="margin:0 0 12px;color:#17352b;font-size:26px;line-height:1.25;font-weight:700;">An update about your subscription</h1>
+<h1 style="margin:0 0 12px;color:#17352b;font-size:26px;line-height:1.25;font-weight:700;">{% if title %}{{ title }}{% else %}An update about your subscription{% endif %}</h1>
 <p style="margin:0 0 22px;color:#52665d;font-size:15px;line-height:1.65;">Hi {{ name.split()[0] if name else 'there' }},</p>
 <div style="margin:0 0 24px;padding:20px 21px;background:#f6f9f7;border:1px solid #e2ebe5;border-radius:10px;color:#29463b;font-size:15px;line-height:1.7;white-space:pre-line;">{{ message }}</div>
 {% if link %}
