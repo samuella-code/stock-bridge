@@ -1,6 +1,7 @@
 """Explicit worker; never scheduled by application startup or deployment."""
 from datetime import datetime, timedelta
 import click
+import os
 from flask import current_app
 from sqlalchemy import update
 from app import db
@@ -50,17 +51,39 @@ def queue_due(now=None):
     db.session.commit()
 
 
+def _billing_email_recipient_allowed(email):
+    """Non-production billing notices require an explicit recipient allowlist."""
+    environment = os.getenv('VERCEL_ENV', '').strip().lower()
+    project_id = os.getenv('VERCEL_PROJECT_ID', '').strip()
+    is_production = (
+        environment == 'production'
+        and project_id == 'prj_ahZe3mfUk4MvejILpj9Md9QPP4fd'
+    )
+    if is_production:
+        return True
+    allowed = {
+        address.strip().lower()
+        for address in current_app.config.get('STAGING_BILLING_EMAIL_ALLOWED_RECIPIENTS', '').split(',')
+        if address.strip()
+    }
+    return bool(email and email.strip().lower() in allowed)
+
+
 def deliver(limit=100):
     ids=[row[0] for row in db.session.query(BillingEvent.id).filter(BillingEvent.kind!='provider_event',BillingEvent.email_claimed_at.is_(None)).order_by(BillingEvent.id).limit(limit)]
     sent=0
     for event_id in ids:
+        event=db.session.get(BillingEvent,event_id)
+        user=db.session.get(User,event.user_id) if event else None
+        if (not event or not user or user.role!='user' or user.admin_enabled or user.staff_only or _active_staff(user)):
+            continue
+        if not _billing_email_recipient_allowed(user.email):
+            current_app.logger.warning("Billing email skipped: recipient is not on the non-production allowlist (event %s).", event.id)
+            continue
         now=datetime.utcnow()
         claimed=db.session.execute(update(BillingEvent).where(BillingEvent.id==event_id,BillingEvent.email_claimed_at.is_(None)).values(email_claimed_at=now))
         db.session.commit()
         if not claimed.rowcount:continue
-        event=db.session.get(BillingEvent,event_id);user=db.session.get(User,event.user_id)
-        if (not user or user.role!='user' or user.admin_enabled or user.staff_only or _active_staff(user)):
-            continue
         # Durable claim precedes SMTP. Unknown delivery failures require operator review; no blind duplicate send.
         titles = {
             'trial_ending': 'Your StockBridge trial ends soon',
