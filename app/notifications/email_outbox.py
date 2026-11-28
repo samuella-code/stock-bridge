@@ -109,9 +109,9 @@ def queue_restock_alert(business_id, items, event_key):
     db.session.add(row)
     db.session.info['inventory_alert_created'] = True
     return row
-def customer_origin():
-    # Explicit origin: VERCEL_ENV=production also describes staging-project deploys.
-    raw = (current_app.config.get('CUSTOMER_SUMMARY_EMAIL_BASE_URL') or current_app.config['INVENTORY_EMAIL_BASE_URL'])
+def customer_origin(summary=False):
+    # Explicit per-feature origin: VERCEL_ENV=production also describes staging-project deploys.
+    raw = (current_app.config.get('CUSTOMER_SUMMARY_EMAIL_BASE_URL') if summary else '') or current_app.config['INVENTORY_EMAIL_BASE_URL']
     url = urlsplit(raw)
     if (url.scheme != 'https' or not url.hostname or url.username or url.password
             or url.query or url.fragment or url.path not in ('', '/') or url.port not in (None, 443)):
@@ -176,8 +176,9 @@ def dispatch_one(user_id=None, business_id=None, now=None, event_types=None):
     if policy(now).mode == 'blocked':
         return 'disabled'
     # Invalid configuration must not consume all jobs' attempts.
+    summary_dispatch = (not inventory_enabled) or bool(event_types and set(event_types).issubset({'daily_summary', 'weekly_summary'}))
     try:
-        origin = customer_origin()
+        origin = customer_origin(summary=summary_dispatch)
     except (ValueError, TypeError):
         return 'configuration_required'
     now = now or datetime.utcnow()
