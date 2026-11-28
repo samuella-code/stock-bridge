@@ -370,6 +370,7 @@ def test_migration_stops_before_ddl_for_unproven_active_lifetime(tmp_path):
 def test_notifications_branded_once_and_not_at_startup(app,monkeypatch):
     from app.subscriptions.notifications import queue_due,deliver
     monkeypatch.setenv('VERCEL_ENV','production')
+    monkeypatch.setenv('VERCEL_PROJECT_ID','prj_ahZe3mfUk4MvejILpj9Md9QPP4fd')
     u,b=seed();start_trial(u);db.session.commit();a=db.session.get(AccountBilling,u.id)
     sent=[];monkeypatch.setattr('app.email_service._send_email',lambda *args,**kwargs:sent.append((args,kwargs)) or True)
     queue_due(now=a.trial_ends_at-timedelta(days=1));assert deliver()==2 and deliver()==0
@@ -385,12 +386,15 @@ def test_nonproduction_billing_email_requires_allowlisted_recipient_without_clai
     u,_=seed();start_trial(u);db.session.commit()
     account=db.session.get(AccountBilling,u.id)
     sent=[];monkeypatch.setattr('app.email_service._send_email',lambda *args,**kwargs:sent.append((args,kwargs)) or True)
-    monkeypatch.setenv('VERCEL_ENV','preview')
-    monkeypatch.delenv('VERCEL_PROJECT_ID',raising=False)
+    monkeypatch.setenv('VERCEL_ENV','production')
+    monkeypatch.setenv('VERCEL_PROJECT_ID','prj_unknown_project')
     app.config['STAGING_BILLING_EMAIL_ALLOWED_RECIPIENTS']=''
     queue_due(now=account.trial_ends_at-timedelta(days=1))
     assert deliver()==0 and sent==[]
     assert BillingEvent.query.filter(BillingEvent.email_claimed_at.isnot(None)).count()==0
+    monkeypatch.setenv('VERCEL_ENV','preview')
+    monkeypatch.delenv('VERCEL_PROJECT_ID',raising=False)
+    assert deliver()==0 and sent==[]
     app.config['STAGING_BILLING_EMAIL_ALLOWED_RECIPIENTS']='  OWNER@example.com '
     assert deliver()==2 and len(sent)==2
     assert BillingEvent.query.filter(BillingEvent.email_sent_at.isnot(None)).count()==2
