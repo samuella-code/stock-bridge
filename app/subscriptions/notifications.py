@@ -21,6 +21,19 @@ def queue_due(now=None):
             notice(user.id,f'trial-ending:{user.id}','trial_ending','Your trial ends soon. Choose Basic, Plus or Pro to keep recording business activity. No automatic charge follows your trial.')
         elif now >= account.trial_ends_at and effective_access(user,now=now).kind == 'restricted':
             notice(user.id,f'trial-expired:{user.id}','trial_expired','Your free trial has ended. Your business records remain available to view. Choose a plan to record new activity.')
+    for sub in RecurringSubscription.query.filter(RecurringSubscription.current_period_end.isnot(None)).yield_per(100):
+        renewal_at = sub.next_renewal_at or sub.current_period_end
+        if (sub.status != 'active' or sub.cancel_at_period_end or not renewal_at
+                or now < renewal_at-timedelta(days=3) or now >= renewal_at):
+            continue
+        user=db.session.get(User,sub.user_id)
+        if not user or user.staff_only or user.role != 'user' or user.admin_enabled or not user.email_verified_at:
+            continue
+        lock_account(user.id)
+        amount=f"₦{sub.amount_kobo / 100:,.2f}"
+        notice(user.id,f'renewal-reminder:{sub.id}:{renewal_at.isoformat()}','renewal_reminder',
+            f"Your {sub.plan_code.title()} {sub.billing_interval} subscription is scheduled to renew on {renewal_at:%d %b %Y}. The expected renewal amount is {amount}. Review your billing details if anything has changed.",
+            sub.id)
     for sub in RecurringSubscription.query.filter(RecurringSubscription.current_period_end<=now).yield_per(100):
         user=db.session.get(User,sub.user_id)
         if not user or user.staff_only or user.role != 'user' or user.admin_enabled:
@@ -44,9 +57,19 @@ def deliver(limit=100):
         event=db.session.get(BillingEvent,event_id);user=db.session.get(User,event.user_id)
         if not user or user.role!='user' or user.admin_enabled or user.staff_only:continue
         # Durable claim precedes SMTP. Unknown delivery failures require operator review; no blind duplicate send.
+        titles = {
+            'trial_ending': 'Your StockBridge trial ends soon',
+            'trial_expired': 'Your free trial has ended',
+            'renewal_reminder': 'Your subscription renews soon',
+            'renewal_failed': "We couldn't renew your subscription",
+            'renewal_succeeded': 'Your subscription payment was successful',
+            'subscription_expired': 'Your subscription period has ended',
+        }
+        title=titles.get(event.kind,'An update about your subscription')
         try:
-            delivered=_transactional('billing','StockBridge billing update',user.email,user.full_name,event.message,
-                link='https://'+current_app.config['CUSTOMER_HOST']+current_app.url_map.bind(current_app.config['CUSTOMER_HOST']).build('subscriptions.index'),message=event.message)
+            delivered=_transactional('billing',title+' | StockBridge',user.email,user.full_name,event.message,
+                link='https://'+current_app.config['CUSTOMER_HOST']+current_app.url_map.bind(current_app.config['CUSTOMER_HOST']).build('subscriptions.index'),
+                message=event.message,title=title,preheader=event.message[:120])
         except Exception:
             current_app.logger.warning("Billing email delivery needs review for event %s.", event.id)
             delivered=False
