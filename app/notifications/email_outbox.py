@@ -232,7 +232,7 @@ def dispatch_one(user_id=None, business_id=None, now=None, event_types=None):
         return 'suppressed'
     try:
         if kind in ('daily_summary', 'weekly_summary'):
-            link = origin + ('/restocking/' if kind == 'daily_summary' else '/')
+            link = origin + f'/notifications/email/summary/{business.id}/' + ('daily' if kind == 'daily_summary' else 'weekly')
             summary = payload
             if kind == 'daily_summary':
                 body_lines = [f"- {item['name']}: {item['quantity']} {item['unit']} left" for item in summary['low_stock_products']]
