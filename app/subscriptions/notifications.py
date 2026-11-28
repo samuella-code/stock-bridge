@@ -74,7 +74,7 @@ def deliver(limit=100):
         try:
             delivered=_transactional('billing',title+' | StockBridge',user.email,user.full_name,event.message,
                 link='https://'+current_app.config['CUSTOMER_HOST']+current_app.url_map.bind(current_app.config['CUSTOMER_HOST']).build('subscriptions.index'),
-                message=event.message,title=title,preheader=event.message[:120])
+                message=event.message,email_title=title,preheader=event.message[:120])
         except Exception:
             current_app.logger.warning("Billing email delivery needs review for event %s.", event.id)
             delivered=False
