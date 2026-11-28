@@ -55,7 +55,10 @@ def _billing_email_recipient_allowed(email):
     """Non-production billing notices require an explicit recipient allowlist."""
     environment = os.getenv('VERCEL_ENV', '').strip().lower()
     project_id = os.getenv('VERCEL_PROJECT_ID', '').strip()
-    is_production = environment == 'production' and project_id != 'prj_yeCWXPd44jShVUGHAgJu9khMjOMv'
+    is_production = (
+        environment == 'production'
+        and project_id == 'prj_ahZe3mfUk4MvejILpj9Md9QPP4fd'
+    )
     if is_production:
         return True
     allowed = {
