@@ -172,7 +172,8 @@ def test_two_workers_same_webhook_or_callback_sqlite(tmp_path, monkeypatch, scen
     with application.app_context():
         sub = db.session.get(RecurringSubscription, sid)
         assert Payment.query.count() == baseline_payments + (1 if scenario == 'renewal' else 0)
-        assert BillingEvent.query.filter_by(kind='subscription_paid').count() == (2 if scenario == 'renewal' else 1)
+        assert BillingEvent.query.filter_by(kind='subscription_paid').count() == 1
+        assert BillingEvent.query.filter_by(kind='renewal_succeeded').count() == (1 if scenario == 'renewal' else 0)
         assert BillingEvent.query.filter_by(kind='provider_event').filter(
             BillingEvent.event_key.like('payment-period:%')).count() == (2 if scenario == 'renewal' else 1)
         assert sub.current_period_end is not None
