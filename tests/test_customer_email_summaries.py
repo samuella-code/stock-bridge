@@ -118,6 +118,7 @@ def test_summary_dispatch_uses_shared_template_and_can_run_without_inventory_ale
     assert dispatch_one() == 'sent'
     assert len(sent) == 2
     assert all('email/base' not in kwargs['html'] for _, kwargs in sent)
+    assert all(f'/notifications/email/summary/{business.id}/' in kwargs['html'] for _, kwargs in sent)
     assert any('RESTOCK SUMMARY' in kwargs['html'] for _, kwargs in sent)
     weekly = next((args, kwargs) for args, kwargs in sent if 'weekly' in args[0].lower())
     assert 'Sales: ₦1,050.00' in weekly[0][2]
