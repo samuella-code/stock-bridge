@@ -1,0 +1,26 @@
+{% extends 'email/base.html' %}
+{% block content %}
+<div style="margin:0 0 14px;"><span style="display:inline-block;padding:5px 10px;border-radius:20px;background:#e8f5ed;color:#17633f;font-size:12px;font-weight:700;">{{ 'RESTOCK SUMMARY' if summary.daily else 'WEEKLY SUMMARY' }}</span></div>
+<h1 style="margin:0 0 14px;color:#17352b;font-size:25px;line-height:1.25;">{{ 'Products need your attention.' if summary.daily else 'Your week at a glance.' }}</h1>
+<p style="margin:0 0 18px;">Hi {{ first_name|default('there', true) }}, here is the {{ 'daily stock check' if summary.daily else 'weekly business summary' }} for {{ summary.business_name }}.</p>
+{% if summary.daily %}
+  <p style="margin:0 0 14px;">{{ summary.low_stock_count }} product{{ '' if summary.low_stock_count == 1 else 's' }} {{ 'needs' if summary.low_stock_count == 1 else 'need' }} restocking.</p>
+{% else %}
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:0 0 20px;background:#f8faf8;border:1px solid #e2ebe5;">
+    {% for label, value in [('Sales', summary.sales), ('Cost of goods', summary.cost_of_goods), ('Expenses', summary.expenses), ('Kept', summary.kept)] %}
+    <tr><td style="padding:11px 14px;border-bottom:1px solid #e2ebe5;">{{ label }}</td><td align="right" style="padding:11px 14px;border-bottom:1px solid #e2ebe5;font-weight:700;">₦{{ value }}</td></tr>
+    {% endfor %}
+    <tr><td style="padding:11px 14px;">Units sold</td><td align="right" style="padding:11px 14px;font-weight:700;">{{ summary.units_sold }}</td></tr>
+  </table>
+  {% if summary.best_seller %}<p style="margin:0 0 16px;">Best seller: <strong>{{ summary.best_seller.name }}</strong> ({{ summary.best_seller.quantity }} {{ summary.best_seller.unit }}).</p>{% endif %}
+  {% if summary.low_stock_count %}<p style="margin:0 0 14px;">{{ summary.low_stock_count }} product{{ '' if summary.low_stock_count == 1 else 's' }} {{ 'needs' if summary.low_stock_count == 1 else 'need' }} restocking.</p>{% endif %}
+{% endif %}
+{% if summary.low_stock_products %}
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:0 0 22px;background:#f8faf8;border:1px solid #e2ebe5;">
+{% for item in summary.low_stock_products %}
+<tr><td style="padding:10px 14px;border-bottom:1px solid #e2ebe5;">{{ item.name }}</td><td align="right" style="padding:10px 14px;border-bottom:1px solid #e2ebe5;">{{ item.quantity }} {{ item.unit }} left</td></tr>
+{% endfor %}
+</table>
+{% endif %}
+<p style="margin:0 0 20px;"><a href="{{ link }}" style="display:inline-block;min-height:44px;box-sizing:border-box;background:#16764d;color:#ffffff;padding:13px 20px;border-radius:6px;text-decoration:none;font-weight:700;">{{ ('Restock these ' ~ summary.low_stock_count ~ ' products') if summary.daily else 'View business overview' }}</a></p>
+{% endblock %}
