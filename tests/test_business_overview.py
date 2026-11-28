@@ -26,7 +26,8 @@ class Clock(datetime):
 def page(application, user=None, *, client=None, **args):
     client = client or application.test_client()
     if user: login(client,user)
-    with patch('app.main.routes.datetime',Clock):
+    with patch('app.main.routes.datetime',Clock), \\
+         patch('app.subscriptions.entitlements.datetime',Clock):
         return client.get('/business-overview',query_string=args or {
             'period':'custom','from':'2026-10-08','to':'2026-10-14'})
 
