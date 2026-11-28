@@ -193,3 +193,40 @@ def test_payment_success_email_displays_complete_payment_reference(app):
 
     assert reference in html
     assert "SBS-123456…" not in html
+    assert "word-break:break-all" in html
+
+
+def test_inventory_alert_preserves_supplied_unit_label(app):
+    from types import SimpleNamespace
+    from flask import render_template
+
+    alert = SimpleNamespace(
+        product_name="Rice", quantity=2, unit="box", business_name="Sample Shop", threshold=5
+    )
+    with app.app_context():
+        html = render_template(
+            "email/inventory_alert.html", alert=alert, kind="low_stock",
+            first_name="Amina", link="https://example.test/inventory",
+            action="View inventory",
+        )
+
+    assert "2 box" in html
+    assert "2 boxs" not in html
+    assert "stock has fallen to 2 box" in html
+
+
+def test_restock_alert_preserves_supplied_unit_label(app):
+    from flask import render_template
+
+    alert = {
+        "business_name": "Sample Shop",
+        "items": [{"name": "Rice", "quantity": 5, "unit": "kg"}],
+    }
+    with app.app_context():
+        html = render_template(
+            "email/restock_alert.html", alert=alert, first_name="Amina",
+            link="https://example.test/inventory", action="View inventory",
+        )
+
+    assert "+5 kg" in html
+    assert "+5 kgs" not in html
