@@ -17,6 +17,19 @@ from app.subscriptions.entitlements import EntitlementSnapshot, access_label, ef
 from tests.test_multi_business import app, seed as base_seed, login
 
 NOW = datetime(2026, 10, 28, 12)
+
+
+class Clock(datetime):
+    @classmethod
+    def utcnow(cls):
+        return NOW
+
+
+@pytest.fixture(autouse=True)
+def freeze_route_and_entitlement_clocks(monkeypatch):
+    # Keep synthetic subscription dates consistent for every request in this module.
+    monkeypatch.setattr('app.main.routes.datetime', Clock)
+    monkeypatch.setattr('app.subscriptions.entitlements.datetime', Clock)
 START, END = datetime(2026, 10, 8), datetime(2026, 10, 15)
 
 

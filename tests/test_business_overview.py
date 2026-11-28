@@ -23,6 +23,13 @@ class Clock(datetime):
         return NOW
 
 
+@pytest.fixture(autouse=True)
+def freeze_route_and_entitlement_clocks(monkeypatch):
+    # Keep synthetic subscription dates consistent for every request in this module.
+    monkeypatch.setattr('app.main.routes.datetime', Clock)
+    monkeypatch.setattr('app.subscriptions.entitlements.datetime', Clock)
+
+
 def page(application, user=None, *, client=None, **args):
     client = client or application.test_client()
     if user: login(client,user)
