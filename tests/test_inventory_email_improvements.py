@@ -365,7 +365,12 @@ def test_staging_links_escaping_plain_text_and_no_ids(app,monkeypatch):
     sent=[];monkeypatch.setattr('app.email_service._send_email',lambda *a,**k:sent.append((a,k)) or True)
     assert dispatch_one()=='sent'
     args,kwargs=sent[0]
-    expected_link = (\n        f'https://stock-bridge-staging.vercel.app/notifications/email/product/'\n        f'{shops[0].id}/{p.id}?action=restock'\n    )\n    assert expected_link in args[2]\n    assert expected_link.replace('&', '&amp;') in kwargs['html']
+    expected_link = (
+        f'https://stock-bridge-staging.vercel.app/notifications/email/product/'
+        f'{shops[0].id}/{p.id}?action=restock'
+    )
+    assert expected_link in args[2]
+    assert expected_link.replace('&', '&amp;') in kwargs['html']
     assert '&lt;b&gt;Drink&lt;/b&gt;' in kwargs['html'] and '<script>Business' not in kwargs['html']
     assert '&lt;script&gt;Business&lt;/script&gt;' in kwargs['html']
     assert 'event_key' not in kwargs['html'] and 'business_id' not in kwargs['html']
