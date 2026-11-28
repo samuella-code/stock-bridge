@@ -368,12 +368,31 @@ def test_migration_stops_before_ddl_for_unproven_active_lifetime(tmp_path):
 
 def test_notifications_branded_once_and_not_at_startup(app,monkeypatch):
     from app.subscriptions.notifications import queue_due,deliver
+    monkeypatch.setenv('VERCEL_ENV','production')
     u,b=seed();start_trial(u);db.session.commit();a=db.session.get(AccountBilling,u.id)
     sent=[];monkeypatch.setattr('app.email_service._send_email',lambda *args,**kwargs:sent.append((args,kwargs)) or True)
     queue_due(now=a.trial_ends_at-timedelta(days=1));assert deliver()==2 and deliver()==0
     assert 'Stock' in sent[0][1]['html'] and '7-day' in sent[0][1]['html']
     queue_due(now=a.trial_ends_at+timedelta(seconds=1));assert deliver()==1
     queue_due(now=a.trial_ends_at+timedelta(seconds=1));assert deliver()==0
+
+
+
+def test_nonproduction_billing_email_requires_allowlisted_recipient_without_claiming(app,monkeypatch):
+    from app.subscriptions.notifications import queue_due,deliver
+    from app.models import BillingEvent
+    u,_=seed();start_trial(u);db.session.commit()
+    account=db.session.get(AccountBilling,u.id)
+    sent=[];monkeypatch.setattr('app.email_service._send_email',lambda *args,**kwargs:sent.append((args,kwargs)) or True)
+    monkeypatch.setenv('VERCEL_ENV','preview')
+    monkeypatch.delenv('VERCEL_PROJECT_ID',raising=False)
+    app.config['STAGING_BILLING_EMAIL_ALLOWED_RECIPIENTS']=''
+    queue_due(now=account.trial_ends_at-timedelta(days=1))
+    assert deliver()==0 and sent==[]
+    assert BillingEvent.query.filter(BillingEvent.email_claimed_at.isnot(None)).count()==0
+    app.config['STAGING_BILLING_EMAIL_ALLOWED_RECIPIENTS']='  OWNER@example.com '
+    assert deliver()==2 and len(sent)==2
+    assert BillingEvent.query.filter(BillingEvent.email_sent_at.isnot(None)).count()==2
 
 
 def test_provider_gate_preview_and_prices(app,monkeypatch):
