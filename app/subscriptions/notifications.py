@@ -4,7 +4,7 @@ import click
 from flask import current_app
 from sqlalchemy import update
 from app import db
-from app.models import AccountBilling, BillingEvent, RecurringSubscription, User
+from app.models import AccountBilling, BillingEvent, RecurringSubscription, StaffMembership, User
 from app.subscriptions.billing import lock_account, notice
 from app.subscriptions.entitlements import effective_access
 from app.email_service import _transactional
@@ -55,7 +55,9 @@ def deliver(limit=100):
         db.session.commit()
         if not claimed.rowcount:continue
         event=db.session.get(BillingEvent,event_id);user=db.session.get(User,event.user_id)
-        if not user or user.role!='user' or user.admin_enabled or user.staff_only:continue
+        if (not user or user.role!='user' or user.admin_enabled or user.staff_only
+                or StaffMembership.query.filter_by(user_id=user.id,state='active').first()):
+            continue
         # Durable claim precedes SMTP. Unknown delivery failures require operator review; no blind duplicate send.
         titles = {
             'trial_ending': 'Your StockBridge trial ends soon',
