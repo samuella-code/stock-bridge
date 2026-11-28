@@ -234,6 +234,7 @@ def test_recurring_renewal_success_creates_distinct_notice(client,fake):
 
 def test_upcoming_renewal_reminder_is_idempotent_and_event_specific(app,fake,monkeypatch):
     from app.subscriptions.notifications import queue_due,deliver
+    app.config['STAGING_BILLING_EMAIL_ALLOWED_RECIPIENTS']='owner@example.com'
     u,b=seed(eligible=False);s=purchase(u)
     initial=BillingEvent.query.filter_by(kind='subscription_paid').one()
     initial.email_claimed_at=datetime.utcnow();db.session.commit()
