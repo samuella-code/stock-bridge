@@ -6,6 +6,14 @@ from tests.test_multi_business import seed, login
 
 
 def test_inventory_email_uses_product_specific_restock_link(app, monkeypatch):
+    app.config.update(
+        INVENTORY_EMAILS_ENABLED=True,
+        INVENTORY_EMAIL_BASE_URL='https://stock-bridge-staging.vercel.app',
+        INVENTORY_EMAIL_MAX_ATTEMPTS=3,
+    )
+    from app.notifications.staging_email_policy import Policy
+    monkeypatch.setattr('app.notifications.staging_email_policy.policy', lambda now=None: Policy('production'))
+    monkeypatch.setattr('app.notifications.email_outbox.policy', lambda now=None: Policy('production'))
     client, _, businesses = setup(app)
     item = product(client, 'Coffee')
     sale(client, item, 3)
