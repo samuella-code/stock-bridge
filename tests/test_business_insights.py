@@ -25,6 +25,14 @@ class Clock(datetime):
         return NOW
 
 
+@pytest.fixture(autouse=True)
+def freeze_route_and_entitlement_clocks(monkeypatch):
+    # Every request in these synthetic-date tests must evaluate access at NOW,
+    # including follow-up /reports and /insights requests outside page helpers.
+    monkeypatch.setattr('app.main.routes.datetime', Clock)
+    monkeypatch.setattr('app.subscriptions.entitlements.datetime', Clock)
+
+
 START, END = datetime(2026, 10, 8), datetime(2026, 10, 15)
 
 
