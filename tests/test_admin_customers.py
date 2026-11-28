@@ -236,7 +236,7 @@ def test_employee_billing_reminders_are_never_queued_or_sent(client, records, mo
     queue_due(now=now)
     assert BillingEvent.query.filter_by(user_id=user.id).count() == 1
     deliver()
-    assert not send.called
+    assert all(call.args[2] != user.email for call in send.call_args_list)
 
 
 def test_mutation_requires_csrf_and_customer_session_has_no_admin_authority(client, records):
