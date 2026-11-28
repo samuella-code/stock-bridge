@@ -15,11 +15,13 @@ from app import email_service
 from app.notifications.staging_email_policy import policy, stamp_test_job
 
 worker_bp = Blueprint('inventory_email_worker', __name__)
-PREFERENCE_FIELDS = ('low_stock_email', 'out_of_stock_email', 'product_added', 'sales', 'restocking')
+PREFERENCE_FIELDS = ('low_stock_email', 'out_of_stock_email', 'product_added', 'sales', 'restocking', 'daily_summary_email', 'weekly_summary_email')
 
 
 def enabled(business_id, field):
     preference = db.session.get(NotificationPreference, business_id)
+    if field in ('daily_summary_email', 'weekly_summary_email'):
+        return preference is not None and bool(getattr(preference, field, False))
     return preference is None or bool(getattr(preference, field))
 
 
@@ -109,7 +111,7 @@ def queue_restock_alert(business_id, items, event_key):
     return row
 def customer_origin():
     # Explicit origin: VERCEL_ENV=production also describes staging-project deploys.
-    raw = current_app.config['INVENTORY_EMAIL_BASE_URL']
+    raw = (current_app.config.get('CUSTOMER_SUMMARY_EMAIL_BASE_URL') or current_app.config['INVENTORY_EMAIL_BASE_URL'])
     url = urlsplit(raw)
     if (url.scheme != 'https' or not url.hostname or url.username or url.password
             or url.query or url.fragment or url.path not in ('', '/') or url.port not in (None, 443)):
@@ -122,7 +124,7 @@ def eligible(now):
         and_(EmailOutbox.status == 'processing', EmailOutbox.claim_expires_at <= now))
 
 
-def claim(now=None, user_id=None, business_id=None):
+def claim(now=None, user_id=None, business_id=None, event_types=None):
     """PG SKIP LOCKED plus a guarded UPDATE; SQLite uses the same CAS guard."""
     now = now or datetime.utcnow()
     selected_policy = policy(now)
@@ -133,12 +135,16 @@ def claim(now=None, user_id=None, business_id=None):
     exhausted = update(EmailOutbox).where(*safety_conditions, eligible(now), EmailOutbox.attempt_count >= EmailOutbox.max_attempts)
     if user_id is not None:
         exhausted = exhausted.where(EmailOutbox.recipient_user_id == user_id, EmailOutbox.business_id == business_id)
+    if event_types:
+        exhausted = exhausted.where(EmailOutbox.event_type.in_(event_types))
     db.session.execute(exhausted.values(
             status='failed', claim_token=None, claim_expires_at=None,
             last_error='AttemptsExhausted', updated_at=now))
     query = EmailOutbox.query.filter(*safety_conditions, eligible(now), EmailOutbox.attempt_count < EmailOutbox.max_attempts)
     if user_id is not None:
         query = query.filter_by(recipient_user_id=user_id, business_id=business_id)
+    if event_types:
+        query = query.filter(EmailOutbox.event_type.in_(event_types))
     row = query.order_by(EmailOutbox.next_attempt_at, EmailOutbox.id).with_for_update(skip_locked=True).first()
     if row is None:
         db.session.commit()
@@ -162,8 +168,10 @@ def finish(row_id, token, status, now, **values):
     return result.rowcount == 1
 
 
-def dispatch_one(user_id=None, business_id=None, now=None):
-    if not current_app.config['INVENTORY_EMAILS_ENABLED']:
+def dispatch_one(user_id=None, business_id=None, now=None, event_types=None):
+    inventory_enabled = bool(current_app.config.get('INVENTORY_EMAILS_ENABLED'))
+    summaries_enabled = bool(current_app.config.get('CUSTOMER_SUMMARY_EMAILS_ENABLED'))
+    if not (inventory_enabled or summaries_enabled):
         return 'disabled'
     if policy(now).mode == 'blocked':
         return 'disabled'
@@ -173,7 +181,8 @@ def dispatch_one(user_id=None, business_id=None, now=None):
     except (ValueError, TypeError):
         return 'configuration_required'
     now = now or datetime.utcnow()
-    lease = claim(now, user_id, business_id)
+    allowed_types = event_types or (('low_stock', 'out_of_stock', 'restock_recorded') if inventory_enabled else ('daily_summary', 'weekly_summary'))
+    lease = claim(now, user_id, business_id, allowed_types)
     if lease is None:
         return 'idle'
     row_id, token = lease
@@ -183,13 +192,17 @@ def dispatch_one(user_id=None, business_id=None, now=None):
     if (not business or not owner or business.user_id != owner.id or owner.role == 'admin'
             or owner.suspended_at or business.suspended_at or not owner.email_verified_at
             or owner.email != row.recipient_email or not valid_recipient(row.recipient_email)
-           or row.event_type not in ('low_stock', 'out_of_stock', 'restock_recorded')):
+           or row.event_type not in ('low_stock', 'out_of_stock', 'restock_recorded', 'daily_summary', 'weekly_summary')):
         finish(row_id, token, 'failed', now, last_error='RecipientUnavailable')
         return 'failed'
-    preference_field = (
-        'restocking' if row.event_type == 'restock_recorded'
-        else row.event_type + '_email'
-    )
+    preference_field = ({
+        'restock_recorded': 'restocking',
+        'daily_summary': 'daily_summary_email',
+        'weekly_summary': 'weekly_summary_email',
+    }.get(row.event_type, row.event_type + '_email'))
+    if row.event_type in ('daily_summary', 'weekly_summary') and not summaries_enabled:
+        finish(row_id, token, 'suppressed', now, last_error=None)
+        return 'suppressed'
     if not enabled(row.business_id, preference_field):
         finish(row_id, token, 'suppressed', now, last_error=None)
         return 'suppressed'
@@ -197,7 +210,32 @@ def dispatch_one(user_id=None, business_id=None, now=None):
     created_at = row.created_at
     attempts, maximum, kind = row.attempt_count, row.max_attempts, row.event_type
     try:
-        if kind == 'restock_recorded':
+        if kind in ('daily_summary', 'weekly_summary'):
+            summary = payload
+            summary_type = 'daily' if kind == 'daily_summary' else 'weekly'
+            link = origin + f'/notifications/email/summary/{business.id}/{summary_type}'
+            first_name = owner.full_name.split()[0] if owner.full_name and owner.full_name.split() else 'there'
+            if kind == 'daily_summary':
+                body_lines = [f"- {item['name']}: {item['quantity']} {item['unit']} left" for item in summary['low_stock_products']]
+                body = (f"Hi {first_name},\\n\\n{summary['low_stock_count']} products need restocking in {summary['business_name']}.\\n"
+                    + "\\n".join(body_lines) + f"\\n\\nRestock these products: {link}\\n\\nStockBridge — Know your stock. Understand your profit.")
+                preheader = f"{summary['low_stock_count']} products need restocking in {summary['business_name']}."[:90]
+            else:
+                best = summary.get('best_seller')
+                low_lines = [f"- {item['name']}: {item['quantity']} {item['unit']} left" for item in summary['low_stock_products']]
+                body = (f"Hi {first_name},\\n\\nWeekly summary for {summary['business_name']} ({summary['period_label']}).\\n"
+                    f"Sales: ₦{summary['sales']}\\nCost of goods: ₦{summary['cost_of_goods']}\\n"
+                    f"Expenses: ₦{summary['expenses']}\\nKept: ₦{summary['kept']}\\nUnits sold: {summary['units_sold']}\\n"
+                    + (f"Best seller: {best['name']} ({best['quantity']} {best['unit']}).\\n" if best else "")
+                    + ("\\nProducts needing restock:\\n" + "\\n".join(low_lines) + "\\n" if low_lines else "")
+                    + f"\\nView business overview: {link}\\n\\nStockBridge — Know your stock. Understand your profit.")
+                preheader = f"Your weekly numbers for {summary['business_name']} are ready."[:90]
+            email_reason = (f"You get this email because daily restock summaries are on for {summary['business_name']}."
+                if kind == 'daily_summary' else f"You get this email because weekly business summaries are on for {summary['business_name']}.")
+            html = render_template('email/customer_summary.html', summary=summary, link=link,
+                first_name=first_name, preheader=preheader, email_reason=email_reason,
+                change_alerts_url=origin + '/profile/')
+        elif kind == 'restock_recorded':
             link = origin + '/restocking/'
             action = 'View Restocking'
             item_lines = [
@@ -289,6 +327,27 @@ def dispatch():
     if len(secret) < 32 or not compare_digest(supplied.encode('utf-8'), ('Bearer ' + secret).encode('utf-8')):
         abort(404)
     response = jsonify(result=dispatch_one())
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+@worker_bp.post('/internal/customer-email-summaries/run')
+@csrf.exempt
+def run_customer_summaries():
+    """Bearer-authenticated scheduler entry point; sends summary jobs only."""
+    secret = current_app.config.get('CUSTOMER_SUMMARY_EMAIL_DISPATCH_SECRET', '')
+    supplied = request.headers.get('Authorization', '')
+    if (not isinstance(secret, str) or len(secret) < 32
+            or not compare_digest(supplied.encode('utf-8'), ('Bearer ' + secret).encode('utf-8'))):
+        abort(404)
+    if not current_app.config.get('CUSTOMER_SUMMARY_EMAILS_ENABLED'):
+        response = jsonify(queued=0, result='disabled')
+        response.headers['Cache-Control'] = 'no-store'
+        return response, 200
+    from app.notifications.summaries import queue_due_summaries
+    queued = queue_due_summaries()
+    result = dispatch_one(event_types=('daily_summary', 'weekly_summary'))
+    response = jsonify(queued=queued, result=result)
     response.headers['Cache-Control'] = 'no-store'
     return response
 
